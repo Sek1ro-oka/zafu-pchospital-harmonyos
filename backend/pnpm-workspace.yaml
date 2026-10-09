@@ -5,3 +5,10 @@ allowBuilds:
   esbuild: true
   prisma: true
   unrs-resolver: true
+
+# next/core-web-vitals 的 ESLint 兼容配置由 @eslint/eslintrc 的 FlatCompat 从项目根解析插件；
+# pnpm 严格链接把 eslint-plugin-* 留在 .pnpm 虚拟仓，`pnpm lint` 会报
+# "couldn't find the plugin eslint-plugin-react-hooks"（2026-10 实测，eslint 9.39.5 / pnpm 12.4.1）。
+# 公开提升 eslint 相关包到 node_modules 根目录即可，不改变依赖版本与锁文件。
+publicHoistPattern:
+  - '*eslint*'

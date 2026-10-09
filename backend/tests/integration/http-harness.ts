@@ -44,7 +44,7 @@ export async function callRoute<Params extends Record<string, string> = Record<s
     headers?: Record<string, string>;
     params?: Params;
   } = {},
-): Promise<{ status: number; json: Record<string, unknown> }> {
+): Promise<{ status: number; json: Record<string, unknown>; headers: Headers }> {
   const parsed = new URL(url);
   const request = new Request(url, {
     method: init.method ?? "GET",
@@ -60,7 +60,11 @@ export async function callRoute<Params extends Record<string, string> = Record<s
   const response = await handler(request, {
     params: Promise.resolve(init.params ?? ({} as Params)),
   });
-  return { status: response.status, json: (await response.json()) as Record<string, unknown> };
+  return {
+    status: response.status,
+    json: (await response.json()) as Record<string, unknown>,
+    headers: response.headers,
+  };
 }
 
 /**

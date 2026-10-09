@@ -2,8 +2,12 @@
   "color": [
     { "name": "start_window_background", "value": "#F6F8FC" },
     { "name": "brand", "value": "#245FBA" },
+    { "name": "brand_soft", "value": "#EAF1FB" },
     { "name": "surface", "value": "#FFFFFF" },
+    { "name": "field_bg", "value": "#F3F6FB" },
     { "name": "text_primary", "value": "#17243A" },
-    { "name": "text_secondary", "value": "#58677D" }
+    { "name": "text_secondary", "value": "#58677D" },
+    { "name": "danger", "value": "#C7332B" },
+    { "name": "ok", "value": "#1F9D6B" }
   ]
 }

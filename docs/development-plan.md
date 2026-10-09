@@ -76,4 +76,4 @@ flowchart LR
 
 ## 当前状态
 
-App 已有可编译的 Stage 工程、导航、主题和三个模块入口，业务尚未接入。后端已改为本机直接运行：当前电脑 MySQL 使用独立实例 `127.0.0.1:3308`，API 使用 `http://localhost:13080`，迁移、seed、健康检查与后端测试已通过；原服务器实验服务已停用。前后端现在位于同一公开仓库的 `app/` 与 `backend/`；启动步骤见 [本地开发说明](../backend/docs/local-development.md)。真机登录、跨角色业务与 AI 回流尚未验证。每次实现后同步更新真实进度即可。
+App 已接入登录与会话：登录页（可配置 API 地址、显示后端连通状态）、启动时向服务器验证并恢复会话、退出、按服务端返回的角色进入客户服务或工作人员入口；业务入口仍为骨架页并如实标注“未接入”。后端提供原生 Bearer 会话通道（`/api/v1/auth/native/*`，[接口说明](../backend/docs/native-client-api.md)）并保留 Web Cookie 登录；测试账号用 `corepack pnpm accounts:prepare` 准备（只操作课设库）。后端已改为本机直接运行：当前电脑 MySQL 使用独立实例 `127.0.0.1:3308`，API 使用 `http://localhost:13080`；迁移、seed、健康检查、lint、生产构建、327 项单测与 150 项集成测试已通过；原服务器实验服务已停用。前后端位于同一公开仓库的 `app/` 与 `backend/`；启动步骤见 [本地开发说明](../backend/docs/local-development.md)。**真机登录链路（health → 登录 → 重启恢复 → 退出）与跨角色业务、AI 回流尚未验证**（无设备，构建成功不等于装机成功）。每次实现后同步更新真实进度即可。

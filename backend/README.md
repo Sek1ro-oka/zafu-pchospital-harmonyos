@@ -11,8 +11,12 @@ git clone https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos.git
 cd zafu-pchospital-harmonyos/backend
 corepack pnpm install --frozen-lockfile
 corepack pnpm setup:local
+corepack pnpm accounts:prepare
 corepack pnpm dev --port 13080
 ```
+
+`accounts:prepare` 准备 App 登录用的本地测试账号（客户 `100001/customer123`、工作人员 `100002/staff123`），
+可重复执行、只操作课设库；接口与角色说明见 [原生客户端接口](docs/native-client-api.md)。
 
 `setup:local` 首次交互询问本机 MySQL 地址/端口（默认 `127.0.0.1:3306`）、管理员账号和不回显的密码，建立独立开发库/测试库及各自账号，并生成本机 `.env`。管理员密码不会保存。同名库或账号已存在时直接停止，换一个库标识或提供原 `.env`；已有 `.env` 时保留连接与密钥，应用迁移、基础字典 seed 并检查数据库健康。
 
@@ -21,7 +25,7 @@ corepack pnpm dev --port 13080
 ## 开发范围与检查
 
 - 接口：`src/app/api/v1/`；业务：`src/features/`；模型与迁移：`prisma/`；测试：`tests/`。
-- 原生 Bearer 登录、客户报修/预约、AI 问答尚未实现。`RepairRecord` 是工作人员维修备案。
+- 原生 Bearer 登录/会话已实现（`/api/v1/auth/native/*`，见 [接口说明](docs/native-client-api.md)）；客户报修/预约、AI 问答尚未实现。`RepairRecord` 是工作人员维修备案。
 - 直接运行本机 Node/MySQL；团队按[开发方案](../docs/development-plan.md)自行安排进度。
 
 ```powershell
