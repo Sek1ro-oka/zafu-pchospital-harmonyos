@@ -37,7 +37,7 @@ export class SessionStore {
     return '';
   }
 
-  /** 保存令牌（同别名覆盖旧值）；存储不可用时返回 false，只影响重启恢复，不影响本次登录。 */
+  /** 保存令牌（同别名覆盖旧值）；返回 false 时由会话服务撤销新令牌并报告登录失败。 */
   static async writeToken(token: string): Promise<boolean> {
     const attributes: asset.AssetMap = new Map<asset.Tag, asset.Value>();
     attributes.set(asset.Tag.SECRET, toBytes(token));

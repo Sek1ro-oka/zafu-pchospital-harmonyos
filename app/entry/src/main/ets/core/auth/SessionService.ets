@@ -39,7 +39,13 @@ export class SessionService {
     const data = await ApiClient.post<NativeLoginData>(baseUrl, LOGIN_PATH, JSON.stringify(request), '');
     const persisted = await SessionStore.writeToken(data.token);
     if (!persisted) {
-      hilog.warn(DOMAIN, TAG, '%{public}s', '令牌写入本地存储失败：本次登录有效，重启后需重新登录');
+      SessionService.identity = null;
+      try {
+        await ApiClient.post<LogoutData>(baseUrl, LOGOUT_PATH, '', data.token);
+      } catch (error) {
+        hilog.warn(DOMAIN, TAG, '%{public}s', '本地令牌保存失败，服务端撤销也未成功');
+      }
+      throw new ApiRequestError('LOCAL_STORAGE_ERROR', '无法保存登录凭证，请检查设备存储后重试', 0, '');
     }
     SessionService.identity = data;
     return data;
@@ -66,6 +72,7 @@ export class SessionService {
     try {
       const data = await ApiClient.get<NativeSessionData>(baseUrl, SESSION_PATH, token);
       SessionService.identity = data;
+      result.identity = data;
       return result;
     } catch (error) {
       if (error instanceof ApiRequestError && isSessionExpiredCode(error.code)) {

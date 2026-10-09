@@ -5,7 +5,7 @@ import { ApiErrorBody, ApiMeta } from './ApiContract';
 /**
  * 统一请求错误（ArkTS 只允许抛出 Error 及其子类）。
  * code 一般是后端错误码（AUTH_INVALID_CREDENTIALS 等）；
- * NETWORK_ERROR / UNEXPECTED_RESPONSE 是客户端侧错误码，此时 status 为 0 或原始 HTTP 状态。
+ * NETWORK_ERROR / UNEXPECTED_RESPONSE / LOCAL_STORAGE_ERROR 是客户端侧错误码，此时 status 为 0 或原始 HTTP 状态。
  */
 export class ApiRequestError extends Error {
   readonly code: string;
