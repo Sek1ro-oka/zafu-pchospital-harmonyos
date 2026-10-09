@@ -1,6 +1,6 @@
 # AGENTS.md
 
-先读 README 和 `docs/development-plan.md`，按用户当前指定的功能开发。团队自行安排进度，不要求拆 Issue、创建 PR、指定 reviewer 或固定排期。
+先读 README 和 `docs/development-plan.md`，按用户当前指定的功能开发。使用 README 中的 7 个模块 Issue 记录目标与进度，团队自行认领和安排；不要求细粒度拆分、创建 PR、指定 reviewer 或固定排期。
 
 - 前后端同仓：DevEco 打开 `app/`，Node 命令在 `backend/` 执行。使用 ArkTS / ArkUI 原生页面；`app/entry/src/main/ets/core/` 放公共会话、网络和 UI，`features/` 放业务。
 - 界面参考 `docs/reference/my-huawei/` 的五张图片。
