@@ -17,8 +17,9 @@
 | HTTP 真实链路 | ✅ **11 项断言全部通过** |
 | Lint / 类型检查 | ✅ 0 错误 0 警告（仅剩上游既有 1 处类型错误） |
 | HAP 构建 | ✅ BUILD SUCCESSFUL |
+| 代码提交 | ✅ `def53b9`（分支 `feat/issue-37-customer-repair-orders`），工作区干净 |
 | Previewer 目视验收 | ⬜ 待人工执行（步骤见第 5.7 节） |
-| 认领评论 / PR | ⬜ 需用户代为操作（本机无 GitHub 写凭据） |
+| 认领评论 / 推送 / PR | ⬜ 需用户代为操作（本机无 GitHub **写**凭据；读正常） |
 
 ### 本轮修掉的真实缺陷（两个，都不是"环境问题"）
 
@@ -278,7 +279,7 @@ corepack pnpm lint
 | 10 | App：客户报修页面（列表+提交+四态） | `features/repair/*.ets` | ✅ 3 个新文件 |
 | 11 | App：路由分离 + 网络层 | `HomePage.ets` 等 | ✅ 客户/工作人员入口已分开 |
 | 12 | 构建 HAP + Previewer 验证 | 验证证据 | ✅ 构建通过；⬜ Previewer 待人工执行 |
-| 13 | 汇总验证证据，开 PR | PR | ⬜ 需用户代为操作 |
+| 13 | 汇总验证证据，开 PR | PR | 🔶 代码已提交 `def53b9`；推送与开 PR 需用户凭据 |
 
 ### 已产出的 App 侧文件
 
@@ -402,4 +403,25 @@ Issue 未提。建议**本 Issue 不做**（`CANCELLED` 状态先定义但不开
   **待办（下轮）**
   1. 用 **Previewer** 目视走查提交/列表/详情（步骤见第 5.7 节；须从 `Index.ets` 进入）
   2. 在 Issue #37 下留**认领评论**（文本见 `docs/work/issue-37-GitHub操作指引.md`）
-  3. 建分支 `feat/issue-37-customer-repair-orders` → 提交 → 开 PR（需用户授权凭据）
+  3. 推送 `feat/issue-37-customer-repair-orders` → 开 PR（需用户凭据）
+
+- **2026-10-10 · 第 3 轮**：提交就绪
+
+  开工前按约定重新 `git fetch upstream`：`upstream/main` 仍为 `6f83dea`，
+  **上游无新提交**，无重复工作风险；上轮遗留的集成测试结果确认为
+  **8/8 通过**（`tests 8 / pass 8 / fail 0`）。
+
+  本轮完成：
+  1. 提交前把**全部新增源码统一为 LF 行尾**（`* text=auto eol=lf`）。
+     实测新增的 7 个 `.ets` / `.ts` 文件原本都是 CRLF，
+     若不转换会在 PR 里产生整文件行尾噪声、掩盖真实 diff。
+  2. 还原 `prisma/migrations/migration_lock.toml` 的无关头部差异
+     （Prisma 7 自动补的两行注释，与 #37 无关，不回带进 PR）。
+  3. 复核 ESLint：新增与改动代码 **0 错误 0 警告**。
+  4. 新建分支 `feat/issue-37-customer-repair-orders`，
+     提交 `def53b9`，工作区干净。
+
+  推送受阻（重要）：本机凭据助手为 Windows `manager`，
+  在非交互环境下**挂起不回**（实测 `git push` 卡死 4 分钟无输出）。
+  但 `git ls-remote origin` **读操作正常** → 确认瓶颈只在写。
+  已终止挂起进程；推送与 PR 需用户交互（见操作指引）。
