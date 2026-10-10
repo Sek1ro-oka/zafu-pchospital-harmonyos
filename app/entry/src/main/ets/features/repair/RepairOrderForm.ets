@@ -1,12 +1,27 @@
-import { ApiRequestError } from '../../core/network/ApiClient';
+import { util } from '@kit.ArkTS';
+import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS } from '../../core/ui/Theme';
 import {
   REPAIR_ORDER_LIMITS,
   RepairOrderSubmitRequest,
 } from './RepairOrderContract';
 
-/** 电话允许的字符：数字、`+`、`-`、空格、括号（与后端 PHONE_PATTERN 一致）。 */
-const PHONE_PATTERN: RegExp = /^[0-9+\-\s()]{5,32}$/;
+/**
+ * 电话校验：允许 `+`、`-`、空格、括号作为分隔符，但至少 7 位数字。
+ * 与后端 repair-order-validation.ts 的 PHONE_PATTERN / PHONE_MIN_DIGITS 保持一致。
+ */
+const PHONE_PATTERN: RegExp = /^[0-9+\-\s()]*$/;
+const PHONE_MIN_DIGITS: number = 7;
+
+function countDigits(s: string): number {
+  let count: number = 0;
+  for (const ch of s) {
+    if (ch >= '0' && ch <= '9') {
+      count++;
+    }
+  }
+  return count;
+}
 
 /** 表单字段级错误：键与后端 fieldErrors 同名，便于把服务端错误直接落到输入框下方。 */
 export type FieldErrorMap = Record<string, string>;
@@ -23,7 +38,10 @@ export struct RepairOrderForm {
   /** 提交成功后由父组件刷新列表并收起表单。 */
   onSubmitted: () => Promise<void> = async () => {
   };
-  submit: (request: RepairOrderSubmitRequest) => Promise<void> = async () => {
+  submit: (request: RepairOrderSubmitRequest, idempotencyKey: string) => Promise<void> = async () => {
+  };
+  /** 鉴权失效时通知上层回登录页（与列表/详情的 handleError 一致）。 */
+  onSessionExpired: () => void = () => {
   };
   @State deviceModel: string = '';
   @State deviceSerial: string = '';
@@ -32,6 +50,12 @@ export struct RepairOrderForm {
   @State busy: boolean = false;
   @State errorText: string = '';
   @State fieldErrors: FieldErrorMap = {};
+  /** 幂等键：同一张表单的重试复用同一个键，成功后才换新的。 */
+  private idempotencyKey: string = '';
+
+  aboutToAppear(): void {
+    this.idempotencyKey = `app-${util.generateRandomUUID(true)}`;
+  }
 
   private fieldError(name: string): string {
     const value: string | undefined = this.fieldErrors[name];
@@ -68,7 +92,9 @@ export struct RepairOrderForm {
     if (phone === '') {
       errors.contactPhone = '请填写联系电话';
     } else if (!PHONE_PATTERN.test(phone)) {
-      errors.contactPhone = '联系电话格式无效';
+      errors.contactPhone = '联系电话只能包含数字、+、-、空格和括号';
+    } else if (countDigits(phone) < PHONE_MIN_DIGITS) {
+      errors.contactPhone = `联系电话至少需要 ${PHONE_MIN_DIGITS} 位数字`;
     }
     return errors;
   }
@@ -113,7 +139,9 @@ export struct RepairOrderForm {
       if (serial !== '') {
         request.deviceSerial = serial;
       }
-      await this.submit(request);
+      await this.submit(request, this.idempotencyKey);
+      // 成功：换一个新键，清空表单，让下一次提交是新的一张单。
+      this.idempotencyKey = `app-${util.generateRandomUUID(true)}`;
       this.deviceModel = '';
       this.deviceSerial = '';
       this.faultDescription = '';
@@ -122,10 +150,16 @@ export struct RepairOrderForm {
       await this.onSubmitted();
     } catch (error) {
       if (error instanceof ApiRequestError) {
+        // 鉴权失效：通知上层回登录页，与列表/详情的 handleError 一致。
+        if (isSessionExpiredCode(error.code)) {
+          this.onSessionExpired();
+          return;
+        }
         const serverFields = this.readServerFieldErrors(error);
         this.fieldErrors = serverFields;
         // 服务端给出的字段级提示已经足够具体时，不再叠一句笼统的总错误。
         this.errorText = Object.keys(serverFields).length > 0 ? '' : error.message;
+        // 失败时不换键：用户重试仍带同一个 Idempotency-Key，服务端会去重。
       } else {
         this.errorText = '提交失败，请重试';
       }

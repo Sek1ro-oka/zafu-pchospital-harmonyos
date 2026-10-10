@@ -1,4 +1,3 @@
-import { util } from '@kit.ArkTS';
 import { ApiClient, ApiRequestError } from '../../core/network/ApiClient';
 import { ApiConfig } from '../../core/network/ApiConfig';
 import { SessionStore } from '../../core/auth/SessionStore';
@@ -39,15 +38,18 @@ export class RepairOrderService {
    *
    * 带 `Idempotency-Key`：网络抖动导致的重复提交由服务端去重并返回原单，
    * 用户不会看到「提交失败」后被引导重试又建出第二张单。
+   *
+   * **键由调用方（表单）生成并传入**，而非此方法内部新建 ——
+   * 这样同一张表单的多次重试复用同一个键，只有确认成功或开始新一张单才换键。
    */
-  static async submit(request: RepairOrderSubmitRequest): Promise<RepairOrderView> {
+  static async submit(request: RepairOrderSubmitRequest, idempotencyKey: string): Promise<RepairOrderView> {
     RepairOrderService.ensureReady();
     const token = await RepairOrderService.token();
     if (token === '') {
       throw new ApiRequestError('UNAUTHENTICATED', '登录状态已失效，请重新登录', 0, '');
     }
     const headers: Record<string, string> = {};
-    headers['Idempotency-Key'] = `app-${util.generateRandomUUID(true)}`;
+    headers['Idempotency-Key'] = idempotencyKey;
     return await ApiClient.postWithHeaders<RepairOrderView>(
       RepairOrderService.baseUrl(),
       LIST_PATH,
@@ -61,18 +63,25 @@ export class RepairOrderService {
    * 本人报修列表。
    *
    * 后端 `GET /api/v1/repair-orders` 把分页放在 **信封 meta** 里，
-   * 而 ApiClient 只拆 `data`，所以这里只取走 `items`；
-   * 本 Issue 不做翻页 UI，页大小用后端默认 20。
+   * 而 ApiClient 只拆 `data`，所以这里只取走 `items`。
+   * 支持 `page` 参数翻页，UI 据此实现"加载更多"。
    */
-  static async listMine(status: string = ''): Promise<RepairOrderView[]> {
+  static async listMine(status: string = '', page: number = 1): Promise<RepairOrderView[]> {
     RepairOrderService.ensureReady();
     const token = await RepairOrderService.token();
     if (token === '') {
       throw new ApiRequestError('UNAUTHENTICATED', '登录状态已失效，请重新登录', 0, '');
     }
     let path: string = LIST_PATH;
+    const params: string[] = [];
     if (status !== '') {
-      path = `${LIST_PATH}?status=${status}`;
+      params.push(`status=${status}`);
+    }
+    if (page > 1) {
+      params.push(`page=${page}`);
+    }
+    if (params.length > 0) {
+      path = `${LIST_PATH}?${params.join('&')}`;
     }
     const items = await ApiClient.get<RepairOrderView[]>(RepairOrderService.baseUrl(), path, token);
     // 服务端历史数据若把 items 返回成 null，界面按空列表处理而不是崩溃。

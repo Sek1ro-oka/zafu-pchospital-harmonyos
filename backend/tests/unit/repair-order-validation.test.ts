@@ -76,7 +76,7 @@ test("超长字段被拒，长度上限与 schema 对齐", () => {
 });
 
 test("电话格式非法被拒", () => {
-  for (const bad of ["abc", "1", "电话13800138000"]) {
+  for (const bad of ["abc", "1", "电话13800138000", "+++++", "()---", "12345"]) {
     try {
       validateRepairOrderInput(normalizeRepairOrderInput({ ...validInput, contactPhone: bad }));
       assert.fail(`应拒绝电话 ${bad}`);
@@ -86,7 +86,7 @@ test("电话格式非法被拒", () => {
   }
 });
 
-test("合法电话形态通过：数字与 + - 空格 括号", () => {
+test("合法电话形态通过：数字与 + - 空格 括号，至少 7 位数字", () => {
   for (const phone of ["13800138000", "+86 138-0013-8000", "(0571) 6374 1234"]) {
     assert.doesNotThrow(
       () => validateRepairOrderInput(normalizeRepairOrderInput({ ...validInput, contactPhone: phone })),

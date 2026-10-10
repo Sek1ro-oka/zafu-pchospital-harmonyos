@@ -11,8 +11,21 @@ export const repairOrderFieldLimits = {
   createRequestKeyMaxLength: 128,
 } as const;
 
-/** 允许的电话字符：数字、`+`、`-`、空格、括号。 */
-const PHONE_PATTERN = /^[0-9+\-\s()]{5,32}$/;
+/**
+ * 电话校验：允许 `+`、`-`、空格、括号作为分隔符，但**至少 7 位数字**。
+ * 纯符号串（如 `+++++`、`()---`）被拒绝；大陆手机号（11 位）和座机（7-8 位）都通过。
+ * 与前端 RepairOrderForm 的 PHONE_PATTERN 保持一致。
+ */
+const PHONE_PATTERN = /^[0-9+\-\s()]*$/;
+const PHONE_MIN_DIGITS = 7;
+
+function countDigits(s: string): number {
+  let count = 0;
+  for (const ch of s) {
+    if (ch >= "0" && ch <= "9") count++;
+  }
+  return count;
+}
 
 export type RepairOrderDraftInput = {
   deviceModel: string;
@@ -59,7 +72,11 @@ export function validateRepairOrderInput(input: RepairOrderDraftInput): void {
 
   if (input.contactPhone === "") errors.contactPhone = ["请填写联系电话"];
   else if (!PHONE_PATTERN.test(input.contactPhone))
-    errors.contactPhone = ["联系电话格式无效"];
+    errors.contactPhone = ["联系电话只能包含数字、+、-、空格和括号"];
+  else if (countDigits(input.contactPhone) < PHONE_MIN_DIGITS)
+    errors.contactPhone = [`联系电话至少需要 ${PHONE_MIN_DIGITS} 位数字`];
+  else if (input.contactPhone.length > repairOrderFieldLimits.contactPhoneMaxLength)
+    errors.contactPhone = [`联系电话不能超过 ${repairOrderFieldLimits.contactPhoneMaxLength} 字`];
 
   if (Object.keys(errors).length)
     throw new AppError("VALIDATION_FAILED", "报修信息填写不完整", { fieldErrors: errors });

@@ -103,10 +103,27 @@ export function repairOrderStatusLabel(status: string): string {
   return status;
 }
 
-/** 时间显示：ISO 串裁到 `YYYY-MM-DD HH:mm`，避免窄屏被时区后缀挤满。 */
+/** 两位补零。ArkTS 不允许把箭头函数赋值给 const 后调用，所以用函数声明。 */
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+
+/**
+ * 时间显示：解析 ISO 字符串并按本地时区格式化为 `YYYY-MM-DD HH:mm`。
+ * 直接截取 UTC 字符串会导致时区错误（如 `04:30Z` 显示为 `04:30` 而非北京 `12:30`）。
+ */
 export function formatOrderTime(iso: string): string {
-  if (iso.length < 16) {
-    return iso;
+  if (iso === null || iso === undefined || iso === '') {
+    return '';
   }
-  return `${iso.substring(0, 10)} ${iso.substring(11, 16)}`;
+  const d: Date = new Date(iso);
+  if (isNaN(d.getTime())) {
+    return iso.length < 16 ? iso : `${iso.substring(0, 10)} ${iso.substring(11, 16)}`;
+  }
+  const year: number = d.getFullYear();
+  const month: number = d.getMonth() + 1;
+  const day: number = d.getDate();
+  const hours: number = d.getHours();
+  const minutes: number = d.getMinutes();
+  return `${year}-${pad2(month)}-${pad2(day)} ${pad2(hours)}:${pad2(minutes)}`;
 }

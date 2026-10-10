@@ -16,6 +16,9 @@ const STATE_READY: number = 1;
 const STATE_EMPTY: number = 2;
 const STATE_ERROR: number = 3;
 
+/** 后端默认页大小，用于判断"加载更多"是否还有下一页。 */
+const PAGE_SIZE: number = 20;
+
 /** 提交成功后的即时反馈文案，避免用户以为「点了一下没反应」。 */
 const SUBMIT_OK_TEXT: string = '报修已提交，工作人员受理后可在此查看进度。';
 
@@ -37,6 +40,10 @@ export struct RepairOrdersPage {
   @State showForm: boolean = false;
   @State selected: RepairOrderView | null = null;
   @State detailLoading: boolean = false;
+  @State detailErrorText: string = '';
+  @State currentPage: number = 1;
+  @State loadingMore: boolean = false;
+  @State hasMore: boolean = false;
 
   aboutToAppear(): void {
     this.load();
@@ -58,13 +65,43 @@ export struct RepairOrdersPage {
   private async load(): Promise<void> {
     this.state = STATE_LOADING;
     this.errorText = '';
+    this.currentPage = 1;
     try {
-      const items = await RepairOrderService.listMine();
+      const items = await RepairOrderService.listMine('', 1);
       this.orders = items;
+      this.hasMore = items.length >= PAGE_SIZE;
       this.state = items.length === 0 ? STATE_EMPTY : STATE_READY;
     } catch (error) {
       this.state = STATE_ERROR;
       this.handleError(error);
+    }
+  }
+
+  /** 加载下一页，追加到列表尾部。 */
+  private async loadMore(): Promise<void> {
+    if (this.loadingMore || !this.hasMore) {
+      return;
+    }
+    this.loadingMore = true;
+    try {
+      const nextPage: number = this.currentPage + 1;
+      const items = await RepairOrderService.listMine('', nextPage);
+      if (items.length > 0) {
+        this.orders = this.orders.concat(items);
+        this.currentPage = nextPage;
+      }
+      this.hasMore = items.length >= PAGE_SIZE;
+    } catch (error) {
+      // 加载更多失败不切换全页状态，只提示。
+      if (error instanceof ApiRequestError) {
+        if (isSessionExpiredCode(error.code)) {
+          this.onSessionExpired();
+          return;
+        }
+      }
+      // 静默失败，用户可以再点一次"加载更多"。
+    } finally {
+      this.loadingMore = false;
     }
   }
 
@@ -73,19 +110,27 @@ export struct RepairOrdersPage {
       return;
     }
     this.detailLoading = true;
-    this.errorText = '';
+    this.detailErrorText = '';
     try {
       // 重新取一次详情而不是复用列表项：列表与详情虽同形状，但进度事件可能已更新。
       this.selected = await RepairOrderService.detail(order.id);
     } catch (error) {
-      this.handleError(error);
+      if (error instanceof ApiRequestError) {
+        if (isSessionExpiredCode(error.code)) {
+          this.onSessionExpired();
+          return;
+        }
+        this.detailErrorText = error.message;
+      } else {
+        this.detailErrorText = '加载详情失败';
+      }
     } finally {
       this.detailLoading = false;
     }
   }
 
-  private async submitOrder(request: RepairOrderSubmitRequest): Promise<void> {
-    await RepairOrderService.submit(request);
+  private async submitOrder(request: RepairOrderSubmitRequest, idempotencyKey: string): Promise<void> {
+    await RepairOrderService.submit(request, idempotencyKey);
     this.noticeText = SUBMIT_OK_TEXT;
   }
 
@@ -193,29 +238,67 @@ export struct RepairOrdersPage {
       }
       .width('100%')
 
-      this.detailRow('设备机型', order.deviceModel)
-      this.detailRow('设备序列号', order.deviceSerial === null || order.deviceSerial === '' ? '未填写' : order.deviceSerial)
-      this.detailRow('联系电话', order.contactPhone)
-      this.detailRow('当前状态', repairOrderStatusLabel(order.status))
-      this.detailRow('故障描述', order.faultDescription)
-
-      Text('进度')
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.text_primary'))
+      if (this.detailLoading) {
+        Column({ space: 8 }) {
+          LoadingProgress()
+            .width(28)
+            .height(28)
+            .color($r('app.color.brand'))
+          Text('正在加载详情…')
+            .fontSize(13)
+            .fontColor($r('app.color.text_secondary'))
+        }
         .width('100%')
-        .textAlign(TextAlign.Start)
+        .padding(20)
+        .justifyContent(FlexAlign.Center)
+      } else if (this.detailErrorText !== '') {
+        Column({ space: 12 }) {
+          Text(this.detailErrorText)
+            .fontSize(14)
+            .fontColor($r('app.color.danger'))
+            .width('100%')
+            .textAlign(TextAlign.Center)
+          Button('重试')
+            .fontSize(14)
+            .height(40)
+            .backgroundColor($r('app.color.brand'))
+            .fontColor(Color.White)
+            .onClick(() => {
+              if (order !== null) {
+                this.askDetail(order);
+              }
+            })
+        }
+        .width('100%')
+        .padding(20)
+        .backgroundColor($r('app.color.surface'))
+        .borderRadius(CARD_RADIUS)
+        .alignItems(HorizontalAlign.Center)
+      } else {
+        this.detailRow('设备机型', order.deviceModel)
+        this.detailRow('设备序列号', order.deviceSerial === null || order.deviceSerial === '' ? '未填写' : order.deviceSerial)
+        this.detailRow('联系电话', order.contactPhone)
+        this.detailRow('当前状态', repairOrderStatusLabel(order.status))
+        this.detailRow('故障描述', order.faultDescription)
 
-      if (order.events.length === 0) {
-        Text('暂无进度记录')
-          .fontSize(13)
-          .fontColor($r('app.color.text_secondary'))
+        Text('进度')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.text_primary'))
           .width('100%')
           .textAlign(TextAlign.Start)
-      } else {
-        ForEach(order.events, (event: RepairOrderEventView) => {
-          this.timelineEvent(event);
-        }, (event: RepairOrderEventView) => event.id)
+
+        if (order.events.length === 0) {
+          Text('暂无进度记录')
+            .fontSize(13)
+            .fontColor($r('app.color.text_secondary'))
+            .width('100%')
+            .textAlign(TextAlign.Start)
+        } else {
+          ForEach(order.events, (event: RepairOrderEventView) => {
+            this.timelineEvent(event);
+          }, (event: RepairOrderEventView) => event.id)
+        }
       }
     }
     .width('100%')
@@ -300,8 +383,25 @@ export struct RepairOrdersPage {
     .alignItems(HorizontalAlign.Center)
   }
 
+  @Builder
+  loadMoreButton() {
+    if (this.hasMore) {
+      Button(this.loadingMore ? '加载中…' : '加载更多')
+        .width('100%')
+        .height(42)
+        .fontSize(14)
+        .backgroundColor($r('app.color.surface'))
+        .fontColor($r('app.color.brand'))
+        .enabled(!this.loadingMore)
+        .onClick(() => {
+          this.loadMore();
+        })
+    }
+  }
+
   build() {
     Column({ space: 14 }) {
+      // 标题栏：固定在顶部，不随列表滚动
       Row({ space: 12 }) {
         Text('我的报修')
           .fontSize(26)
@@ -329,28 +429,41 @@ export struct RepairOrdersPage {
           .textAlign(TextAlign.Start)
       }
 
-      if (this.showForm) {
-        RepairOrderForm({
-          onSubmitted: () => this.afterSubmit(),
-          submit: (request: RepairOrderSubmitRequest) => this.submitOrder(request)
-        })
-      }
+      // 可滚动内容区：表单、详情、列表都在这里
+      Scroll() {
+        Column({ space: 14 }) {
+          if (this.showForm) {
+            RepairOrderForm({
+              onSubmitted: () => this.afterSubmit(),
+              submit: (request: RepairOrderSubmitRequest, idempotencyKey: string) => this.submitOrder(request, idempotencyKey),
+              onSessionExpired: () => this.onSessionExpired()
+            })
+          }
 
-      if (this.selected !== null) {
-        this.detailPanel(this.selected)
-      }
+          if (this.selected !== null) {
+            this.detailPanel(this.selected)
+          }
 
-      if (this.state === STATE_LOADING) {
-        this.loadingView();
-      } else if (this.state === STATE_ERROR) {
-        this.errorView();
-      } else if (this.state === STATE_EMPTY) {
-        this.emptyView();
-      } else {
-        ForEach(this.orders, (order: RepairOrderView) => {
-          this.orderCard(order);
-        }, (order: RepairOrderView) => order.id)
+          if (this.state === STATE_LOADING) {
+            this.loadingView();
+          } else if (this.state === STATE_ERROR) {
+            this.errorView();
+          } else if (this.state === STATE_EMPTY) {
+            this.emptyView();
+          } else {
+            ForEach(this.orders, (order: RepairOrderView) => {
+              this.orderCard(order);
+            }, (order: RepairOrderView) => order.id)
+
+            this.loadMoreButton();
+          }
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
       }
+      .layoutWeight(1)
+      .scrollBar(BarState.Auto)
+      .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')
