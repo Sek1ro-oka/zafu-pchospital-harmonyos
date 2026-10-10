@@ -1,8 +1,9 @@
 import { HOME_STAFF } from '../../core/auth/AuthContract';
-import { ROUTE_KNOWLEDGE, ROUTE_REPAIR, ROUTE_SERVICE } from '../../core/ui/Routes';
+import { ROUTE_KNOWLEDGE, ROUTE_REPAIR, ROUTE_REPAIR_ORDERS, ROUTE_SERVICE } from '../../core/ui/Routes';
 import { SessionHeader } from '../../core/ui/SessionHeader';
 import { CARD_GAP, CARD_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
 import { KnowledgePage } from '../knowledge/KnowledgePage';
+import { RepairOrdersPage } from '../repair/RepairOrdersPage';
 import { RepairPage } from '../repair/RepairPage';
 import { ServicePage } from '../service/ServicePage';
 
@@ -14,7 +15,8 @@ interface HomeEntry {
 
 function customerEntries(): HomeEntry[] {
   return [
-    { title: '客户服务', note: '报修与进度查询 · 待接入', route: ROUTE_SERVICE },
+    { title: '我的报修', note: '提交报修与查看进度', route: ROUTE_REPAIR_ORDERS },
+    { title: '客户服务', note: '预约与常见问题 · 待接入', route: ROUTE_SERVICE },
     { title: '知识问答', note: '有出处的 AI 咨询 · 待接入', route: ROUTE_KNOWLEDGE }
   ];
 }
@@ -35,6 +37,9 @@ export struct HomePage {
   @Prop roleText: string = '';
   @Prop home: string = '';
   onLogout: () => Promise<void> = async () => {
+  };
+  /** 子页面发现会话失效时，通知根页面回登录页。 */
+  onSessionExpired: () => void = () => {
   };
   @State pathStack: NavPathStack = new NavPathStack();
 
@@ -68,6 +73,12 @@ export struct HomePage {
   destination(name: string) {
     if (name === ROUTE_SERVICE) {
       ServicePage();
+    } else if (name === ROUTE_REPAIR_ORDERS) {
+      RepairOrdersPage({
+        onSessionExpired: () => {
+          this.onSessionExpired();
+        }
+      });
     } else if (name === ROUTE_REPAIR) {
       RepairPage();
     } else if (name === ROUTE_KNOWLEDGE) {
@@ -95,7 +106,9 @@ export struct HomePage {
           }, (entry: HomeEntry) => entry.title + entry.route)
         }
         .width('100%')
-        Text('本轮已接入：真实登录与会话。上方业务入口仍为骨架页面，未接入数据。')
+        Text(this.home === HOME_STAFF
+          ? '本轮已接入：真实登录与会话。业务入口仍为骨架页面，未接入数据。'
+          : '本轮已接入：真实登录与会话、我的报修（提交与进度查询）。其余入口仍为骨架页面。')
           .fontSize(13)
           .fontColor($r('app.color.text_secondary'))
           .width('100%')

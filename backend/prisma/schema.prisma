@@ -34,6 +34,8 @@ model User {
   skillsCreated      Skill[]                 @relation("SkillCreator")
   publicSettings     PublicContentSetting[]  @relation("PublicContentSettingUpdater")
   repairActivities   RepairActivity[]        @relation("RepairActivityCreator")
+  repairOrders       RepairOrder[]           @relation("RepairOrderSubmitter")
+  repairOrderEvents  RepairOrderEvent[]      @relation("RepairOrderEventActor")
 
   @@index([status, deletedAt], map: "users_status_deleted_idx")
   @@map("users")
@@ -151,6 +153,7 @@ model MemberProfile {
   notificationsOut  Notification[]   @relation("NotificationActor")
   activityAttendances RepairActivityAttendance[]
   activityServedRegs  RepairActivityRegistration[] @relation("RepairActivityServedBy")
+  assignedRepairOrders RepairOrder[] @relation("RepairOrderAssignee")
 
   @@index([status, deletedAt], map: "member_profiles_status_deleted_idx")
   @@index([deletedAt, sortOrder, createdAt], map: "member_profiles_order_idx")
@@ -337,6 +340,69 @@ model UserSkill {
   @@map("user_skills")
 }
 
+/// 客户报修单（Issue #37）。
+///
+/// **与 `RepairRecord` 是两个不同对象**：`RepairRecord` 是工作人员对维修过程的备案，
+/// 有 `memberProfileId`（成员档案）、审核状态 `DRAFT/PENDING/APPROVED/REJECTED`；
+/// 本模型是**客户提交的故障申报**，有 `submittedByUserId`（客户账号）、
+/// 处理状态 `SUBMITTED/ACCEPTED/REPAIRING/COMPLETED/CANCELLED`。
+/// 两者通过 `repairRecordId` 可选一对一关联衔接，但状态各自独立维护（#38 要求）。
+model RepairOrder {
+  id                String    @id @db.Char(36)
+  /// 提交人：报修客户账号。数据归属的唯一依据。
+  submittedByUserId String    @map("submitted_by_user_id") @db.Char(36)
+  /// 机型（必填）
+  deviceModel       String    @map("device_model") @db.VarChar(60)
+  /// 设备序列号（选填，便于工作人员核对机器）
+  deviceSerial      String?   @map("device_serial") @db.VarChar(120)
+  /// 故障描述（必填）
+  faultDescription  String    @map("fault_description") @db.Text
+  /// 联系电话（必填，工作人员受理时需要）
+  contactPhone      String    @map("contact_phone") @db.VarChar(32)
+  /// 报修处理状态：RepairOrderStatus，**独立于备案的 RepairStatus**
+  status            String    @db.VarChar(32)
+  /// 最近一次进度事件时间，列表按此倒序
+  lastProgressAt    DateTime? @map("last_progress_at") @db.DateTime(3)
+  /// 幂等键：同一客户端重复提交不产生多张单
+  createRequestKey  String    @unique(map: "repair_orders_create_request_uq") @map("create_request_key") @db.VarChar(128)
+  /// 受理人（#38 工作人员受理时回填）；本 Issue 不写入
+  assigneeMemberProfileId String? @map("assignee_member_profile_id") @db.Char(36)
+  /// 关联的维修备案（#38 完成维修后回填）；本 Issue 不写入
+  repairRecordId    String?   @unique(map: "repair_orders_record_uq") @map("repair_record_id") @db.Char(36)
+  createdAt         DateTime  @map("created_at") @db.DateTime(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt         DateTime? @map("deleted_at") @db.DateTime(3)
+
+  submittedBy  User              @relation("RepairOrderSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict)
+  assignee     MemberProfile?    @relation("RepairOrderAssignee", fields: [assigneeMemberProfileId], references: [id], onDelete: Restrict)
+  repairRecord RepairRecord?     @relation("RepairOrderToRecord", fields: [repairRecordId], references: [id], onDelete: Restrict)
+  events       RepairOrderEvent[]
+
+  @@index([submittedByUserId, status, createdAt], map: "repair_orders_submitter_status_idx")
+  @@index([status, lastProgressAt], map: "repair_orders_status_progress_idx")
+  @@map("repair_orders")
+}
+
+/// 报修单进度事件：每次状态变更留一条，可追溯（#37 建立，#38 写入工作人员变更）。
+model RepairOrderEvent {
+  id            String      @id @db.Char(36)
+  repairOrderId String      @map("repair_order_id") @db.Char(36)
+  /// 变更前状态；首次提交事件为 null
+  fromStatus    String?     @map("from_status") @db.VarChar(32)
+  toStatus      String      @map("to_status") @db.VarChar(32)
+  /// 备注：工作人员更新进度时填写
+  note          String?     @db.VarChar(500)
+  /// 操作人
+  actorUserId   String      @map("actor_user_id") @db.Char(36)
+  createdAt     DateTime    @map("created_at") @db.DateTime(3)
+
+  repairOrder RepairOrder @relation(fields: [repairOrderId], references: [id], onDelete: Restrict)
+  actor       User        @relation("RepairOrderEventActor", fields: [actorUserId], references: [id], onDelete: Restrict)
+
+  @@index([repairOrderId, createdAt], map: "repair_order_events_order_time_idx")
+  @@map("repair_order_events")
+}
+
 model RepairRecord {
   id               String                @id @db.Char(36)
   memberProfileId  String                @map("member_profile_id") @db.Char(36)
@@ -367,6 +433,7 @@ model RepairRecord {
   favorites        RepairFavorite[]
   notifications    Notification[]
   activityRegistration RepairActivityRegistration?
+  repairOrder      RepairOrder?            @relation("RepairOrderToRecord")
 
   @@index([memberProfileId, status, repairDate], map: "repair_records_member_status_date_idx")
   @@index([status, submittedAt], map: "repair_records_status_submitted_idx")

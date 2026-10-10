@@ -30,6 +30,21 @@ export const InviteCodeEffectiveStatus = [
 ] as const;
 export const AuditActorType = ["USER", "SYSTEM"] as const;
 export const RepairStatus = ["DRAFT", "PENDING", "APPROVED", "REJECTED"] as const;
+/**
+ * 客户报修单的处理状态（Issue #37）。
+ *
+ * **刻意不复用 `RepairStatus`**：那个是工作人员维修备案的**审核流**
+ * （草稿/待审/通过/驳回），本枚举是客户报修的**处理流**（提交/受理/维修中/完成/取消），
+ * 两者语义与流转规则都不同。#38 要求「维修处理状态与备案审核状态分别维护」，
+ * 分成两个枚举即是该要求的落点。
+ */
+export const RepairOrderStatus = [
+  "SUBMITTED",
+  "ACCEPTED",
+  "REPAIRING",
+  "COMPLETED",
+  "CANCELLED",
+] as const;
 export const RepairResult = ["COMPLETED", "NOT_COMPLETED"] as const;
 export const RepairReviewDecision = ["APPROVED", "REJECTED"] as const;
 export const RepairTimelineEventType = [
@@ -66,6 +81,7 @@ export type InviteCodeStoredStatus = ValueOf<typeof InviteCodeStoredStatus>;
 export type InviteCodeEffectiveStatus = ValueOf<typeof InviteCodeEffectiveStatus>;
 export type AuditActorType = ValueOf<typeof AuditActorType>;
 export type RepairStatus = ValueOf<typeof RepairStatus>;
+export type RepairOrderStatus = ValueOf<typeof RepairOrderStatus>;
 export type RepairResult = ValueOf<typeof RepairResult>;
 export type RepairReviewDecision = ValueOf<typeof RepairReviewDecision>;
 export type RepairTimelineEventType = ValueOf<typeof RepairTimelineEventType>;
@@ -173,6 +189,11 @@ export const Permission = [
   // 维修活动：管理 CRUD / 报名管理 vs 成员出勤签到接待。
   "activity:admin",
   "activity:staff",
+  // 客户报修单（Issue #37）：与 `repair:*` 是两条独立链路。
+  // `repair:*` 是工作人员维修备案；`repair.order:*` 是客户报修申报。
+  // 客户没有 MEMBER/ADMIN 角色，靠 customerPermissions 拿到这两个码。
+  "repair.order:create",
+  "repair.order:read",
 ] as const;
 export type Permission = ValueOf<typeof Permission>;
 
