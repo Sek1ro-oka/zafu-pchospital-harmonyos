@@ -1,31 +1,52 @@
 # Issue #37 认领与 PR 操作指引
 
-> ⚠️ **本机无 GitHub 写凭据**（已实测：`gh` 未安装、无 Token、
-> Windows 凭据助手 `manager` 在非交互环境下挂起不回）。
-> **读操作正常**（`git ls-remote origin` 可通），所以**只有"写"的三步需要你操作**：
-> ① 留认领评论 ② 推送分支 ③ 开 PR。
+> **第二步（推送分支）已完成** ✅ —— 远端 `Sek1ro-oka/zafu-pchospital-harmonyos` 上
+> `feat/issue-37-customer-repair-orders` = `1ba250d`，本地远端一致，工作区干净。
 >
-> 代码已全部写完并按 LF 规范提交在本地分支上，**工作区干净**，随时可推。
+> **剩下 2 步需要你跑一条命令**（`gh` 已装好，但未登录；本机确实无存量凭据）：
+> ① 在 Issue #37 留认领评论 ② 开 PR。
+> 两步已合并进 `issue37-finish.sh`，跑它就行 —— `gh` 会自己弹浏览器让你登录，
+> 之后评论与 PR 全自动完成。**或者**按下面两步手动做。
 
 ---
 
-## 当前本地状态（已验证，2026-10-10）
+## 当前状态（2026-10-10 核对）
 
 | 项 | 值 |
 | --- | --- |
 | 本地分支 | `feat/issue-37-customer-repair-orders` |
-| 提交 | `def53b9` feat(repair-orders): 客户报修提交、本人列表与进度查询 (#37) |
+| 提交 | `def53b9` 实现 + `1ba250d` 文档 |
 | 工作区 | 干净（无未提交改动） |
+| 推送状态 | ✅ **已推送**，远端 = `1ba250d`，与本地一致 |
 | 推送目标 | `origin` = `Sek1ro-oka/zafu-pchospital-harmonyos` |
-| PR 目标 | `Xiaoyuan-114/zafu-pchospital-harmonyos` : `main` |
+| PR base | **上游 `main`**（`Xiaoyuan-114/zafu-pchospital-harmonyos`），已验证是本分支祖先 |
+| 剩余待办 | ① 认领评论 ② 开 PR |
 
 ---
 
-## 第一步：在 Issue #37 下留认领评论
+## 一键完成（推荐）
+
+打开 Git Bash，执行：
+
+```bash
+bash /e/zafu_ph_tmp/issue37-finish.sh
+```
+
+脚本会：① 检测 `gh` 登录（未登录则弹浏览器，你粘贴一次性验证码即可）
+→ ② 在 Issue #37 下发出认领评论 → ③ 用 `base=上游main` 开 PR 并打印链接。
+
+> 脚本与正文材料同时备份在 `E:\zafu_ph_tmp\` 下，被清掉可重新生成。
+
+---
+
+## 手动方式（若不想用脚本）
+
+### 第一步：在 Issue #37 下留认领评论
 
 打开 https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/37
 
 复制以下内容贴到评论区：
+
 
 ```markdown
 **认领 Issue #37（02 客户报修与进度查询）**
@@ -51,43 +72,51 @@ HAP 构建成功。PR 即将提交。
 
 ---
 
-## 第二步：推送分支
+## 第二步：推送分支 ✅ 已完成
 
-代码已提交在本地，只差推送。**三种方式任选其一**：
+已于 2026-10-10 完成。远端核对：
 
-### 方式 1（推荐）：你本机开个终端跑一条命令
-
-在 `E:\zafu_ph` 目录下执行：
-
-```bash
-git push -u origin feat/issue-37-customer-repair-orders
+```
+$ git ls-remote origin refs/heads/feat/issue-37-customer-repair-orders
+1ba250df5fc63595d3122b4e51fdc213572b9dec    refs/heads/feat/issue-37-customer-repair-orders
 ```
 
-会弹出 GitHub 登录窗口（或让你输入用户名 + Personal Access Token），
-登录/粘贴后即完成推送。**这一步我这边做不了，因为凭据窗口需要真人交互。**
+本地 `HEAD` 同为 `1ba250d`，**本地与远端一致**。
 
-### 方式 2：给我一个 Token，我替你推
-
-在 https://github.com/settings/tokens 生成 **classic token**，勾选：
-- `public_repo`（若仓库是私有，改用 `repo`）
-
-把 Token 贴给我，我用它**一次性**完成推送。凭据**只用于本次操作，不写入任何文件**，
-用完你可以在 GitHub 上一键 Revoke。
-
-### 方式 3：先把提交导出成补丁，你在别处应用
-
-如果上面都走不通，我可以导出 `.patch`，你在有凭据的机器上 `git am` 后推送。
+> 保留原说明备查：本机凭据助手 `manager` 在非交互环境会挂起，
+> 所以推送必须由你在本机终端执行（`git push -u origin <branch>`），
+> 凭据窗口需要真人交互。既然已成功，后续分支沿用同样方式即可。
 
 ---
 
 ## 第三步：开 PR
 
+⚠️ **base 必须选上游 `main`**，不要选个人 fork 的 `main`。
+个人 fork 的 `main` 停在 `c5b332b`，**落后上游 12 个提交**；
+若拿它当 base，会误把上游已合入的 12 个提交也算进本 PR 的 diff。
+
+已验证：**上游 `main`（`6f83dea`）是本分支的祖先**，
+所以对上游开 PR 时 diff 恰好只有这 2 个提交：
+
+```
+1ba250d docs(issue-37): 记录提交就绪状态与推送/PR 操作指引
+def53b9 feat(repair-orders): 客户报修提交、本人列表与进度查询 (#37)
+```
+
 推送成功后，GitHub 会在仓库页顶部显示 **"Compare & pull request"** 提示条，点它即可。
-或直接打开：
+或直接打开（`base` 已指向上游）：
 
 ```
 https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/compare/main...Sek1ro-oka:zafu-pchospital-harmonyos:feat/issue-37-customer-repair-orders?expand=1
 ```
+
+> 用 `gh` 一条命令等价写法（会自动指定 `--head Sek1ro-oka:feat/...`）：
+> ```bash
+> gh pr create --repo Xiaoyuan-114/zafu-pchospital-harmonyos \
+>   --base main --head Sek1ro-oka:feat/issue-37-customer-repair-orders \
+>   --title "feat(repair-orders): 客户报修提交、本人列表与进度查询 (#37)" \
+>   --body-file /e/zafu_ph_tmp/issue37-pr-body.md
+> ```
 
 **PR 标题**：
 
