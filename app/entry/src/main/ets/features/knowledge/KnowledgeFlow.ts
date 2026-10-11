@@ -120,6 +120,15 @@ export function removeMessageById(messages: ChatMessage[], id: number): ChatMess
 }
 
 /**
+ * 错误码是否属于「网络/连接」类：客户端侧错误码（NETWORK_ERROR / UNEXPECTED_RESPONSE /
+ * LOCAL_STORAGE_ERROR）与后端信封里的业务错误码天然分开。
+ * 界面据此区分：网络错误补排查引导，业务错误直接展示后端文案。
+ */
+export function isNetworkErrorCode(code: string): boolean {
+  return code === 'NETWORK_ERROR' || code === 'UNEXPECTED_RESPONSE' || code === 'LOCAL_STORAGE_ERROR';
+}
+
+/**
  * 重试定位：失败卡必须紧跟它所回答的用户问题。
  * 返回用户消息下标；找不到（或结构不符合不变量）返回 -1，调用方不发送请求。
  */

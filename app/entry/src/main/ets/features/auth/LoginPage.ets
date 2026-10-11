@@ -3,7 +3,22 @@ import { SessionIdentity } from '../../core/auth/AuthContract';
 import { SessionService } from '../../core/auth/SessionService';
 import { ApiRequestError } from '../../core/network/ApiClient';
 import { ApiConfig } from '../../core/network/ApiConfig';
-import { CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
+import {
+  CARD_GAP,
+  CARD_PADDING,
+  CARD_RADIUS,
+  CONTROL_HEIGHT,
+  CONTROL_HEIGHT_MD,
+  CONTROL_RADIUS,
+  FONT_BODY,
+  FONT_DISPLAY,
+  FONT_NOTE,
+  FONT_SUBTITLE,
+  FONT_TEXT,
+  GAP_LG,
+  GAP_SM,
+  PAGE_PADDING,
+} from '../../core/ui/Theme';
 
 /** 登录页：服务器地址 + QQ + 密码；登录成功把服务端身份交给上层。 */
 @Component
@@ -14,6 +29,8 @@ export struct LoginPage {
   @State qq: string = '';
   @State password: string = '';
   @State busy: boolean = false;
+  /** 地址检测进行中：覆盖「保存地址 + 连接检测」全程，期间按钮禁用防连点。 */
+  @State checking: boolean = false;
   @State errorText: string = '';
   @State healthText: string = '';
   @State healthOk: boolean = false;
@@ -47,12 +64,18 @@ export struct LoginPage {
   }
 
   private async onServerUrlSubmitted(): Promise<void> {
-    if (this.busy) {
+    if (this.busy || this.checking) {
       return;
     }
+    // checking 覆盖保存与检测全程：快速双击只会发出一次检测请求。
+    this.checking = true;
     this.errorText = '';
-    if (await this.applyServerUrl()) {
-      await this.refreshHealth();
+    try {
+      if (await this.applyServerUrl()) {
+        await this.refreshHealth();
+      }
+    } finally {
+      this.checking = false;
     }
   }
 
@@ -79,10 +102,13 @@ export struct LoginPage {
       this.onLoggedIn(identity);
     } catch (error) {
       if (error instanceof ApiRequestError) {
-        this.errorText = error.message;
+        // 网络错误补一句排查引导；业务错误（密码错误/账号停用等）直接用后端信封文案。
         if (error.code === 'NETWORK_ERROR') {
+          this.errorText = `${error.message}（请检查服务器地址与网络）`;
           this.healthOk = false;
           this.healthText = '连接不可用，请检查服务器地址与网络';
+        } else {
+          this.errorText = error.message;
         }
       } else {
         this.errorText = '登录失败，请重试';
@@ -95,27 +121,27 @@ export struct LoginPage {
   @Builder
   fieldLabel(text: string) {
     Text(text)
-      .fontSize(14)
+      .fontSize(FONT_TEXT)
       .fontColor($r('app.color.text_secondary'))
       .width('100%')
       .textAlign(TextAlign.Start)
   }
 
   build() {
-    Column({ space: 16 }) {
-      Column({ space: 6 }) {
+    Column({ space: GAP_LG }) {
+      Column({ space: GAP_SM }) {
         Text('鸿蒙电脑医院')
-          .fontSize(30)
+          .fontSize(FONT_DISPLAY)
           .fontWeight(FontWeight.Bold)
           .fontColor($r('app.color.text_primary'))
         Text('课程实验 · 登录')
-          .fontSize(15)
+          .fontSize(FONT_BODY)
           .fontColor($r('app.color.text_secondary'))
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
 
-      Column({ space: 12 }) {
+      Column({ space: CARD_GAP }) {
         this.fieldLabel('QQ 号')
         TextInput({ text: $$this.qq, placeholder: '5–11 位数字' })
           .type(InputType.Number)
@@ -130,28 +156,38 @@ export struct LoginPage {
           .borderRadius(CONTROL_RADIUS)
         if (this.errorText !== '') {
           Text(this.errorText)
-            .fontSize(14)
+            .fontSize(FONT_TEXT)
             .fontColor($r('app.color.danger'))
             .width('100%')
             .textAlign(TextAlign.Start)
         }
-        Button(this.busy ? '登录中…' : '登录')
-          .width('100%')
-          .height(CONTROL_HEIGHT)
-          .fontSize(17)
-          .backgroundColor($r('app.color.brand'))
-          .fontColor(Color.White)
-          .enabled(!this.busy)
-          .onClick(() => {
-            this.doLogin();
-          })
+        Button() {
+          Row({ space: GAP_SM }) {
+            if (this.busy) {
+              LoadingProgress()
+                .width(18)
+                .height(18)
+                .color(Color.White)
+            }
+            Text(this.busy ? '登录中…' : (this.errorText !== '' ? '重试登录' : '登录'))
+              .fontSize(FONT_SUBTITLE)
+              .fontColor(Color.White)
+          }
+        }
+        .width('100%')
+        .height(CONTROL_HEIGHT)
+        .backgroundColor($r('app.color.brand'))
+        .enabled(!this.busy)
+        .onClick(() => {
+          this.doLogin();
+        })
       }
       .width('100%')
-      .padding(16)
+      .padding(CARD_PADDING)
       .backgroundColor($r('app.color.surface'))
       .borderRadius(CARD_RADIUS)
 
-      Column({ space: 8 }) {
+      Column({ space: GAP_SM }) {
         this.fieldLabel('服务器地址（手机填电脑局域网 IP:端口）')
         TextInput({ text: $$this.serverUrl, placeholder: 'http://192.168.1.20:13080' })
           .height(CONTROL_HEIGHT)
@@ -160,28 +196,28 @@ export struct LoginPage {
           .onSubmit(() => {
             this.onServerUrlSubmitted();
           })
-        Row({ space: 6 }) {
+        Row({ space: GAP_SM }) {
           Text('●')
             .fontSize(10)
-            .fontColor(this.healthOk ? $r('app.color.ok') : $r('app.color.text_secondary'))
-          Text(this.healthText === '' ? '正在检测后端连接…' : this.healthText)
-            .fontSize(13)
-            .fontColor(this.healthOk ? $r('app.color.ok') : $r('app.color.text_secondary'))
+            .fontColor(this.healthOk && !this.checking ? $r('app.color.ok') : $r('app.color.text_secondary'))
+          Text(this.checking || this.healthText === '' ? '正在检测后端连接…' : this.healthText)
+            .fontSize(FONT_NOTE)
+            .fontColor(this.healthOk && !this.checking ? $r('app.color.ok') : $r('app.color.text_secondary'))
             .layoutWeight(1)
         }
         .width('100%')
-        Button('保存地址并检测')
-          .fontSize(14)
-          .height(40)
+        Button(this.checking ? '检测中…' : '保存地址并检测')
+          .fontSize(FONT_TEXT)
+          .height(CONTROL_HEIGHT_MD)
           .backgroundColor($r('app.color.brand_soft'))
           .fontColor($r('app.color.brand'))
-          .enabled(!this.busy)
+          .enabled(!this.busy && !this.checking)
           .onClick(() => {
             this.onServerUrlSubmitted();
           })
       }
       .width('100%')
-      .padding(16)
+      .padding(CARD_PADDING)
       .backgroundColor($r('app.color.surface'))
       .borderRadius(CARD_RADIUS)
       .alignItems(HorizontalAlign.Start)

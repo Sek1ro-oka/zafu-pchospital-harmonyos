@@ -1,6 +1,23 @@
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { ROUTE_KNOWLEDGE_SOURCE } from '../../core/ui/Routes';
-import { CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
+import { NavPusher, ROUTE_KNOWLEDGE_SOURCE } from '../../core/ui/Routes';
+import { ErrorPanel } from '../../core/ui/StatePanel';
+import {
+  CARD_GAP,
+  CARD_PADDING,
+  CARD_PADDING_SM,
+  CARD_RADIUS,
+  CONTROL_HEIGHT,
+  CONTROL_HEIGHT_SM,
+  CONTROL_RADIUS,
+  FONT_BODY,
+  FONT_CHIP,
+  FONT_HEADING,
+  FONT_NOTE,
+  FONT_TEXT,
+  GAP_SM,
+  GAP_XS,
+  PAGE_PADDING,
+} from '../../core/ui/Theme';
 import {
   headingTrailText,
   KnowledgeChatData,
@@ -17,6 +34,7 @@ import {
   ChatMessage,
   failedMessage,
   insertAfterUser,
+  isNetworkErrorCode,
   KIND_CLARIFY,
   KIND_INSUFFICIENT,
   pendingMessage,
@@ -39,6 +57,13 @@ const EXAMPLE_QUESTIONS: string[] = [
   'CrystalDiskInfo 怎么看硬盘健康状态？'
 ];
 
+/** 「资料不足」回答的引导文案：干净回答应当给出处，没有出处就明确说清可以怎么补问。 */
+const INSUFFICIENT_HINT: string =
+  '现有资料不足以支持回答，可补充机型、系统版本或具体报错原文后再问一次。';
+
+/** 澄清追问的引导文案：后端追问会带上需要补充的信息。 */
+const CLARIFY_HINT: string = '请补充上面的信息后再发一次。';
+
 /**
  * 知识问答页：客户与工作人员共用，资料范围由服务端按角色过滤。
  *
@@ -47,6 +72,7 @@ const EXAMPLE_QUESTIONS: string[] = [
  * - 消息顺序不变量由 KnowledgeFlow 的纯函数保证：回答紧跟对应问题，
  *   旧问题重试不会跑到新问题之后，重复失败仍可重试；
  * - 会话过期交给上层（onSessionExpired → 现有退出/回登录流程）。
+ * - 页面标题由 HomePage 的 NavDestination 提供，本页只保留对话工具行。
  */
 @Component
 export struct KnowledgePage {
@@ -57,6 +83,8 @@ export struct KnowledgePage {
   @State inputText: string = '';
   @State sending: boolean = false;
   private scroller: Scroller = new Scroller();
+  /** 引用详情跳转与首页同一套路：防抖，双击不会压入两个详情页。 */
+  private pusher: NavPusher = new NavPusher();
   private nextId: number = 1;
   /** 代次：清空/离开时自增，旧请求的异步返回据此丢弃。 */
   private generation: number = 0;
@@ -138,13 +166,16 @@ export struct KnowledgePage {
         return;
       }
       const apiError: ApiRequestError | null = error instanceof ApiRequestError ? error : null;
+      const errorCode: string = apiError !== null ? apiError.code : 'UNKNOWN';
+      const errorMessage: string = apiError !== null ? apiError.message : '请求失败，请重试';
       this.messages = replaceMessageById(
         this.messages,
         pendingId,
+        // 网络错误与业务错误分开展示：网络错误补一句排查引导，业务错误直接用后端信封文案。
         failedMessage(
           pendingId,
-          apiError !== null ? apiError.code : 'UNKNOWN',
-          apiError !== null ? apiError.message : '请求失败，请重试'
+          errorCode,
+          isNetworkErrorCode(errorCode) ? `${errorMessage}（请检查服务器地址、网络与后端是否已启动）` : errorMessage
         )
       );
       this.scrollToBottom();
@@ -177,31 +208,31 @@ export struct KnowledgePage {
 
   private openCitation(citation: KnowledgeCitation): void {
     const param: KnowledgeSourceParam = { sourceId: citation.sourceId, title: citation.title };
-    this.pathStack.pushPathByName(ROUTE_KNOWLEDGE_SOURCE, param);
+    this.pusher.push(this.pathStack, ROUTE_KNOWLEDGE_SOURCE, param);
   }
 
   @Builder
   emptyState() {
-    Column({ space: 10 }) {
+    Column({ space: GAP_SM }) {
       Text('有出处的维修知识问答')
-        .fontSize(18)
+        .fontSize(FONT_HEADING)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      Text('回答只依据电脑医院公开文档，并给出可打开的引用；资料不足时会追问或说明。')
-        .fontSize(14)
+      Text('回答依据当前账号可访问的资料，并给出可打开的引用；资料不足时会追问或说明。')
+        .fontSize(FONT_TEXT)
         .fontColor($r('app.color.text_secondary'))
       Text('试试这样问：')
-        .fontSize(13)
+        .fontSize(FONT_NOTE)
         .fontColor($r('app.color.text_secondary'))
-        .margin({ top: 6 })
+        .margin({ top: GAP_SM })
       Flex({ wrap: FlexWrap.Wrap }) {
         ForEach(EXAMPLE_QUESTIONS, (question: string) => {
           Text(question)
-            .fontSize(13)
+            .fontSize(FONT_NOTE)
             .fontColor($r('app.color.brand'))
-            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
-            .margin({ right: 8, bottom: 8 })
-            .backgroundColor($r('app.color.surface'))
+            .padding({ left: CARD_GAP, right: CARD_GAP, top: GAP_SM, bottom: GAP_SM })
+            .margin({ right: GAP_SM, bottom: GAP_SM })
+            .backgroundColor($r('app.color.field_bg'))
             .borderRadius(CONTROL_RADIUS)
             .onClick(() => {
               this.inputText = question;
@@ -211,7 +242,7 @@ export struct KnowledgePage {
       .width('100%')
     }
     .width('100%')
-    .padding(16)
+    .padding(CARD_PADDING)
     .alignItems(HorizontalAlign.Start)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
@@ -219,29 +250,29 @@ export struct KnowledgePage {
 
   @Builder
   citationCard(citation: KnowledgeCitation) {
-    Column({ space: 4 }) {
+    Column({ space: GAP_XS }) {
       Text(`[${citation.label}] ${citation.docTitle}`)
-        .fontSize(14)
+        .fontSize(FONT_TEXT)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
       Text(headingTrailText(citation.headingPath))
-        .fontSize(12)
+        .fontSize(FONT_CHIP)
         .fontColor($r('app.color.text_secondary'))
       Text(citation.snippet)
-        .fontSize(12)
+        .fontSize(FONT_CHIP)
         .fontColor($r('app.color.text_secondary'))
         .maxLines(3)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
       Text('查看引用原文 >')
-        .fontSize(12)
+        .fontSize(FONT_CHIP)
         .fontColor($r('app.color.brand'))
         .margin({ top: 2 })
     }
     .width('100%')
-    .padding(10)
+    .padding(CARD_PADDING_SM)
     .alignItems(HorizontalAlign.Start)
     .backgroundColor($r('app.color.start_window_background'))
-    .borderRadius(10)
+    .borderRadius(CONTROL_RADIUS)
     .onClick(() => {
       this.openCitation(citation);
     })
@@ -252,58 +283,65 @@ export struct KnowledgePage {
     if (message.role === ROLE_USER) {
       Row() {
         Text(message.text)
-          .fontSize(15)
+          .fontSize(FONT_BODY)
           .fontColor(Color.White)
-          .padding(12)
+          .padding(CARD_PADDING_SM)
           .backgroundColor($r('app.color.brand'))
           .borderRadius(CARD_RADIUS)
       }
       .width('100%')
       .justifyContent(FlexAlign.End)
     } else {
-      Column({ space: 8 }) {
+      Column({ space: GAP_SM }) {
         if (message.status === STATUS_PENDING) {
-          Row({ space: 8 }) {
+          Row({ space: GAP_SM }) {
             LoadingProgress().width(20).height(20)
             Text('正在检索资料并生成回答…')
-              .fontSize(14)
+              .fontSize(FONT_TEXT)
               .fontColor($r('app.color.text_secondary'))
           }
         } else if (message.status === STATUS_FAILED) {
-          Text(message.errorMessage)
-            .fontSize(14)
-            .fontColor($r('app.color.danger'))
-          Button('重试')
-            .height(34)
-            .fontSize(14)
-            .backgroundColor($r('app.color.brand'))
-            .onClick(() => {
+          // 失败卡复用统一错误面板：错误信息 + 重试；是否包卡片底色由外层气泡决定。
+          ErrorPanel({
+            message: message.errorMessage,
+            onRetry: (): void => {
               this.retry(message.id);
-            })
+            }
+          })
         } else {
           if (message.kind === KIND_CLARIFY) {
             Text('需要补充信息：')
-              .fontSize(13)
+              .fontSize(FONT_NOTE)
               .fontColor($r('app.color.brand'))
           }
           if (message.kind === KIND_INSUFFICIENT) {
             Text('资料不足')
-              .fontSize(13)
+              .fontSize(FONT_NOTE)
               .fontColor($r('app.color.brand'))
           }
           if (message.text !== '') {
             Text(message.text)
-              .fontSize(15)
+              .fontSize(FONT_BODY)
               .fontColor($r('app.color.text_primary'))
+          }
+          // 空数据引导：资料不足 / 追问时没有正文，给出下一步可做的事，不留空白。
+          if (message.kind === KIND_INSUFFICIENT) {
+            Text(INSUFFICIENT_HINT)
+              .fontSize(FONT_CHIP)
+              .fontColor($r('app.color.text_secondary'))
+          } else if (message.kind === KIND_CLARIFY) {
+            Text(CLARIFY_HINT)
+              .fontSize(FONT_CHIP)
+              .fontColor($r('app.color.text_secondary'))
           }
           if (message.degradationMessage !== '') {
             Text(`本次为关键词检索：${message.degradationMessage}`)
-              .fontSize(12)
+              .fontSize(FONT_CHIP)
               .fontColor($r('app.color.text_secondary'))
           }
           if (message.citations.length > 0) {
             Text('来源')
-              .fontSize(13)
+              .fontSize(FONT_NOTE)
               .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_secondary'))
             ForEach(message.citations, (citation: KnowledgeCitation) => {
@@ -313,7 +351,7 @@ export struct KnowledgePage {
         }
       }
       .width('100%')
-      .padding(12)
+      .padding(CARD_PADDING_SM)
       .alignItems(HorizontalAlign.Start)
       .backgroundColor($r('app.color.surface'))
       .borderRadius(CARD_RADIUS)
@@ -321,16 +359,13 @@ export struct KnowledgePage {
   }
 
   build() {
-    Column({ space: 10 }) {
+    Column({ space: CARD_GAP }) {
+      // 标题在 NavDestination 标题栏；这里只放对话工具行（清空）。
       Row() {
-        Text('知识问答')
-          .fontSize(22)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
         Blank()
         Button('清空本次对话')
-          .height(34)
-          .fontSize(13)
+          .height(CONTROL_HEIGHT_SM)
+          .fontSize(FONT_NOTE)
           .backgroundColor($r('app.color.surface'))
           .fontColor($r('app.color.text_secondary'))
           .enabled(this.messages.length > 0)
@@ -340,7 +375,7 @@ export struct KnowledgePage {
       }
       .width('100%')
 
-      List({ space: 10, scroller: this.scroller }) {
+      List({ space: CARD_GAP, scroller: this.scroller }) {
         if (this.messages.length === 0) {
           ListItem() {
             this.emptyState();
@@ -356,11 +391,11 @@ export struct KnowledgePage {
       .width('100%')
       .scrollBar(BarState.Auto)
 
-      Row({ space: 8 }) {
+      Row({ space: GAP_SM }) {
         TextInput({ text: this.inputText, placeholder: '描述故障或提问，支持多轮追问' })
           .layoutWeight(1)
           .height(CONTROL_HEIGHT)
-          .fontSize(15)
+          .fontSize(FONT_BODY)
           .backgroundColor($r('app.color.surface'))
           .borderRadius(CONTROL_RADIUS)
           .enterKeyType(EnterKeyType.Send)
@@ -370,14 +405,25 @@ export struct KnowledgePage {
           .onSubmit(() => {
             this.send();
           })
-        Button(this.sending ? '发送中…' : '发送')
-          .height(CONTROL_HEIGHT)
-          .fontSize(15)
-          .backgroundColor($r('app.color.brand'))
-          .enabled(!this.sending && this.inputText.trim() !== '')
-          .onClick(() => {
-            this.send();
-          })
+        Button() {
+          Row({ space: GAP_SM }) {
+            if (this.sending) {
+              LoadingProgress()
+                .width(18)
+                .height(18)
+                .color(Color.White)
+            }
+            Text(this.sending ? '发送中…' : '发送')
+              .fontSize(FONT_BODY)
+              .fontColor(Color.White)
+          }
+        }
+        .height(CONTROL_HEIGHT)
+        .backgroundColor($r('app.color.brand'))
+        .enabled(!this.sending && this.inputText.trim() !== '')
+        .onClick(() => {
+          this.send();
+        })
       }
       .width('100%')
     }
