@@ -11,13 +11,25 @@ export class ApiRequestError extends Error {
   readonly code: string;
   readonly status: number;
   readonly requestId: string;
+  /**
+   * 字段级错误（如报修单提交的 `{ deviceModel: ["请填写设备机型"] }`）。
+   * 后端 `VALIDATION_FAILED` 会带上它，界面据此把提示落到对应输入框下方。
+   */
+  readonly fieldErrors: Record<string, string[]> | undefined;
 
-  constructor(code: string, message: string, status: number, requestId: string) {
+  constructor(
+    code: string,
+    message: string,
+    status: number,
+    requestId: string,
+    fieldErrors?: Record<string, string[]>
+  ) {
     super(message);
     this.name = 'ApiRequestError';
     this.code = code;
     this.status = status;
     this.requestId = requestId;
+    this.fieldErrors = fieldErrors;
   }
 }
 
@@ -78,18 +90,39 @@ export class ApiClient {
     return ApiClient.request<T>(baseUrl, http.RequestMethod.POST, path, body, token, options);
   }
 
+  /**
+   * 携带额外请求头的 POST。
+   * 报修单提交用 `Idempotency-Key` 防重复建单：网络抖动重试时服务端据此返回原单。
+   */
+  static async postWithHeaders<T>(
+    baseUrl: string,
+    path: string,
+    body: string,
+    token: string,
+    extraHeaders: Record<string, string>
+  ): Promise<T> {
+    return ApiClient.request<T>(baseUrl, http.RequestMethod.POST, path, body, token, undefined, extraHeaders);
+  }
+
   private static async request<T>(
     baseUrl: string,
     method: http.RequestMethod,
     path: string,
     body: string,
     token: string,
-    options?: ApiRequestOptions
+    options?: ApiRequestOptions,
+    extraHeaders?: Record<string, string>
   ): Promise<T> {
     const headers: Record<string, string> = {};
     const baseKeys: string[] = Object.keys(ApiClient.BASE_HEADERS);
     for (const key of baseKeys) {
       headers[key] = ApiClient.BASE_HEADERS[key];
+    }
+    if (extraHeaders !== undefined) {
+      const extraKeys: string[] = Object.keys(extraHeaders);
+      for (const key of extraKeys) {
+        headers[key] = extraHeaders[key];
+      }
     }
     if (token !== '') {
       headers['Authorization'] = `Bearer ${token}`;
@@ -134,7 +167,8 @@ export class ApiClient {
     const requestId: string = envelope.meta !== undefined ? envelope.meta.requestId : '';
     const apiError: ApiErrorBody | undefined = envelope.error;
     if (apiError !== undefined) {
-      throw new ApiRequestError(apiError.code, apiError.message, status, requestId);
+      // fieldErrors 原样透出：报修单提交这类表单要靠它把提示落到具体输入框。
+      throw new ApiRequestError(apiError.code, apiError.message, status, requestId, apiError.fieldErrors);
     }
     throw new ApiRequestError('UNEXPECTED_RESPONSE', `请求失败（HTTP ${status}）`, status, requestId);
   }

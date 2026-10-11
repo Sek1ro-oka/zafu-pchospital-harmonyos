@@ -67,6 +67,16 @@ struct Index {
     this.phase = PHASE_LOGIN;
   }
 
+  /**
+   * 子页面发现会话失效（401 类错误码）时回登录页。
+   * 走 `logout()` 而不是直接改 phase：让服务端令牌与本地存储一起清干净，
+   * 否则本地残留的失效令牌会让下次启动又白跑一次恢复流程。
+   */
+  private async handleSessionExpired(): Promise<void> {
+    await SessionService.logout();
+    this.phase = PHASE_LOGIN;
+  }
+
   private async resetToLogin(): Promise<void> {
     await SessionService.logout();
     this.bootFailed = false;
@@ -131,7 +141,8 @@ struct Index {
         displayName: this.displayName,
         roleText: this.roleText,
         home: this.home,
-        onLogout: () => this.handleLogout()
+        onLogout: () => this.handleLogout(),
+        onSessionExpired: () => this.handleSessionExpired()
       })
     }
   }
