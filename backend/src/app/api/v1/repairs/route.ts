@@ -4,7 +4,7 @@ import { repairService } from "@/features/repairs/repair-service";
 import { parsePagination } from "@/lib/api/pagination";
 import { apiFailure, apiSuccess } from "@/lib/api/response";
 import { getRequestId } from "@/lib/api/request-id";
-import { assertSameOrigin, authenticateRequest } from "@/lib/auth/request";
+import { assertWriteAccess, authenticateRequest } from "@/lib/auth/request";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   const requestId = getRequestId(request.headers);
@@ -24,7 +24,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const requestId = getRequestId(request.headers);
   try {
-    assertSameOrigin(request);
+    // 原生 App 建档草稿（Bearer + X-Client-Type: native）与 Web（Cookie + 同源）各自校验。
+    assertWriteAccess(request);
     const { actor } = await authenticateRequest(request, requestId);
     const body = (await request.json()) as Record<string, unknown>;
     return apiSuccess(

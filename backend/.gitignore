@@ -22,3 +22,4 @@ next-env.d.ts
 # Issue #39 知识索引与同步暂存（机器相关产物，不入库）
 data/knowledge/index/
 data/knowledge/.sync-staging-*/
+*.tsbuildinfo

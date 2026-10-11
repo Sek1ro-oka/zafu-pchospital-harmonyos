@@ -44,6 +44,8 @@ export const ApiErrorCode = [
   // 错误码也分开，避免客户端把「备案」的错误文案套到「报修单」上。
   "REPAIR_ORDER_NOT_FOUND",
   "REPAIR_ORDER_STATE_INVALID",
+  // 409：请求本身合法，但单据已被他人抢先处理或状态已变化（#38 抢单/并发推进），客户端应刷新后重试。
+  "REPAIR_ORDER_STATE_CONFLICT",
   "MEMBER_PROFILE_NOT_FOUND",
   "MEMBER_PROFILE_FORBIDDEN",
   "MEMBER_PROFILE_VERSION_CONFLICT",
@@ -144,6 +146,7 @@ const defaultStatus: Record<ApiErrorCode, number> = {
   REPAIR_PHOTO_STORAGE_FAILED: 500,
   REPAIR_ORDER_NOT_FOUND: 404,
   REPAIR_ORDER_STATE_INVALID: 409,
+  REPAIR_ORDER_STATE_CONFLICT: 409,
   // 不存在、软删除、非有效成员与无权访问统一走 404，避免成员枚举（M3 任务书 §8、§11）
   MEMBER_PROFILE_NOT_FOUND: 404,
   MEMBER_PROFILE_FORBIDDEN: 403,
