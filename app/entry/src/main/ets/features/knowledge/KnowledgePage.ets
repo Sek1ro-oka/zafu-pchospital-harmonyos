@@ -1,5 +1,6 @@
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { NavPusher, ROUTE_KNOWLEDGE_SOURCE } from '../../core/ui/Routes';
+import { ErrorPanel } from '../../core/ui/StatePanel';
 import {
   CARD_GAP,
   CARD_PADDING,
@@ -33,6 +34,7 @@ import {
   ChatMessage,
   failedMessage,
   insertAfterUser,
+  isNetworkErrorCode,
   KIND_CLARIFY,
   KIND_INSUFFICIENT,
   pendingMessage,
@@ -54,6 +56,17 @@ const EXAMPLE_QUESTIONS: string[] = [
   '开机黑屏怎么排查？',
   'CrystalDiskInfo 怎么看硬盘健康状态？'
 ];
+
+/** 「资料不足」回答的引导文案：干净回答应当给出处，没有出处就明确说清可以怎么补问。 */
+const INSUFFICIENT_HINT: string =
+  '公开资料里没有找到足够依据，可补充机型、系统版本或具体报错原文后再问一次。';
+
+/** 澄清追问的引导文案：后端追问会带上需要补充的信息。 */
+const CLARIFY_HINT: string = '请补充上面的信息后再发一次。';
+
+/** 空态：暂无引用时说明原因，并给出可用操作（重问 / 本次对话不保存）。 */
+const NO_CITATIONS_HINT: string =
+  '本次回答没有匹配到公开文档片段，可换个说法再问，或补充机型和报错原文（本次对话不保存到服务器）。';
 
 /**
  * 知识问答页：客户与工作人员共用，资料范围由服务端按角色过滤。
@@ -157,13 +170,16 @@ export struct KnowledgePage {
         return;
       }
       const apiError: ApiRequestError | null = error instanceof ApiRequestError ? error : null;
+      const errorCode: string = apiError !== null ? apiError.code : 'UNKNOWN';
+      const errorMessage: string = apiError !== null ? apiError.message : '请求失败，请重试';
       this.messages = replaceMessageById(
         this.messages,
         pendingId,
+        // 网络错误与业务错误分开展示：网络错误补一句排查引导，业务错误直接用后端信封文案。
         failedMessage(
           pendingId,
-          apiError !== null ? apiError.code : 'UNKNOWN',
-          apiError !== null ? apiError.message : '请求失败，请重试'
+          errorCode,
+          isNetworkErrorCode(errorCode) ? `${errorMessage}（请检查服务器地址、网络与后端是否已启动）` : errorMessage
         )
       );
       this.scrollToBottom();
@@ -289,16 +305,13 @@ export struct KnowledgePage {
               .fontColor($r('app.color.text_secondary'))
           }
         } else if (message.status === STATUS_FAILED) {
-          Text(message.errorMessage)
-            .fontSize(FONT_TEXT)
-            .fontColor($r('app.color.danger'))
-          Button('重试')
-            .height(CONTROL_HEIGHT_SM)
-            .fontSize(FONT_TEXT)
-            .backgroundColor($r('app.color.brand'))
-            .onClick(() => {
+          // 失败卡复用统一错误面板：错误信息 + 重试；是否包卡片底色由外层气泡决定。
+          ErrorPanel({
+            message: message.errorMessage,
+            onRetry: (): void => {
               this.retry(message.id);
-            })
+            }
+          })
         } else {
           if (message.kind === KIND_CLARIFY) {
             Text('需要补充信息：')
@@ -315,6 +328,16 @@ export struct KnowledgePage {
               .fontSize(FONT_BODY)
               .fontColor($r('app.color.text_primary'))
           }
+          // 空数据引导：资料不足 / 追问时没有正文，给出下一步可做的事，不留空白。
+          if (message.kind === KIND_INSUFFICIENT) {
+            Text(INSUFFICIENT_HINT)
+              .fontSize(FONT_CHIP)
+              .fontColor($r('app.color.text_secondary'))
+          } else if (message.kind === KIND_CLARIFY) {
+            Text(CLARIFY_HINT)
+              .fontSize(FONT_CHIP)
+              .fontColor($r('app.color.text_secondary'))
+          }
           if (message.degradationMessage !== '') {
             Text(`本次为关键词检索：${message.degradationMessage}`)
               .fontSize(FONT_CHIP)
@@ -328,6 +351,11 @@ export struct KnowledgePage {
             ForEach(message.citations, (citation: KnowledgeCitation) => {
               this.citationCard(citation);
             }, (citation: KnowledgeCitation) => citation.sourceId)
+          } else {
+            // 引用为空不是错误：如实说明并给出可操作的下一步，而不是留一片空白。
+            Text(NO_CITATIONS_HINT)
+              .fontSize(FONT_CHIP)
+              .fontColor($r('app.color.text_secondary'))
           }
         }
       }
@@ -386,14 +414,25 @@ export struct KnowledgePage {
           .onSubmit(() => {
             this.send();
           })
-        Button(this.sending ? '发送中…' : '发送')
-          .height(CONTROL_HEIGHT)
-          .fontSize(FONT_BODY)
-          .backgroundColor($r('app.color.brand'))
-          .enabled(!this.sending && this.inputText.trim() !== '')
-          .onClick(() => {
-            this.send();
-          })
+        Button() {
+          Row({ space: GAP_SM }) {
+            if (this.sending) {
+              LoadingProgress()
+                .width(18)
+                .height(18)
+                .color(Color.White)
+            }
+            Text(this.sending ? '发送中…' : '发送')
+              .fontSize(FONT_BODY)
+              .fontColor(Color.White)
+          }
+        }
+        .height(CONTROL_HEIGHT)
+        .backgroundColor($r('app.color.brand'))
+        .enabled(!this.sending && this.inputText.trim() !== '')
+        .onClick(() => {
+          this.send();
+        })
       }
       .width('100%')
     }

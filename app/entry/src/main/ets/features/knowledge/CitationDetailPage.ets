@@ -1,7 +1,8 @@
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { CARD_GAP, CARD_PADDING, CARD_RADIUS, CONTROL_HEIGHT, CONTROL_HEIGHT_SM, CONTROL_RADIUS, FONT_BODY, FONT_CHIP, FONT_HEADING, FONT_NOTE, FONT_SUBTITLE, FONT_TEXT, GAP_SM, PAGE_PADDING } from '../../core/ui/Theme';
+import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
+import { CARD_GAP, CARD_PADDING, CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS, FONT_BODY, FONT_CHIP, FONT_HEADING, FONT_NOTE, FONT_SUBTITLE, FONT_TEXT, GAP_SM, PAGE_PADDING } from '../../core/ui/Theme';
 import {
   headingTrailText,
   KnowledgeSourceData,
@@ -29,6 +30,8 @@ export struct CitationDetailPage {
   @State failed: boolean = false;
   @State errorMessage: string = '';
   @State data: KnowledgeSourceData | null = null;
+  /** 请求进行中标记：与 loading 分开，防止重试按钮连点发出并发请求。 */
+  private requesting: boolean = false;
   private generation: number = 0;
 
   aboutToAppear(): void {
@@ -36,6 +39,10 @@ export struct CitationDetailPage {
   }
 
   private async load(): Promise<void> {
+    if (this.requesting) {
+      return;
+    }
+    this.requesting = true;
     const generation: number = ++this.generation;
     this.loading = true;
     this.failed = false;
@@ -63,6 +70,8 @@ export struct CitationDetailPage {
       }
       this.failed = true;
       this.errorMessage = error instanceof ApiRequestError ? error.message : '加载失败，请重试';
+    } finally {
+      this.requesting = false;
     }
   }
 
@@ -147,12 +156,13 @@ export struct CitationDetailPage {
   build() {
     Column({ space: CARD_GAP }) {
       if (this.loading) {
-        Row({ space: GAP_SM }) {
-          LoadingProgress().width(22).height(22)
-          Text('正在加载引用正文…')
-            .fontSize(FONT_TEXT)
-            .fontColor($r('app.color.text_secondary'))
+        // 状态面板统一转圈规格与文案层级；引用正文卡由下方段落渲染。
+        Column() {
+          LoadingPanel({ text: '正在加载引用正文…' })
         }
+        .width('100%')
+        .backgroundColor($r('app.color.surface'))
+        .borderRadius(CARD_RADIUS)
       } else if (this.notFound) {
         Column({ space: GAP_SM }) {
           Text('引用已过期或不存在')
@@ -169,21 +179,16 @@ export struct CitationDetailPage {
         .backgroundColor($r('app.color.surface'))
         .borderRadius(CARD_RADIUS)
       } else if (this.failed) {
-        Column({ space: GAP_SM }) {
-          Text(this.errorMessage)
-            .fontSize(FONT_TEXT)
-            .fontColor($r('app.color.danger'))
-          Button('重试')
-            .height(CONTROL_HEIGHT_SM)
-            .fontSize(FONT_TEXT)
-            .backgroundColor($r('app.color.brand'))
-            .onClick(() => {
+        // 失败态复用统一错误面板：错误信息 + 重试（网络错误与业务错误文案由 ApiClient 区分）。
+        Column() {
+          ErrorPanel({
+            message: this.errorMessage,
+            onRetry: (): void => {
               this.load();
-            })
+            }
+          })
         }
         .width('100%')
-        .padding(CARD_PADDING)
-        .alignItems(HorizontalAlign.Start)
         .backgroundColor($r('app.color.surface'))
         .borderRadius(CARD_RADIUS)
       } else if (this.data !== null) {

@@ -1,5 +1,6 @@
 import { util } from '@kit.ArkTS';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
+import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
 import {
   CARD_PADDING,
   CARD_RADIUS,
@@ -169,7 +170,10 @@ export struct RepairOrderForm {
         const serverFields = this.readServerFieldErrors(error);
         this.fieldErrors = serverFields;
         // 服务端给出的字段级提示已经足够具体时，不再叠一句笼统的总错误。
-        this.errorText = Object.keys(serverFields).length > 0 ? '' : error.message;
+        // 网络错误补一句排查引导，业务错误直接用后端信封文案，两类提示可区分。
+        this.errorText = Object.keys(serverFields).length > 0
+          ? ''
+          : (isNetworkErrorCode(error.code) ? `${error.message}（请检查网络与服务器地址后重试）` : error.message);
         // 失败时不换键：用户重试仍带同一个 Idempotency-Key，服务端会去重。
       } else {
         this.errorText = '提交失败，请重试';
@@ -250,6 +254,7 @@ export struct RepairOrderForm {
       })
 
       if (this.errorText !== '') {
+        // 提交/网络失败的就地提示：文案已含排查引导，下方按钮即为重试入口。
         Text(this.errorText)
           .fontSize(FONT_TEXT)
           .fontColor($r('app.color.danger'))
@@ -257,16 +262,26 @@ export struct RepairOrderForm {
           .textAlign(TextAlign.Start)
       }
 
-      Button(this.busy ? '提交中…' : '提交报修')
-        .width('100%')
-        .height(CONTROL_HEIGHT)
-        .fontSize(FONT_SUBTITLE)
-        .backgroundColor($r('app.color.brand'))
-        .fontColor(Color.White)
-        .enabled(!this.busy)
-        .onClick(() => {
-          this.handleSubmit();
-        })
+      Button() {
+        Row({ space: GAP_SM }) {
+          if (this.busy) {
+            LoadingProgress()
+              .width(18)
+              .height(18)
+              .color(Color.White)
+          }
+          Text(this.busy ? '提交中…' : (this.errorText !== '' ? '重试提交' : '提交报修'))
+            .fontSize(FONT_SUBTITLE)
+            .fontColor(Color.White)
+        }
+      }
+      .width('100%')
+      .height(CONTROL_HEIGHT)
+      .backgroundColor($r('app.color.brand'))
+      .enabled(!this.busy)
+      .onClick(() => {
+        this.handleSubmit();
+      })
     }
     .width('100%')
     .padding(CARD_PADDING)

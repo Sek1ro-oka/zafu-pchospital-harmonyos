@@ -1,4 +1,6 @@
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
+import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
+import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
 import {
   CARD_GAP,
   CARD_PADDING,
@@ -75,25 +77,36 @@ export struct RepairOrdersPage {
   @State hasMore: boolean = false;
   /** 「加载更多」失败提示：保留列表原样，仅就地提示失败原因。 */
   @State loadMoreErrorText: string = '';
+  /** 列表请求进行中（与 state 分开的私有标记）：防止重试按钮连点触发并发请求。 */
+  private requesting: boolean = false;
 
   aboutToAppear(): void {
     this.load();
   }
 
-  /** 统一处理会话失效：清掉本地展示状态并让上层回登录页。 */
+  /**
+   * 统一处理会话失效：清掉本地展示状态并让上层回登录页。
+   * 网络错误补一句排查引导，业务错误直接用后端信封文案，两类提示可区分。
+   */
   private handleError(error: Object): void {
     if (error instanceof ApiRequestError) {
       if (isSessionExpiredCode(error.code)) {
         this.onSessionExpired();
         return;
       }
-      this.errorText = error.message;
+      this.errorText = isNetworkErrorCode(error.code)
+        ? `${error.message}（请检查服务器地址、网络与后端是否已启动）`
+        : error.message;
     } else {
       this.errorText = '加载失败，请重试';
     }
   }
 
   private async load(): Promise<void> {
+    if (this.requesting) {
+      return;
+    }
+    this.requesting = true;
     this.state = STATE_LOADING;
     this.errorText = '';
     this.currentPage = 1;
@@ -105,6 +118,8 @@ export struct RepairOrdersPage {
     } catch (error) {
       this.state = STATE_ERROR;
       this.handleError(error);
+    } finally {
+      this.requesting = false;
     }
   }
 
@@ -130,7 +145,9 @@ export struct RepairOrdersPage {
           this.onSessionExpired();
           return;
         }
-        this.loadMoreErrorText = error.message;
+        this.loadMoreErrorText = isNetworkErrorCode(error.code)
+          ? `${error.message}（请检查网络后重试）`
+          : error.message;
       } else {
         this.loadMoreErrorText = '加载更多失败，请重试';
       }
@@ -314,39 +331,15 @@ export struct RepairOrdersPage {
       .width('100%')
 
       if (this.detailLoading) {
-        Column({ space: CARD_GAP }) {
-          LoadingProgress()
-            .width(28)
-            .height(28)
-            .color($r('app.color.brand'))
-          Text('正在加载详情…')
-            .fontSize(FONT_NOTE)
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .width('100%')
-        .padding(CARD_PADDING)
-        .justifyContent(FlexAlign.Center)
+        // 嵌在详情卡内：不再包卡片底色，只给统一的转圈与文案。
+        LoadingPanel({ text: '正在加载详情…' })
       } else if (this.detailErrorText !== '') {
-        Column({ space: CARD_GAP }) {
-          Text(this.detailErrorText)
-            .fontSize(FONT_TEXT)
-            .fontColor($r('app.color.danger'))
-            .width('100%')
-            .textAlign(TextAlign.Center)
-          Button('重试')
-            .fontSize(FONT_TEXT)
-            .height(CONTROL_HEIGHT_MD)
-            .backgroundColor($r('app.color.brand'))
-            .fontColor(Color.White)
-            .onClick(() => {
-              this.retryDetail();
-            })
-        }
-        .width('100%')
-        .padding(CARD_PADDING)
-        .backgroundColor($r('app.color.surface'))
-        .borderRadius(CARD_RADIUS)
-        .alignItems(HorizontalAlign.Center)
+        ErrorPanel({
+          message: this.detailErrorText,
+          onRetry: (): void => {
+            this.retryDetail();
+          }
+        })
       } else if (order !== null) {
         this.detailRow('设备机型', order.deviceModel)
         this.detailRow('设备序列号', order.deviceSerial === null || order.deviceSerial === '' ? '未填写' : order.deviceSerial)
@@ -401,18 +394,7 @@ export struct RepairOrdersPage {
 
   @Builder
   loadingView() {
-    Column({ space: CARD_GAP }) {
-      LoadingProgress()
-        .width(36)
-        .height(36)
-        .color($r('app.color.brand'))
-      Text('正在加载报修记录…')
-        .fontSize(FONT_TEXT)
-        .fontColor($r('app.color.text_secondary'))
-    }
-    .width('100%')
-    .padding(CARD_PADDING_LG)
-    .justifyContent(FlexAlign.Center)
+    LoadingPanel({ text: '正在加载报修记录…' })
   }
 
   @Builder
@@ -434,26 +416,18 @@ export struct RepairOrdersPage {
 
   @Builder
   errorView() {
-    Column({ space: CARD_GAP }) {
-      Text(this.errorText === '' ? '加载失败，请重试' : this.errorText)
-        .fontSize(FONT_TEXT)
-        .fontColor($r('app.color.danger'))
-        .width('100%')
-        .textAlign(TextAlign.Center)
-      Button('重试')
-        .fontSize(FONT_TEXT)
-        .height(CONTROL_HEIGHT_MD)
-        .backgroundColor($r('app.color.brand'))
-        .fontColor(Color.White)
-        .onClick(() => {
+    // 复用统一错误面板，外面补回整块卡片的底色（与前手列表错误态外观一致）。
+    Column() {
+      ErrorPanel({
+        message: this.errorText === '' ? '加载失败，请重试' : this.errorText,
+        onRetry: (): void => {
           this.load();
-        })
+        }
+      })
     }
     .width('100%')
-    .padding(CARD_PADDING_LG)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
-    .alignItems(HorizontalAlign.Center)
   }
 
   @Builder
