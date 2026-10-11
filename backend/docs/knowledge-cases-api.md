@@ -104,7 +104,7 @@ differences/unknowns/mergeReason）+ `displayText` + `embedding{status,fingerpri
 1. **精确去重**：来源材料指纹（机型/分类/正文/结果/备注/维修日期，忽略空白与版本）相同 → 直接复用已有来源的案例，不再调用模型；重复标记幂等。
 2. **候选预筛**：案例池为 `PUBLISHED` 的 STAFF 案例；向量可用时按余弦相似度（阈值 `CASE_SIMILARITY_MIN` 默认 0.5），向量不可用时按「同机型或同分类」预筛，最多 `CASE_MAX_CANDIDATES`（默认 3）个候选。
 3. **模型决策**：一次调用同时给出 `action: new|merge` 与结构化正文；`merge` 目标必须在候选白名单内（伪造目标 → 坏响应不落库）。
-4. **证据校验**：`evidences` 的 `quote` 必须是该来源材料文本的子串，否则丢弃并记录说明；`fault/investigation/cause/resolution` 非空必须有有效证据，否则清空。证据与字段只按**实际参与本次案例的来源集合**取证：`new` 仅 S1，`merge` 为 S1 + 选中候选的来源；未选中候选的引文、结果与机型/分类一律不参与（单一来源时 `differences` 恒为空），防止候选污染案例事实。
+4. **证据校验**：`evidences` 的 `quote` 必须是该来源材料文本的子串，否则丢弃并记录说明；`fault/investigation/cause/resolution` 非空必须有有效证据，否则清空。证据与字段只按**实际参与本次案例的来源集合**取证：`new` 仅 S1，`merge` 为 S1 + 选中候选的来源；未选中候选的引文、结果与机型/分类一律不参与。`differences` 也不采用模型自由文本：统一由服务端按实际参与来源生成（MIXED 时逐来源列出结果差异，其余为 null），防止候选事实进入案例正文。
 5. **结果与未知**：`result` 由实际来源结果强制推导（全完成/全未完成/混合 `MIXED` 并生成差异说明）；来源未写明的事实保持 `null`，由服务端生成 `unknowns`，不推断。
 6. **发布事务**：条件更新校验案例版本 + 当前来源集合 + 可见范围 + 撤回代次 + 备案仍是 APPROVED 且 isTypical、材料指纹未变；任一变化 → 本次结果作废（`CASE_SOURCES_CHANGED`/`CASE_VERSION_CONFLICT`/`CASE_VISIBILITY_CHANGED`），不丢已发布的旧版本。
 7. **并发**：来源租约（`CASE_LEASE_MS` 默认 120s）保证同一来源不被重复处理；两条来源并发合并时版本守卫保证不互相覆盖，失败者以可重试的 FAILED 收尾，来源不丢失。
@@ -127,7 +127,7 @@ differences/unknowns/mergeReason）+ `displayText` + `embedding{status,fingerpri
 
 - 查询时把当前数据库中的 `PUBLISHED` 案例（STAFF 全部 + 客户仅 PUBLIC）合并进已加载的文档索引参与 BM25+向量+RRF，**无需重建索引文件**；案例向量仅在指纹与索引一致时使用，否则按关键词降级。
 - 案例块 ID：`kcase_<caseId>_v<contentVersion>`；内容版本变化后旧引用打开即 404（提示重新检索）。
-- **返回前复核**：搜索与问答在返回前按数据库当前状态重新校验案例候选——已撤回/重整中/失败/改范围/版本变化的案例不带旧摘要返回；问答引用的案例失效时，在预算内用剩余有效证据重新生成一次，做不到就整条降级为 `STALE_EVIDENCE_MESSAGE`（资料已变化，请重新提问），绝不原样返回由失效案例生成的正文。
+- **返回前复核**：搜索与问答在返回前按数据库当前状态重新校验案例证据——已撤回/重整中/失败/改范围/版本变化的案例不带旧摘要返回。问答的复核绑定**实际送给模型的案例证据集合**（`answer`/`clarify`/`insufficient_evidence` 一视同仁，含未被引用的候选）：任一证据失效或复核失败时，在预算内用剩余有效证据重新生成一次（对本次送出的案例集合再复核），做不到就整条降级为 `STALE_EVIDENCE_MESSAGE`（资料已变化，请重新提问），绝不原样返回由失效案例生成的正文或追问。
 - 引用详情 `GET /api/v1/knowledge/sources/[id]`：`kind=case` 时返回 `caseDetail`（结构化正文 + 逐条来源证据）；
   客户拿到的来源中 `authorName/repairRecordId` 为 `null`，且每次读取都按数据库当前状态与查看者权限重新判定。
 

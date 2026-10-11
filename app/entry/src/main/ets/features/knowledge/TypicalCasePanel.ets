@@ -4,7 +4,13 @@ import {
   RecordCaseProcessingView,
   RecordCaseRetryResult,
 } from './KnowledgeCaseContract';
-import { isActionContextCurrent, typicalPanelModel, TypicalPanelModel } from './KnowledgeCaseFlow';
+import { TypicalPanelModel } from './KnowledgeCaseFlow';
+import {
+  PanelErrorView,
+  TypicalCasePanelController,
+  TypicalPanelDeps,
+  TypicalPanelHooks,
+} from './TypicalCasePanelController';
 import { KnowledgeCaseService } from './KnowledgeCaseService';
 
 /**
@@ -14,6 +20,9 @@ import { KnowledgeCaseService } from './KnowledgeCaseService';
  * - 标记是同步动作（服务端内联整理，可能等待模型返回），期间按钮显示进行中；
  * - 失败原因原样展示，重试按钮只在服务端说可以重试时出现；
  * - 成功后通过 onChanged 通知宿主刷新备案数据（典型标记已变化）。
+ *
+ * 写动作编排（守卫、409 刷新、busy 归属）在 TypicalCasePanelController 中，
+ * 本组件只做事件接线与状态渲染。
  */
 @Component
 export struct TypicalCasePanel {
@@ -34,127 +43,61 @@ export struct TypicalCasePanel {
   @State busy: boolean = false;
   @State actionError: string = '';
   @State notice: string = '';
-  private generation: number = 0;
+  private controller: TypicalCasePanelController | null = null;
+
+  private panel(): TypicalCasePanelController {
+    if (this.controller === null) {
+      const hooks = new TypicalPanelHooks();
+      hooks.loading = (value: boolean): void => {
+        this.loading = value;
+      };
+      hooks.loadFailed = (value: boolean, text: string): void => {
+        this.loadFailed = value;
+        this.errorText = text;
+      };
+      hooks.appliedView = (view: RecordCaseProcessingView, model: TypicalPanelModel): void => {
+        this.view = view;
+        this.model = model;
+      };
+      hooks.busy = (value: boolean): void => {
+        this.busy = value;
+      };
+      hooks.actionError = (text: string): void => {
+        this.actionError = text;
+      };
+      hooks.notice = (text: string): void => {
+        this.notice = text;
+      };
+      hooks.changed = (): void => {
+        this.onChanged();
+      };
+      hooks.sessionExpired = (): void => {
+        this.onSessionExpired();
+      };
+      const deps = new TypicalPanelDeps(
+        (recordId: string): Promise<RecordCaseProcessingView> => KnowledgeCaseService.recordStatus(recordId),
+        (recordId: string): Promise<RecordCaseProcessingView> => KnowledgeCaseService.markTypical(recordId),
+        (recordId: string): Promise<RecordCaseRetryResult> => KnowledgeCaseService.retryProcessing(recordId),
+        (recordId: string): Promise<RecordCaseProcessingView> => KnowledgeCaseService.unmarkTypical(recordId),
+        (error: Object): PanelErrorView => {
+          if (error instanceof ApiRequestError) {
+            return { sessionExpired: isSessionExpiredCode(error.code), code: error.code, message: error.message };
+          }
+          return { sessionExpired: false, code: null, message: '' };
+        },
+      );
+      this.controller = new TypicalCasePanelController(deps, hooks);
+    }
+    return this.controller;
+  }
 
   aboutToAppear(): void {
-    this.load();
+    this.panel().setRecord(this.recordId);
   }
 
   onRecordChanged(): void {
-    // 换备案：立即重置忙碌与提示，并让在途写操作的结果失效（load 会推进代次）。
-    this.busy = false;
-    this.actionError = '';
-    this.notice = '';
-    if (this.recordId !== '') {
-      this.load();
-    }
-  }
-
-  private setView(view: RecordCaseProcessingView): void {
-    this.view = view;
-    this.model = typicalPanelModel(view);
-  }
-
-  /** 写操作的上下文守卫：结果/错误/回调只能写回发起时的备案与代次。 */
-  private isCurrent(recordId: string, generation: number): boolean {
-    return isActionContextCurrent(this.recordId, this.generation, recordId, generation);
-  }
-
-  private async load(): Promise<void> {
-    if (this.recordId === '') {
-      this.loading = false;
-      return;
-    }
-    this.generation = this.generation + 1;
-    const generation = this.generation;
-    this.loading = true;
-    this.loadFailed = false;
-    this.errorText = '';
-    try {
-      const view = await KnowledgeCaseService.recordStatus(this.recordId);
-      if (generation !== this.generation) {
-        return;
-      }
-      this.setView(view);
-      this.loading = false;
-    } catch (error) {
-      if (generation !== this.generation) {
-        return;
-      }
-      this.loading = false;
-      if (this.isSessionExpired(error)) {
-        return;
-      }
-      this.loadFailed = true;
-      this.errorText = error instanceof ApiRequestError ? error.message : '加载案例状态失败';
-    }
-  }
-
-  private isSessionExpired(error: Object): boolean {
-    if (error instanceof ApiRequestError && isSessionExpiredCode(error.code)) {
-      this.onSessionExpired();
-      return true;
-    }
-    return false;
-  }
-
-  private async runMark(): Promise<void> {
-    if (this.busy || this.recordId === '') {
-      return;
-    }
-    const recordId: string = this.recordId;
-    const generation: number = this.generation;
-    this.busy = true;
-    this.actionError = '';
-    this.notice = '';
-    try {
-      const view = await KnowledgeCaseService.markTypical(recordId);
-      if (!this.isCurrent(recordId, generation)) {
-        return;
-      }
-      this.setView(view);
-      this.notice = view.status === 'PUBLISHED' ? '已整理入库，可被检索命中。' : '';
-      if (view.status === 'FAILED' && view.failureMessage !== null) {
-        this.actionError = view.failureMessage;
-      }
-      this.onChanged();
-    } catch (error) {
-      this.handleActionError(recordId, generation, error, '标记失败，请重试');
-    } finally {
-      if (this.isCurrent(recordId, generation)) {
-        this.busy = false;
-      }
-    }
-  }
-
-  private async runRetry(): Promise<void> {
-    if (this.busy || this.recordId === '') {
-      return;
-    }
-    const recordId: string = this.recordId;
-    const generation: number = this.generation;
-    this.busy = true;
-    this.actionError = '';
-    this.notice = '';
-    try {
-      const result: RecordCaseRetryResult = await KnowledgeCaseService.retryProcessing(recordId);
-      if (!this.isCurrent(recordId, generation)) {
-        return;
-      }
-      this.setView(result.state);
-      if (result.state.status === 'PUBLISHED') {
-        this.notice = '已重新入库。';
-      } else if (result.state.failureMessage !== null && result.state.failureMessage !== '') {
-        this.actionError = result.state.failureMessage;
-      }
-      this.onChanged();
-    } catch (error) {
-      this.handleActionError(recordId, generation, error, '重试失败，请重试');
-    } finally {
-      if (this.isCurrent(recordId, generation)) {
-        this.busy = false;
-      }
-    }
+    // 换备案：控制器重置忙碌与提示，并让在途写操作的结果失效（load 会推进读取代次）。
+    this.panel().setRecord(this.recordId);
   }
 
   private confirmUnmark(): void {
@@ -174,57 +117,10 @@ export struct TypicalCasePanel {
       secondaryButton: {
         value: '确认取消',
         action: () => {
-          this.runUnmark(recordId);
+          this.panel().runUnmark(recordId);
         }
       }
     });
-  }
-
-  private async runUnmark(recordId: string): Promise<void> {
-    if (this.busy || recordId !== this.recordId) {
-      return;
-    }
-    const generation: number = this.generation;
-    this.busy = true;
-    this.actionError = '';
-    this.notice = '';
-    try {
-      const view = await KnowledgeCaseService.unmarkTypical(recordId);
-      if (!this.isCurrent(recordId, generation)) {
-        return;
-      }
-      this.setView(view);
-      this.notice = '已取消典型标记。';
-      this.onChanged();
-    } catch (error) {
-      this.handleActionError(recordId, generation, error, '取消失败，请重试');
-    } finally {
-      if (this.isCurrent(recordId, generation)) {
-        this.busy = false;
-      }
-    }
-  }
-
-  private handleActionError(recordId: string, generation: number, error: Object, fallback: string): void {
-    if (error instanceof ApiRequestError) {
-      if (isSessionExpiredCode(error.code)) {
-        // 会话失效是全局的：无论面板切到哪条备案都要回登录。
-        this.onSessionExpired();
-        return;
-      }
-      if (!this.isCurrent(recordId, generation)) {
-        return;
-      }
-      this.actionError = error.message;
-      // 409 冲突（如别人先取消、案例已撤回）：刷新拿最新真实状态，按钮不留在旧状态。
-      if (error.code === 'CASE_STATE_CONFLICT' || error.code === 'CASE_VERSION_CONFLICT') {
-        this.load();
-      }
-      return;
-    }
-    if (this.isCurrent(recordId, generation)) {
-      this.actionError = fallback;
-    }
   }
 
   @Builder
@@ -245,7 +141,7 @@ export struct TypicalCasePanel {
           .fontSize(13)
           .fontColor($r('app.color.brand'))
           .onClick(() => {
-            this.load();
+            this.panel().load();
           })
       }
     }
@@ -290,7 +186,7 @@ export struct TypicalCasePanel {
         .fontColor(Color.White)
         .enabled(!this.busy)
         .onClick(() => {
-          this.runMark();
+          this.panel().runMark();
         })
     }
     if (model.showRetry) {
@@ -302,7 +198,7 @@ export struct TypicalCasePanel {
         .fontColor(Color.White)
         .enabled(!this.busy)
         .onClick(() => {
-          this.runRetry();
+          this.panel().runRetry();
         })
     }
     if (model.canOpenCase) {
@@ -362,7 +258,7 @@ export struct TypicalCasePanel {
             .fontSize(14)
             .backgroundColor($r('app.color.brand'))
             .onClick(() => {
-              this.load();
+              this.panel().load();
             })
         }
         .width('100%')

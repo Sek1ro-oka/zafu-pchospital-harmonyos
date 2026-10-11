@@ -349,17 +349,21 @@ export function parseCaseModelOutput(
     .filter((label) => context.sourceResults.has(label))
     .map((label) => [label, context.sourceResults.get(label) ?? null] as const);
   const result: CaseResult = deriveResult(activeResultEntries.map(([, value]) => value));
-  let differences = readString(record, "differences", FIELD_LIMITS.differences);
-  if (activeLabels.size <= 1) {
-    // 单一来源没有「来源间差异」可言：此刻的差异说明必然引用了未参与本次案例的资料。
-    differences = null;
-  }
-  if (result === "MIXED" && !differences) {
+  // 差异说明一律由服务端按实际参与来源生成（可核实）：模型自由文本可能携带未选中候选的事实，
+  // 即使实际来源多于一条也不采用（审查回归：C2/S3 的事实不得进入案例正文）。
+  const modelDifferences = readString(record, "differences", FIELD_LIMITS.differences);
+  let differences: string | null = null;
+  if (result === "MIXED") {
     const perSource = activeResultEntries
       .map(([label, value]) => `${label} 结果为${value === "COMPLETED" ? "已完成" : value === "NOT_COMPLETED" ? "未完成" : "未知"}`)
       .join("；");
     differences = `来源间维修结果不一致：${perSource}。`;
-    notes.push("模型未说明混合结果差异，已由服务端补事实性说明");
+    if (modelDifferences === null) {
+      notes.push("模型未说明混合结果差异，已由服务端补事实性说明");
+    }
+  }
+  if (modelDifferences !== null) {
+    notes.push("模型给出的差异说明未采用：差异说明由服务端按实际参与来源生成");
   }
 
   const content: CaseStructuredContent = {

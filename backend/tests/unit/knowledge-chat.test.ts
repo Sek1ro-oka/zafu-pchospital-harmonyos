@@ -534,7 +534,7 @@ test("问答返回前复核：复核失败且无剩余证据时整条降级，�
   });
 });
 
-test("问答返回前复核：重生成后案例证据再次变化，同样整条降级（不循环重试）", async () => {
+test("问答返回前复核：重生成（clarify）后案例证据再次变化，同样整条降级（不循环重试）", async () => {
   await withTempIndex(async () => {
     const modelCalls: string[] = [];
     let revalidateCount = 0;
@@ -555,14 +555,114 @@ test("问答返回前复核：重生成后案例证据再次变化，同样整�
             : new Set<string>();
         },
       },
-      callModelFn: citeAllLabelsModel(modelCalls),
+      callModelFn: async (_config: unknown, messages: Array<{ content: string }>): Promise<string> => {
+        const labels = renderedLabels(messages);
+        modelCalls.push(labels.join(","));
+        if (modelCalls.length === 1) {
+          return JSON.stringify({ status: "answer", answer: `第1次回答：${labels.join("")}`, citations: labels });
+        }
+        return JSON.stringify({ status: "clarify", clarifying_question: "案例 B 的机型是什么？" });
+      },
     });
     assert.equal(modelCalls.length, 2, "最多用剩余证据重生成一次，不做循环");
-    assert.equal(revalidateCount, 2, "重生成结果必须再做一次复核");
+    assert.equal(revalidateCount, 2, "重生成结果必须再做一次复核（非 answer 输出同样复核）");
     assert.equal(data.status, "insufficient_evidence");
     assert.equal(data.answer, STALE_EVIDENCE_MESSAGE);
+    assert.equal(data.clarifyingQuestion, null, "重生成的追问同样不得返回");
     assert.deepEqual(data.citations, []);
     assert.ok(data.notes.some((note) => note.includes("重新生成后案例证据再次变化")));
+  });
+});
+
+test("问答返回前复核：clarify 若基于失效案例生成，不返回旧追问", async () => {
+  await withTempIndex(async () => {
+    let modelCalls = 0;
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [caseChunk("kcase_case7_v1", "排线故障的处理：更换排线组件后恢复显示。")],
+        revalidate: async () => new Set<string>(),
+      },
+      callModelFn: async () => {
+        modelCalls += 1;
+        return JSON.stringify({ status: "clarify", clarifying_question: "案例 [S1] 的机型是什么？" });
+      },
+    });
+    assert.equal(modelCalls, 1, "失效且无剩余证据时不得再送入重生成");
+    assert.equal(data.status, "insufficient_evidence");
+    assert.equal(data.answer, STALE_EVIDENCE_MESSAGE);
+    assert.equal(data.clarifyingQuestion, null, "追问也可能携带失效案例的事实，不得返回");
+  });
+});
+
+test("问答返回前复核：案例仍有效时 clarify 原样返回", async () => {
+  await withTempIndex(async () => {
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [caseChunk("kcase_case8_v1", "排线故障的处理：更换排线组件后恢复显示。")],
+        revalidate: async (ids) => new Set(ids),
+      },
+      callModelFn: async () =>
+        JSON.stringify({ status: "clarify", clarifying_question: "请问是哪台设备的排线？" }),
+    });
+    assert.equal(data.status, "clarify");
+    assert.equal(data.clarifyingQuestion, "请问是哪台设备的排线？");
+    assert.deepEqual(data.citations, []);
+  });
+});
+
+test("问答返回前复核：模型 insufficient_evidence 的正文同样复核（失效时不返回旧事实）", async () => {
+  await withTempIndex(async () => {
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [caseChunk("kcase_case10_v1", "排线故障的处理：更换排线组件后恢复显示。")],
+        revalidate: async () => new Set<string>(),
+      },
+      callModelFn: async () =>
+        JSON.stringify({ status: "insufficient_evidence", answer: "资料提到排线组件更换，但没有说明具体机型。" }),
+    });
+    assert.equal(data.status, "insufficient_evidence");
+    assert.equal(data.answer, STALE_EVIDENCE_MESSAGE, "不得返回由失效案例生成的「资料不足」正文");
+  });
+});
+
+test("问答返回前复核：首次只引用 A 时，同样失效的 B 不得再送入重生成（全集合复核）", async () => {
+  await withTempIndex(async () => {
+    const revalidateCalls: Array<{ ids: string[]; includeStaff: boolean }> = [];
+    let modelCalls = 0;
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [
+          caseChunk("kcase_a01_v1", "排线故障排查：更换排线后恢复。"),
+          caseChunk("kcase_b01_v1", "排线故障处理：排线重新插紧后恢复显示。"),
+        ],
+        revalidate: async (ids, includeStaff) => {
+          revalidateCalls.push({ ids, includeStaff });
+          return new Set<string>(); // A、B 都已失效
+        },
+      },
+      callModelFn: async () => {
+        modelCalls += 1;
+        return JSON.stringify({ status: "answer", answer: "根据 [S1] 处理。", citations: ["S1"] });
+      },
+    });
+    assert.equal(revalidateCalls.length, 1);
+    assert.ok(revalidateCalls[0].ids.includes("kcase_a01_v1"));
+    assert.ok(
+      revalidateCalls[0].ids.includes("kcase_b01_v1"),
+      "复核必须覆盖全部送出的案例证据，而不只是被引用的 A",
+    );
+    assert.equal(modelCalls, 1, "失效案例（含未被引用的 B）不得再送入重生成");
+    assert.equal(data.status, "insufficient_evidence");
+    assert.equal(data.answer, STALE_EVIDENCE_MESSAGE);
+    assert.ok(data.notes.some((note) => note.includes("2 条案例证据已失效")));
   });
 });
 

@@ -130,6 +130,21 @@ export function isActionContextCurrent(
   return actionRecordId === currentRecordId && actionGeneration === currentGeneration;
 }
 
+/**
+ * 写动作收尾守卫（busy 的归属）：busy 只能由「同一备案上仍是最后一次的写动作」清除。
+ * 与读取代次（generation）分开管理——409 冲突会触发刷新并推进读取代次，
+ * 若收尾也用读取代次判断，busy 会被永久锁死；同时旧 A 请求的收尾
+ * 也不能清除已切到 B（或 B 上新动作）的 busy。
+ */
+export function isActionRunCurrent(
+  currentRecordId: string,
+  currentActionSeq: number,
+  runRecordId: string,
+  runActionSeq: number,
+): boolean {
+  return runRecordId === currentRecordId && runActionSeq === currentActionSeq;
+}
+
 /** 「原文未提供」清单文案；为空返回空串（不显示空行）。 */
 export function unknownsText(unknowns: string[]): string {
   if (unknowns.length === 0) {

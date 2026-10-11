@@ -9,18 +9,27 @@ import {
   caseStatusLabel,
   caseVisibilityLabel,
   RecordCaseProcessingView,
+  RecordCaseRetryResult,
   recordCaseStatusLabel,
 } from "../../../app/entry/src/main/ets/features/knowledge/KnowledgeCaseContract";
 import {
   contentRows,
   isActionContextCurrent,
+  isActionRunCurrent,
   PANEL_MODE_FAILED,
   PANEL_MODE_PUBLISHED,
   PANEL_MODE_PROCESSING,
   PANEL_MODE_UNMARKED,
   typicalPanelModel,
+  TypicalPanelModel,
   unknownsText,
 } from "../../../app/entry/src/main/ets/features/knowledge/KnowledgeCaseFlow";
+import {
+  PanelErrorView,
+  TypicalCasePanelController,
+  TypicalPanelDeps,
+  TypicalPanelHooks,
+} from "../../../app/entry/src/main/ets/features/knowledge/TypicalCasePanelController";
 
 /**
  * 典型案例面板的页面状态回归（复用页面使用的 KnowledgeCaseFlow 纯函数）：
@@ -46,6 +55,103 @@ function view(overrides: Partial<RecordCaseProcessingView>): RecordCaseProcessin
     updatedAt: null,
     ...overrides,
   };
+}
+
+/** 面板控制器的真实页面接线回归夹具：hooks 把状态写回本地 state，服务用桩。 */
+class PanelConflictError extends Error {
+  readonly code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+function describeErrorForTest(error: unknown): PanelErrorView {
+  if (error instanceof PanelConflictError) {
+    return { sessionExpired: false, code: error.code, message: error.message };
+  }
+  return { sessionExpired: false, code: null, message: error instanceof Error ? error.message : "" };
+}
+
+interface PanelState {
+  loading: boolean;
+  loadFailed: boolean;
+  errorText: string;
+  view: RecordCaseProcessingView | null;
+  model: TypicalPanelModel | null;
+  busy: boolean;
+  actionError: string;
+  notice: string;
+  changed: number;
+  sessionExpired: number;
+}
+
+function makePanelHarness(impl: {
+  recordStatus: (recordId: string) => Promise<RecordCaseProcessingView>;
+  retryProcessing?: (recordId: string) => Promise<RecordCaseRetryResult>;
+  markTypical?: (recordId: string) => Promise<RecordCaseProcessingView>;
+  unmarkTypical?: (recordId: string) => Promise<RecordCaseProcessingView>;
+}): { controller: TypicalCasePanelController; state: PanelState } {
+  const state: PanelState = {
+    loading: true,
+    loadFailed: false,
+    errorText: "",
+    view: null,
+    model: null,
+    busy: false,
+    actionError: "",
+    notice: "",
+    changed: 0,
+    sessionExpired: 0,
+  };
+  const hooks = new TypicalPanelHooks();
+  hooks.loading = (value: boolean): void => {
+    state.loading = value;
+  };
+  hooks.loadFailed = (value: boolean, text: string): void => {
+    state.loadFailed = value;
+    state.errorText = text;
+  };
+  hooks.appliedView = (value: RecordCaseProcessingView, model: TypicalPanelModel): void => {
+    state.view = value;
+    state.model = model;
+  };
+  hooks.busy = (value: boolean): void => {
+    state.busy = value;
+  };
+  hooks.actionError = (text: string): void => {
+    state.actionError = text;
+  };
+  hooks.notice = (text: string): void => {
+    state.notice = text;
+  };
+  hooks.changed = (): void => {
+    state.changed += 1;
+  };
+  hooks.sessionExpired = (): void => {
+    state.sessionExpired += 1;
+  };
+  const deps = new TypicalPanelDeps(
+    impl.recordStatus,
+    impl.markTypical ?? (async (): Promise<RecordCaseProcessingView> => view({})),
+    impl.retryProcessing ?? (async (): Promise<RecordCaseRetryResult> => ({ state: view({}), outcome: null })),
+    impl.unmarkTypical ?? (async (): Promise<RecordCaseProcessingView> => view({})),
+    describeErrorForTest,
+  );
+  return { controller: new TypicalCasePanelController(deps, hooks), state };
+}
+
+async function settle(): Promise<void> {
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolveFn: (value: T) => void = () => {};
+  const promise = new Promise<T>((resolve) => {
+    resolveFn = resolve;
+  });
+  return { promise, resolve: resolveFn };
 }
 
 test("面板：未标记且可标记时只出现标记按钮", () => {
@@ -147,6 +253,88 @@ test("写操作守卫：切换备案或代次过期后，迟到的 A 响应不�
   assert.equal(isActionContextCurrent("A", 1, "A", 1), true);
   assert.equal(isActionContextCurrent("B", 2, "A", 1), false, "切到 B 后 A 的响应（含错误/回调/busy）必须失效");
   assert.equal(isActionContextCurrent("A", 2, "A", 1), false, "同一备案刷新推进代次后旧响应也必须失效");
+  // busy 归属由写动作代次决定（与读取代次分开）：刷新不推进写动作代次，旧动作的收尾不得清除新动作的 busy。
+  assert.equal(isActionRunCurrent("A", 1, "A", 1), true);
+  assert.equal(isActionRunCurrent("B", 1, "A", 1), false, "切到 B 后 A 的收尾不得清除 B 的 busy");
+  assert.equal(isActionRunCurrent("A", 2, "A", 1), false, "同一备案上新的写动作已接管 busy");
+});
+
+test("面板写动作：409 冲突后自动刷新推进代次，busy 必须结束且可继续操作（审查回归）", async () => {
+  const initial = view({ isTypical: true, canUnmark: true, canRetry: true, status: "FAILED", failureCode: "MODEL_TIMEOUT", failureMessage: "整理超时，可重试" });
+  const refreshed = view({ isTypical: true, canUnmark: true, canRetry: false, status: "NONE", failureMessage: null });
+  const published = view({ isTypical: true, canUnmark: true, status: "PUBLISHED", caseId: "case_9", caseStatus: "PUBLISHED", caseTitle: "恢复后的案例" });
+  let statusCalls = 0;
+  let retryCalls = 0;
+  const { controller, state } = makePanelHarness({
+    recordStatus: async () => {
+      statusCalls += 1;
+      return statusCalls === 1 ? initial : refreshed;
+    },
+    retryProcessing: async () => {
+      retryCalls += 1;
+      if (retryCalls === 1) {
+        throw new PanelConflictError("CASE_STATE_CONFLICT", "案例状态已变化，请刷新后重试");
+      }
+      return { state: published, outcome: null };
+    },
+  });
+  controller.setRecord("rec_1");
+  await settle();
+  assert.equal(state.loading, false);
+  assert.equal(state.model?.showRetry, true, "初始状态可重试");
+
+  await controller.runRetry();
+  assert.equal(state.busy, false, "409 后的自动刷新不得把 busy 永久锁死");
+  assert.equal(state.loading, false, "冲突后的刷新必须结束加载态");
+  assert.equal(state.actionError, "案例状态已变化，请刷新后重试", "冲突原因原样展示");
+  assert.equal(state.view?.canRetry, false, "刷新后展示服务端最新真实状态");
+  assert.equal(state.changed, 0, "失败路径不得触发 onChanged");
+
+  // 面板未被锁死：busy 结束后新动作仍可执行。
+  await controller.runRetry();
+  assert.equal(state.busy, false);
+  assert.equal(state.notice, "已重新入库。");
+  assert.equal(state.view?.caseTitle, "恢复后的案例");
+  assert.equal(state.changed, 1);
+});
+
+test("面板写动作：A 的迟到响应不写回 B，也不清除 B 新动作的 busy（审查回归）", async () => {
+  const viewA = view({ recordId: "A", isTypical: true, canRetry: true, status: "FAILED", failureMessage: "A 失败" });
+  const viewA2 = view({ recordId: "A", isTypical: true, canUnmark: true, status: "PUBLISHED", caseId: "case_a", caseStatus: "PUBLISHED", caseTitle: "A 案例" });
+  const viewB = view({ recordId: "B", isTypical: true, canRetry: true, status: "FAILED", failureMessage: "B 失败" });
+  const viewB2 = view({ recordId: "B", isTypical: true, canUnmark: true, status: "PUBLISHED", caseId: "case_b", caseStatus: "PUBLISHED", caseTitle: "B 案例" });
+  const pendingA = deferred<RecordCaseRetryResult>();
+  const pendingB = deferred<RecordCaseRetryResult>();
+  const { controller, state } = makePanelHarness({
+    recordStatus: async (recordId: string) => (recordId === "A" ? viewA : viewB),
+    retryProcessing: (recordId: string) => (recordId === "A" ? pendingA.promise : pendingB.promise),
+  });
+  controller.setRecord("A");
+  await settle();
+  assert.equal(state.view?.recordId, "A");
+
+  const actionA = controller.runRetry();
+  assert.equal(state.busy, true, "A 动作进行中");
+
+  controller.setRecord("B");
+  assert.equal(state.busy, false, "切备案立即复位 busy");
+  await settle();
+  assert.equal(state.view?.recordId, "B");
+
+  const actionB = controller.runRetry();
+  assert.equal(state.busy, true, "B 动作进行中");
+
+  pendingA.resolve({ state: viewA2, outcome: null });
+  await actionA;
+  assert.equal(state.view?.recordId, "B", "A 的迟到响应不得写回 B 面板");
+  assert.equal(state.busy, true, "A 的迟到收尾不得清除 B 动作的 busy");
+  assert.equal(state.changed, 0, "A 的迟到成功不得触发 onChanged");
+
+  pendingB.resolve({ state: viewB2, outcome: null });
+  await actionB;
+  assert.equal(state.view?.caseTitle, "B 案例");
+  assert.equal(state.busy, false);
+  assert.equal(state.changed, 1);
 });
 
 test("面板：处理中状态不提供重试（避免并发重复提交）", () => {

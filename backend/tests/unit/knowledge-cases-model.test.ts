@@ -101,6 +101,9 @@ test("解析：合法输出保留可定位字段，引文按来源编号分桶",
   assert.equal(parsed.content.cause, null, "未知原因必须保持未知");
   assert.equal(parsed.evidenceByLabel.get("S1")?.length, 1);
   assert.equal(parsed.evidenceByLabel.get("S2")?.length, 1);
+  // 差异说明不由模型自由文本决定：按实际参与来源（S1 已完成 + S2 未完成）服务端重建。
+  assert.equal(parsed.content.differences, "来源间维修结果不一致：S1 结果为已完成；S2 结果为未完成。");
+  assert.ok(parsed.notes.some((note) => note.includes("未采用")));
 });
 
 test("解析：结果由来源强制推导（混合结果不允许被模型抹平）", () => {
@@ -217,6 +220,84 @@ test("解析：merge 选中 C1 时，C2 的证据与结果不参与（审查 P1-
   assert.equal(parsed.evidenceByLabel.get("S1")?.length, 1);
   assert.equal(parsed.evidenceByLabel.get("S3"), undefined, "C2 的引文必须被拒绝");
   assert.ok(parsed.notes.some((note) => note.includes("未选中候选")));
+});
+
+test("解析：差异说明只由服务端按实际参与来源生成（引用未选中 C2 的差异被清空/重建，审查回归）", () => {
+  const materialC = materialOf({
+    deviceModel: "ThinkPad E14",
+    category: { name: "硬件维修" },
+    content: "键盘进水后开不了机，烘干主板后恢复。",
+    result: "NOT_COMPLETED",
+    remark: null,
+  });
+  const base = {
+    sourceTexts: new Map([
+      ["S1", materialTextOf(materialOf(RECORD_B))],
+      ["S2", materialTextOf(materialOf(RECORD_A))],
+      ["S3", materialTextOf(materialC)],
+    ]),
+    candidates: new Map([
+      ["C1", "case-1"],
+      ["C2", "case-2"],
+    ]),
+    candidateSourceLabels: new Map([
+      ["C1", ["S2"]],
+      ["C2", ["S3"]],
+    ]),
+  };
+  // 场景一：实际来源（S1+S2）结果一致，模型却给出引用 S3 的差异 → 清空。
+  const consistent = parseCaseModelOutput(
+    JSON.stringify({
+      action: "merge",
+      target: "C1",
+      title: "键盘进水处理",
+      device_model: "ThinkPad E14",
+      fault: "键盘失灵",
+      resolution: "更换键盘模块",
+      differences: "S1、S2 已恢复，但 S3 风扇损坏未修复。",
+      merge_reason: "与 C1 同类故障",
+      evidences: [{ source: "S1", field: "resolution", quote: "更换键盘模块后恢复" }],
+    }),
+    {
+      ...base,
+      sourceResults: new Map<string, string | null>([
+        ["S1", "COMPLETED"],
+        ["S2", "COMPLETED"],
+        ["S3", "NOT_COMPLETED"],
+      ]),
+    },
+  );
+  assert.equal(consistent.content.result, "COMPLETED");
+  assert.equal(consistent.content.differences, null, "未选中候选的差异事实不得进入正文");
+  assert.ok(consistent.notes.some((note) => note.includes("未采用")));
+
+  // 场景二：实际来源（S1+S2）真实结果不一致 → 服务端重建差异，且只涉及 S1/S2。
+  const mixed = parseCaseModelOutput(
+    JSON.stringify({
+      action: "merge",
+      target: "C1",
+      title: "键盘进水处理",
+      device_model: "ThinkPad E14",
+      fault: "键盘失灵",
+      resolution: "更换键盘模块",
+      differences: "S1、S2 已恢复，但 S3 风扇损坏未修复。",
+      merge_reason: "与 C1 同类故障",
+      evidences: [{ source: "S1", field: "resolution", quote: "更换键盘模块后恢复" }],
+    }),
+    {
+      ...base,
+      sourceResults: new Map<string, string | null>([
+        ["S1", "COMPLETED"],
+        ["S2", "NOT_COMPLETED"],
+        ["S3", "NOT_COMPLETED"],
+      ]),
+    },
+  );
+  assert.equal(mixed.content.result, "MIXED");
+  assert.match(mixed.content.differences ?? "", /S1 结果为已完成/);
+  assert.match(mixed.content.differences ?? "", /S2 结果为未完成/);
+  assert.ok(!(mixed.content.differences ?? "").includes("S3"), "差异说明不得出现未选中候选");
+  assert.ok(!(mixed.content.differences ?? "").includes("风扇"), "差异说明不得携带未选中候选的事实");
 });
 
 test("解析：无法定位的引文被丢弃，字段无证据时降级为未提供（宁缺毋造）", () => {
