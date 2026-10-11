@@ -43,6 +43,13 @@ export struct RepairOrdersPage {
   @State detailOpen: boolean = false;
   /** 当前详情目标订单 ID：加载、错误、重试都围绕它，避免"重试请求错单"。 */
   @State detailTargetId: string = '';
+  /**
+   * 详情请求序号（请求令牌）：每次发起详情请求自增并捕获快照，
+   * 响应到达时只有序号仍是当前值才允许写入状态。
+   * 用于让「收起面板 / 切换目标」后仍在飞行的旧请求失效，
+   * 防止旧响应覆盖当前订单（A 未返回就收起、再开 B 后 A 的响应迟到）。
+   */
+  @State detailRequestSeq: number = 0;
   @State detailLoading: boolean = false;
   @State detailErrorText: string = '';
   @State currentPage: number = 1;
@@ -123,14 +130,29 @@ export struct RepairOrdersPage {
     this.fetchDetail(order.id);
   }
 
-  /** 按订单 ID 拉取详情：加载、错误与重试统一围绕同一个 ID，避免错单。 */
+  /**
+   * 按订单 ID 拉取详情：加载、错误与重试统一围绕同一个 ID，避免错单。
+   *
+   * 用请求序号做失效判定：发出前自增并捕获，回到主线程后只有
+   * `seq === this.detailRequestSeq` 才允许更新页面。这样「收起面板」
+   * 或「切换到另一单」之后迟到的旧响应会被直接丢弃，不会覆盖当前订单。
+   */
   private async fetchDetail(id: string): Promise<void> {
+    this.detailRequestSeq = this.detailRequestSeq + 1;
+    const seq: number = this.detailRequestSeq;
     this.detailLoading = true;
     this.detailErrorText = '';
     try {
+      const detail = await RepairOrderService.detail(id);
+      if (seq !== this.detailRequestSeq) {
+        return;
+      }
       // 重新取一次详情而不是复用列表项：列表与详情虽同形状，但进度事件可能已更新。
-      this.selected = await RepairOrderService.detail(id);
+      this.selected = detail;
     } catch (error) {
+      if (seq !== this.detailRequestSeq) {
+        return;
+      }
       if (error instanceof ApiRequestError) {
         if (isSessionExpiredCode(error.code)) {
           this.onSessionExpired();
@@ -141,7 +163,9 @@ export struct RepairOrdersPage {
         this.detailErrorText = '加载详情失败';
       }
     } finally {
-      this.detailLoading = false;
+      if (seq === this.detailRequestSeq) {
+        this.detailLoading = false;
+      }
     }
   }
 
@@ -153,6 +177,8 @@ export struct RepairOrdersPage {
   }
 
   private closeDetail(): void {
+    // 自增序号使仍在飞行的请求失效，其响应到达后不再写入页面状态。
+    this.detailRequestSeq = this.detailRequestSeq + 1;
     this.detailOpen = false;
     this.selected = null;
     this.detailTargetId = '';
