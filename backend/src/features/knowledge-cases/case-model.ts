@@ -173,6 +173,13 @@ export type CaseOutputContext = {
   sourceResults: Map<string, string | null>;
   /** 候选白名单：编号 → 案例 ID。 */
   candidates: Map<string, string>;
+  /**
+   * 新来源的编号（默认 S1）。决策模式下它才是 new 时唯一实际参与案例的来源：
+   * 候选来源只用于「判断是否合并」，未选中候选的结果与证据不得进入本次案例。
+   */
+  newSourceLabel?: string;
+  /** 候选编号（C1）→ 该候选渲染的来源编号集合：merge 时并入实际来源集合后再校验。 */
+  candidateSourceLabels?: Map<string, string[]>;
 };
 
 export type ParseCaseOptions = {
@@ -205,8 +212,13 @@ export function parseCaseModelOutput(
   const notes: string[] = [];
 
   const requireDecision = options.requireDecision !== false;
+  const newSourceLabel = context.newSourceLabel ?? "S1";
   let targetCaseId: string | null = null;
+  // 实际参与本次案例的来源集合：new = S1；merge = S1 + 选中候选的来源。
+  // 未选中候选只用于「判断是否合并」，其来源不得作为事实依据（防止结果/证据污染）。
+  const activeLabels = new Set<string>();
   if (requireDecision) {
+    activeLabels.add(newSourceLabel);
     const action = record.action;
     if (action !== "new" && action !== "merge") {
       throw new ChatModelError("bad_response", `模型返回了未知 action：${String(action)}`);
@@ -220,6 +232,9 @@ export function parseCaseModelOutput(
         );
       }
       targetCaseId = context.candidates.get(target) ?? null;
+      for (const label of context.candidateSourceLabels?.get(target) ?? []) {
+        activeLabels.add(label);
+      }
     }
     if (
       action === "new" &&
@@ -230,12 +245,18 @@ export function parseCaseModelOutput(
       // 无候选时 target 必须为空；给出值但 action=new 仍按 new 处理（不采信 target）。
       notes.push("无候选时模型仍给出 target，已忽略");
     }
+  } else {
+    // 重整模式：全部来源都属于同一案例，全部参与。
+    for (const label of context.sourceTexts.keys()) {
+      activeLabels.add(label);
+    }
   }
 
-  // 引文校验：编号合法 + 可定位到该来源材料文本。
+  // 引文校验：编号合法 + 属于本次实际来源集合 + 可定位到该来源材料文本。
   const validQuotes = new Map<string, CaseEvidence[]>();
   const rawEvidences = record.evidences;
   let droppedQuotes = 0;
+  let outOfScopeQuotes = 0;
   if (Array.isArray(rawEvidences)) {
     for (const entry of rawEvidences) {
       const item = entry as Record<string, unknown>;
@@ -244,6 +265,11 @@ export function parseCaseModelOutput(
       const quote = readString(item, "quote", FIELD_LIMITS.quote);
       if (!sourceLabel || !field || !quote) {
         droppedQuotes += 1;
+        continue;
+      }
+      if (!activeLabels.has(sourceLabel)) {
+        // 有效来源编号但未进入本次案例（未选中候选）：直接忽略并记录。
+        outOfScopeQuotes += 1;
         continue;
       }
       const sourceText = context.sourceTexts.get(sourceLabel);
@@ -258,6 +284,9 @@ export function parseCaseModelOutput(
   }
   if (droppedQuotes > 0) {
     notes.push(`丢弃了 ${droppedQuotes} 条无法定位到来源原文的引文`);
+  }
+  if (outOfScopeQuotes > 0) {
+    notes.push(`忽略了 ${outOfScopeQuotes} 条来自未选中候选的引文（未参与本次案例）`);
   }
 
   const fieldHasEvidence = new Map<string, boolean>();
@@ -283,7 +312,11 @@ export function parseCaseModelOutput(
   };
   // 机型/分类属于来源直接列出的结构化字段：允许两种证据形态 ——
   // ① 显式引文；② 取值本身能在某个来源材料文本中定位（同样不允许凭空补写）。
-  const allSourceText = [...context.sourceTexts.values()].map((text) => text.replace(/\s+/g, " ")).join(" ");
+  // 只在本次实际来源集合内取证：未选中候选的机型/分类不得被采用。
+  const allSourceText = [...activeLabels]
+    .map((label) => context.sourceTexts.get(label) ?? "")
+    .map((text) => text.replace(/\s+/g, " "))
+    .join(" ");
   const metadataAllowed = (value: string | null): boolean =>
     value !== null && (allSourceText.includes(value) || quoteInMaterial(allSourceText, value));
   let withoutEvidence = 0;
@@ -311,11 +344,18 @@ export function parseCaseModelOutput(
     throw new ChatModelError("bad_response", "模型未给出可用的案例标题");
   }
 
-  const sourceResults = [...context.sourceResults.values()];
-  const result: CaseResult = deriveResult(sourceResults);
+  // 结果只按实际参与本次案例的来源推导：未选中候选的结果不参与（不得把案例改成 MIXED/COMPLETED）。
+  const activeResultEntries = [...activeLabels]
+    .filter((label) => context.sourceResults.has(label))
+    .map((label) => [label, context.sourceResults.get(label) ?? null] as const);
+  const result: CaseResult = deriveResult(activeResultEntries.map(([, value]) => value));
   let differences = readString(record, "differences", FIELD_LIMITS.differences);
+  if (activeLabels.size <= 1) {
+    // 单一来源没有「来源间差异」可言：此刻的差异说明必然引用了未参与本次案例的资料。
+    differences = null;
+  }
   if (result === "MIXED" && !differences) {
-    const perSource = [...context.sourceResults.entries()]
+    const perSource = activeResultEntries
       .map(([label, value]) => `${label} 结果为${value === "COMPLETED" ? "已完成" : value === "NOT_COMPLETED" ? "未完成" : "未知"}`)
       .join("；");
     differences = `来源间维修结果不一致：${perSource}。`;

@@ -13,6 +13,7 @@ import {
 } from "../../../app/entry/src/main/ets/features/knowledge/KnowledgeCaseContract";
 import {
   contentRows,
+  isActionContextCurrent,
   PANEL_MODE_FAILED,
   PANEL_MODE_PUBLISHED,
   PANEL_MODE_PROCESSING,
@@ -86,6 +87,7 @@ test("面板：已入库显示案例标题与打开入口；案例层面失败�
   );
   assert.equal(published.mode, PANEL_MODE_PUBLISHED);
   assert.equal(published.canOpenCase, true);
+  assert.equal(published.summary, "已入库可检索");
   assert.ok(published.detail.includes("ThinkPad E14 键盘进水清理"));
   assert.ok(published.detail.includes("内部可见"));
 
@@ -104,6 +106,47 @@ test("面板：已入库显示案例标题与打开入口；案例层面失败�
   );
   assert.equal(caseFailed.showRetry, true, "来源已入库但案例失败时必须允许重试");
   assert.equal(caseFailed.canOpenCase, true);
+});
+
+test("面板：来源已入库但案例撤回/重整/失败时不写「可检索」，如实区分两类状态", () => {
+  const base = {
+    isTypical: true,
+    canUnmark: true,
+    status: "PUBLISHED",
+    caseId: "case_1",
+    caseTitle: "案例标题",
+    caseVisibility: "STAFF",
+  };
+  const withdrawn = typicalPanelModel(view({ ...base, caseStatus: "WITHDRAWN" }));
+  assert.ok(withdrawn.summary.includes("案例已撤回"), withdrawn.summary);
+  assert.ok(!withdrawn.summary.includes("可检索"), "撤回案例不得显示可检索");
+  assert.ok(withdrawn.detail.includes("需管理员"), "撤回后应给出恢复路径说明");
+  assert.equal(withdrawn.canOpenCase, true, "工作人员仍可打开查看撤回案例");
+
+  const reprocessing = typicalPanelModel(view({ ...base, caseStatus: "REPROCESSING" }));
+  assert.ok(reprocessing.summary.includes("案例重整中"), reprocessing.summary);
+  assert.ok(!reprocessing.summary.includes("可检索"));
+
+  const failed = typicalPanelModel(view({ ...base, caseStatus: "FAILED" }));
+  assert.ok(failed.summary.includes("案例整理失败"), failed.summary);
+  assert.ok(!failed.summary.includes("可检索"));
+});
+
+test("面板：来源被移除归一为 NONE 时，重试入口跟随服务端 canRetry", () => {
+  const removed = typicalPanelModel(
+    view({ isTypical: true, canUnmark: true, canRetry: true, status: "NONE" }),
+  );
+  assert.equal(removed.mode, PANEL_MODE_UNMARKED);
+  assert.equal(removed.showRetry, true, "服务端可重试时必须给出恢复入口（不能只剩取消再标记）");
+  assert.equal(removed.showMark, false);
+  assert.equal(removed.summary, "来源暂未入库");
+  assert.equal(removed.canOpenCase, false);
+});
+
+test("写操作守卫：切换备案或代次过期后，迟到的 A 响应不得写回面板", () => {
+  assert.equal(isActionContextCurrent("A", 1, "A", 1), true);
+  assert.equal(isActionContextCurrent("B", 2, "A", 1), false, "切到 B 后 A 的响应（含错误/回调/busy）必须失效");
+  assert.equal(isActionContextCurrent("A", 2, "A", 1), false, "同一备案刷新推进代次后旧响应也必须失效");
 });
 
 test("面板：处理中状态不提供重试（避免并发重复提交）", () => {

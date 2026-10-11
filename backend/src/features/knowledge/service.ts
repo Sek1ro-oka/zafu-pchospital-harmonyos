@@ -95,12 +95,32 @@ export async function searchKnowledge(options: SearchKnowledgeOptions): Promise<
     forceKeyword: options.input.retrieval === "keyword",
     embedFn: options.embedFn,
   });
+  // 返回前复核案例候选：检索（含向量等待）期间被撤回/改内部/重整/版本变化（或复核失败）
+  // 的案例不得继续返回旧摘要；文档块不受影响。
+  let candidates = outcome.candidates;
+  if (caseSource) {
+    const caseChunkIds = candidates
+      .filter((candidate) => candidate.chunk.origin === "case")
+      .map((candidate) => candidate.chunk.id);
+    if (caseChunkIds.length > 0) {
+      let valid: Set<string>;
+      try {
+        valid = await caseSource.revalidate(caseChunkIds, options.includeStaff);
+      } catch (error) {
+        console.error("[knowledge] 案例检索复核失败（搜索）：", error);
+        valid = new Set<string>();
+      }
+      candidates = candidates.filter(
+        (candidate) => candidate.chunk.origin !== "case" || valid.has(candidate.chunk.id),
+      );
+    }
+  }
   return {
     query: options.input.query,
     retrievalMode: outcome.mode,
     degradation: outcome.degradation,
     indexVersion: knowledgeIndex.indexVersion,
-    results: outcome.candidates.map((candidate, position) => ({
+    results: candidates.map((candidate, position) => ({
       sourceId: candidate.chunk.id,
       label: `S${position + 1}`,
       title: candidate.chunk.heading === "" ? candidate.chunk.docTitle : candidate.chunk.heading,

@@ -4,7 +4,7 @@ import {
   RecordCaseProcessingView,
   RecordCaseRetryResult,
 } from './KnowledgeCaseContract';
-import { typicalPanelModel, TypicalPanelModel } from './KnowledgeCaseFlow';
+import { isActionContextCurrent, typicalPanelModel, TypicalPanelModel } from './KnowledgeCaseFlow';
 import { KnowledgeCaseService } from './KnowledgeCaseService';
 
 /**
@@ -41,6 +41,10 @@ export struct TypicalCasePanel {
   }
 
   onRecordChanged(): void {
+    // 换备案：立即重置忙碌与提示，并让在途写操作的结果失效（load 会推进代次）。
+    this.busy = false;
+    this.actionError = '';
+    this.notice = '';
     if (this.recordId !== '') {
       this.load();
     }
@@ -49,6 +53,11 @@ export struct TypicalCasePanel {
   private setView(view: RecordCaseProcessingView): void {
     this.view = view;
     this.model = typicalPanelModel(view);
+  }
+
+  /** 写操作的上下文守卫：结果/错误/回调只能写回发起时的备案与代次。 */
+  private isCurrent(recordId: string, generation: number): boolean {
+    return isActionContextCurrent(this.recordId, this.generation, recordId, generation);
   }
 
   private async load(): Promise<void> {
@@ -93,11 +102,16 @@ export struct TypicalCasePanel {
     if (this.busy || this.recordId === '') {
       return;
     }
+    const recordId: string = this.recordId;
+    const generation: number = this.generation;
     this.busy = true;
     this.actionError = '';
     this.notice = '';
     try {
-      const view = await KnowledgeCaseService.markTypical(this.recordId);
+      const view = await KnowledgeCaseService.markTypical(recordId);
+      if (!this.isCurrent(recordId, generation)) {
+        return;
+      }
       this.setView(view);
       this.notice = view.status === 'PUBLISHED' ? '已整理入库，可被检索命中。' : '';
       if (view.status === 'FAILED' && view.failureMessage !== null) {
@@ -105,9 +119,11 @@ export struct TypicalCasePanel {
       }
       this.onChanged();
     } catch (error) {
-      this.handleActionError(error, '标记失败，请重试');
+      this.handleActionError(recordId, generation, error, '标记失败，请重试');
     } finally {
-      this.busy = false;
+      if (this.isCurrent(recordId, generation)) {
+        this.busy = false;
+      }
     }
   }
 
@@ -115,11 +131,16 @@ export struct TypicalCasePanel {
     if (this.busy || this.recordId === '') {
       return;
     }
+    const recordId: string = this.recordId;
+    const generation: number = this.generation;
     this.busy = true;
     this.actionError = '';
     this.notice = '';
     try {
-      const result: RecordCaseRetryResult = await KnowledgeCaseService.retryProcessing(this.recordId);
+      const result: RecordCaseRetryResult = await KnowledgeCaseService.retryProcessing(recordId);
+      if (!this.isCurrent(recordId, generation)) {
+        return;
+      }
       this.setView(result.state);
       if (result.state.status === 'PUBLISHED') {
         this.notice = '已重新入库。';
@@ -128,13 +149,20 @@ export struct TypicalCasePanel {
       }
       this.onChanged();
     } catch (error) {
-      this.handleActionError(error, '重试失败，请重试');
+      this.handleActionError(recordId, generation, error, '重试失败，请重试');
     } finally {
-      this.busy = false;
+      if (this.isCurrent(recordId, generation)) {
+        this.busy = false;
+      }
     }
   }
 
   private confirmUnmark(): void {
+    // 确认弹窗绑定「打开时的备案」：切到别的备案后确认，也只会作用于原来的对象且被守卫拦下。
+    const recordId: string = this.recordId;
+    if (recordId === '') {
+      return;
+    }
     this.getUIContext().showAlertDialog({
       title: '取消典型案例标记',
       message: '取消后该备案的贡献会从案例中移除；关联案例将按剩余来源自动重整，没有剩余来源时会被撤下。',
@@ -146,35 +174,45 @@ export struct TypicalCasePanel {
       secondaryButton: {
         value: '确认取消',
         action: () => {
-          this.runUnmark();
+          this.runUnmark(recordId);
         }
       }
     });
   }
 
-  private async runUnmark(): Promise<void> {
-    if (this.busy || this.recordId === '') {
+  private async runUnmark(recordId: string): Promise<void> {
+    if (this.busy || recordId !== this.recordId) {
       return;
     }
+    const generation: number = this.generation;
     this.busy = true;
     this.actionError = '';
     this.notice = '';
     try {
-      const view = await KnowledgeCaseService.unmarkTypical(this.recordId);
+      const view = await KnowledgeCaseService.unmarkTypical(recordId);
+      if (!this.isCurrent(recordId, generation)) {
+        return;
+      }
       this.setView(view);
       this.notice = '已取消典型标记。';
       this.onChanged();
     } catch (error) {
-      this.handleActionError(error, '取消失败，请重试');
+      this.handleActionError(recordId, generation, error, '取消失败，请重试');
     } finally {
-      this.busy = false;
+      if (this.isCurrent(recordId, generation)) {
+        this.busy = false;
+      }
     }
   }
 
-  private handleActionError(error: Object, fallback: string): void {
+  private handleActionError(recordId: string, generation: number, error: Object, fallback: string): void {
     if (error instanceof ApiRequestError) {
       if (isSessionExpiredCode(error.code)) {
+        // 会话失效是全局的：无论面板切到哪条备案都要回登录。
         this.onSessionExpired();
+        return;
+      }
+      if (!this.isCurrent(recordId, generation)) {
         return;
       }
       this.actionError = error.message;
@@ -184,7 +222,9 @@ export struct TypicalCasePanel {
       }
       return;
     }
-    this.actionError = fallback;
+    if (this.isCurrent(recordId, generation)) {
+      this.actionError = fallback;
+    }
   }
 
   @Builder

@@ -40,6 +40,9 @@ export const NO_EVIDENCE_MESSAGE =
   "资料库中没有检索到与该问题相关的证据。请补充机型、系统版本或报错原文后重试；如果是设备故障，可以在客户服务中提交报修。";
 export const UNCITED_ANSWER_MESSAGE =
   "模型没有给出可核实的引用，本条回答已按证据不足处理。可以换一种问法，或补充机型、系统版本与报错原文后重试。";
+/** 已引用的案例证据在回答生成期间失效：不得返回原正文，也不能用剩余证据重生成时的兜底文案。 */
+export const STALE_EVIDENCE_MESSAGE =
+  "本条回答引用的资料在生成期间发生了变化，已不能作为依据；请重新提问获取最新结果。";
 const BUDGET_EXHAUSTED_MESSAGE = "本次问答的整体时间预算已用尽，请稍后重试";
 /** 总预算剩余低于此值即视为不可再继续：检索后与每次模型调用前统一检查。 */
 const MIN_REMAINING_BUDGET_MS = 1000;
@@ -402,6 +405,72 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
       throw mapChatModelError(error);
     }
   };
+  /**
+   * 部分案例证据失效后的补救：仅用剩余有效候选（编号与候选一一对应）重新生成一次。
+   * 预算不足、重生成失败或新回答的案例引用再次失效时返回 null，由调用方整条降级。
+   */
+  const regenerateWithoutStaleCase = async (
+    validCandidates: RetrievalCandidate[],
+  ): Promise<KnowledgeChatData | null> => {
+    if (validCandidates.length === 0) {
+      return null;
+    }
+    if (deadline - Date.now() < MIN_REMAINING_BUDGET_MS) {
+      notes.push("预算不足，未用剩余证据重新生成");
+      return null;
+    }
+    try {
+      const retryRaw = await callModelWithinBudget(buildMessages(options.input, validCandidates));
+      const retryOutput = parseOutputOrThrow(retryRaw, validCandidates.length);
+      notes.push("案例证据在回答生成期间发生变化，已用剩余有效证据重新生成");
+      if (retryOutput.status === "answer" && retryOutput.citationIds.length === 0) {
+        notes.push("重新生成仍缺少有效引用，按证据不足处理");
+        return {
+          ...base,
+          status: "insufficient_evidence",
+          answer: UNCITED_ANSWER_MESSAGE,
+          clarifyingQuestion: null,
+          citations: [],
+          notes,
+        };
+      }
+      const retryCitations =
+        retryOutput.status === "answer"
+          ? retryOutput.citationIds.map((id) =>
+              citationOf(validCandidates[Number.parseInt(id.slice(1), 10) - 1], knowledgeIndex, id),
+            )
+          : [];
+      // 重生成期间证据仍可能变化：对新回答的案例引用再复核一次，不再循环。
+      if (caseSource && retryCitations.some((citation) => citation.sourceId.startsWith("kcase_"))) {
+        const retryCaseIds = retryCitations
+          .filter((citation) => citation.sourceId.startsWith("kcase_"))
+          .map((citation) => citation.sourceId);
+        let revalidated: Set<string>;
+        try {
+          revalidated = await caseSource.revalidate(retryCaseIds, options.includeStaff);
+        } catch (error) {
+          console.error("[knowledge] 重生成的案例引用复核失败：", error);
+          revalidated = new Set<string>();
+        }
+        if (retryCaseIds.some((id) => !revalidated.has(id))) {
+          notes.push("重新生成后案例证据再次变化，本次不返回回答");
+          return null;
+        }
+      }
+      return {
+        ...base,
+        status: retryOutput.status,
+        answer: retryOutput.status === "clarify" ? null : retryOutput.answer,
+        clarifyingQuestion: retryOutput.status === "clarify" ? retryOutput.clarifyingQuestion : null,
+        citations: retryCitations,
+        notes,
+      };
+    } catch (error) {
+      console.error("[knowledge] 用剩余证据重新生成失败：", error);
+      notes.push("重新生成未成功，本次不返回原回答");
+      return null;
+    }
+  };
   const raw = await callModelWithinBudget(messages);
   const notes: string[] = [...preNotes];
   let output = parseOutputOrThrow(raw, outcome.candidates.length);
@@ -435,41 +504,57 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
   }
 
   notes.push(...output.notes);
-  let citations =
+  const citations =
     output.status === "answer"
       ? output.citationIds.map((id) =>
           citationOf(outcome.candidates[Number.parseInt(id.slice(1), 10) - 1], knowledgeIndex, id),
         )
       : [];
   // 返回前复核案例引用：回答生成期间被撤回/重整/范围调整/版本更新的案例不得继续提供。
-  if (caseSource && citations.some((citation) => citation.sourceId.startsWith("kcase_"))) {
-    const caseChunkIds = citations
+  // 只要有任何被引用的案例证据失效，整段回答就不再可信（正文可能包含该案例的事实）：
+  // 在预算内用剩余有效证据重新生成；做不到就整条降级为「资料已变化，请重试」——
+  // 绝不原样返回由失效案例生成的正文，也不只做「去掉引用」的表面过滤。
+  if (caseSource) {
+    const citedCaseIds = citations
       .filter((citation) => citation.sourceId.startsWith("kcase_"))
       .map((citation) => citation.sourceId);
-    try {
-      const valid = await caseSource.revalidate(caseChunkIds, options.includeStaff);
-      const before = citations.length;
-      citations = citations.filter(
-        (citation) => !citation.sourceId.startsWith("kcase_") || valid.has(citation.sourceId),
-      );
-      const dropped = before - citations.length;
-      if (dropped > 0) notes.push(`返回前复核发现 ${dropped} 条案例引用已失效，已移除`);
-    } catch (error) {
-      // 复核失败时保守移除案例引用：宁可少给证据，不给可能已失效的证据。
-      console.error("[knowledge] 案例引用复核失败：", error);
-      citations = citations.filter((citation) => !citation.sourceId.startsWith("kcase_"));
-      notes.push("案例引用复核失败，已移除本次案例引用");
-    }
-    if (output.status === "answer" && citations.length === 0) {
-      notes.push("回答所依赖的案例引用均已失效，按证据不足处理");
-      return {
-        ...base,
-        status: "insufficient_evidence",
-        answer: UNCITED_ANSWER_MESSAGE,
-        clarifyingQuestion: null,
-        citations: [],
-        notes,
-      };
+    if (citedCaseIds.length > 0) {
+      let validCaseIds: Set<string>;
+      let revalidateFailed = false;
+      try {
+        validCaseIds = await caseSource.revalidate(citedCaseIds, options.includeStaff);
+      } catch (error) {
+        // 复核失败时保守处理：本次案例证据一律视为不可用。
+        console.error("[knowledge] 案例引用复核失败：", error);
+        validCaseIds = new Set<string>();
+        revalidateFailed = true;
+      }
+      const droppedCaseIds = new Set(citedCaseIds.filter((id) => !validCaseIds.has(id)));
+      if (revalidateFailed) {
+        notes.push("案例引用复核失败，本次回答不再返回");
+      } else if (droppedCaseIds.size > 0) {
+        notes.push(`返回前复核发现 ${droppedCaseIds.size} 条案例引用已失效，原回答不再返回`);
+      }
+      if (revalidateFailed || droppedCaseIds.size > 0) {
+        const remainingCandidates = outcome.candidates.filter(
+          (candidate) =>
+            candidate.chunk.origin !== "case" ||
+            (!revalidateFailed && !droppedCaseIds.has(candidate.chunk.id)),
+        );
+        const regenerated = await regenerateWithoutStaleCase(remainingCandidates);
+        if (regenerated !== null) {
+          return regenerated;
+        }
+        notes.push("未用剩余证据重新生成，按资料变化处理");
+        return {
+          ...base,
+          status: "insufficient_evidence",
+          answer: STALE_EVIDENCE_MESSAGE,
+          clarifyingQuestion: null,
+          citations: [],
+          notes,
+        };
+      }
     }
   }
   return {

@@ -218,6 +218,30 @@ async function attachCount(caseId: string): Promise<number> {
   return getDb().knowledgeCaseSource.count({ where: { caseId, status: "PUBLISHED" } });
 }
 
+/** 直接插入「已发布来源」行：模拟历史数据/制造满额案例（证据快照为空，仅提供来源数与关联）。 */
+async function attachFakeSources(caseId: string, count: number, tag: string): Promise<void> {
+  const db = getDb();
+  for (let index = 1; index <= count; index += 1) {
+    const recordId = await createApprovedRecord(index % 2 === 0 ? MP_A_ID : MP_B_ID, {
+      deviceModel: "遗留设备",
+      content: `${tag} 第 ${index} 条来源正文，仅用于来源计数。`,
+      result: "COMPLETED",
+    });
+    await db.knowledgeCaseSource.create({
+      data: {
+        id: randomUUID(),
+        repairRecordId: recordId,
+        caseId,
+        status: "PUBLISHED",
+        contentHash: randomUUID().replace(/-/g, "").padEnd(64, "0"),
+        generation: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    });
+  }
+}
+
 // ---------- 用例 ----------
 
 dbTest("权限矩阵：客户/其他成员不能标记，作者与审核人员可以；标记不改动正文与状态", async () => {
@@ -1047,4 +1071,350 @@ dbTest("取消典型（原生通道）：多来源案例按剩余来源重整（
   assert.equal(singleCase?.status, "WITHDRAWN", "无有效来源的案例必须自动撤下");
   assert.equal(singleCase?.withdrawnSource, "SOURCES_EXHAUSTED");
   assert.equal(await attachCount(single.caseId!), 0);
+});
+
+// ---------- 审查回归（PR #52 第一轮审查的 7 类问题） ----------
+
+dbTest("回归 P1-1：new 不受未选中候选的结果与证据影响（服务端按实际选择收窄来源集合）", async () => {
+  enableFakeModelEnv();
+  // 候选案例：结果为 NOT_COMPLETED。
+  const r1 = await createApprovedRecord(MP_A_ID, {
+    deviceModel: "ThinkPad E14",
+    content: "键盘进水后部分按键失灵，拆机清理排线后按键仍不可用。",
+    result: "NOT_COMPLETED",
+  });
+  const first = await knowledgeCaseService.markTypical(memberA(), r1, {
+    callModelFn: async () =>
+      JSON.stringify({
+        action: "new",
+        target: null,
+        title: "ThinkPad E14 键盘进水处理",
+        device_model: "ThinkPad E14",
+        fault: "键盘进水后部分按键失灵",
+        resolution: "拆机清理排线",
+        evidences: [
+          { source: "S1", field: "fault", quote: "键盘进水后部分按键失灵" },
+          { source: "S1", field: "resolution", quote: "拆机清理排线" },
+        ],
+      }),
+    embedFn: fakeEmbed,
+  });
+  assert.equal(first.status, "PUBLISHED");
+  const candidateCaseId = first.caseId!;
+
+  // 新来源（COMPLETED）：模型选择 new，但字段/差异/引文全部引用候选来源（S2）。
+  const r2 = await createApprovedRecord(MP_B_ID, {
+    deviceModel: "ThinkPad E14",
+    content: "键盘进水，个别键失灵感，更换键盘模块后恢复。",
+    result: "COMPLETED",
+  });
+  const second = await knowledgeCaseService.markTypical(memberB(), r2, {
+    callModelFn: async () =>
+      JSON.stringify({
+        action: "new",
+        target: null,
+        title: "键盘进水处理（新）",
+        device_model: "ThinkPad E14",
+        fault: "排线失效",
+        resolution: "拆机清理排线",
+        result: "MIXED",
+        differences: "S1 结果为已完成，S2 结果为未完成。",
+        evidences: [
+          { source: "S2", field: "fault", quote: "拆机清理排线后按键仍不可用" },
+          { source: "S2", field: "resolution", quote: "拆机清理排线" },
+        ],
+      }),
+    embedFn: fakeEmbed,
+  });
+  assert.equal(second.status, "PUBLISHED", JSON.stringify(second));
+  assert.notEqual(second.caseId, candidateCaseId, "action=new 必须新建独立案例");
+  const created = await caseOf(second.caseId!);
+  const structured = created!.structured as Record<string, unknown>;
+  assert.equal(structured.result, "COMPLETED", "候选的 NOT_COMPLETED 不得把新案例改成 MIXED");
+  assert.equal(structured.differences, null, "单一来源不得携带候选间差异说明");
+  assert.equal(structured.resolution, null, "引文只来自未选中候选时字段必须置为未提供");
+  assert.equal(await attachCount(second.caseId!), 1);
+  assert.equal(await attachCount(candidateCaseId), 1, "候选案例的来源不受影响");
+});
+
+dbTest("回归 P1-2：重整/显式恢复期间再次撤回，迟到的模型结果不重新发布", async () => {
+  enableFakeModelEnv();
+  const db = getDb();
+  const recordId = await createApprovedRecord(MP_A_ID, {
+    deviceModel: "重回测试机型",
+    content: "系统无法关机，长按电源键后恢复。",
+    result: "COMPLETED",
+  });
+  const created = await knowledgeCaseService.markTypical(memberA(), recordId, {
+    callModelFn: async () =>
+      JSON.stringify({
+        action: "new",
+        target: null,
+        title: "重回测试案例",
+        device_model: "重回测试机型",
+        fault: "无法关机",
+        resolution: "长按电源键",
+        evidences: [
+          { source: "S1", field: "fault", quote: "无法关机" },
+          { source: "S1", field: "resolution", quote: "长按电源键" },
+        ],
+      }),
+    embedFn: fakeEmbed,
+  });
+  assert.equal(created.status, "PUBLISHED");
+  const caseId = created.caseId!;
+  const versionBefore = (await caseOf(caseId))!.contentVersion;
+  const regeneratePayload = JSON.stringify({
+    action: "new",
+    target: null,
+    title: "重回测试案例（重整）",
+    device_model: "重回测试机型",
+    fault: "无法关机",
+    resolution: "长按电源键",
+    evidences: [
+      { source: "S1", field: "fault", quote: "无法关机" },
+      { source: "S1", field: "resolution", quote: "长按电源键" },
+    ],
+  });
+
+  // 场景一：普通重整期间管理员撤回 → 迟到的模型结果不得重新发布。
+  const reprocessed = await knowledgeCaseService.reprocessCaseByAdmin(admin(), caseId, {
+    callModelFn: async () => {
+      await knowledgeCaseService.withdrawCase(admin(), caseId);
+      return regeneratePayload;
+    },
+    embedFn: fakeEmbed,
+  });
+  assert.equal(reprocessed.outcome.status, "SKIPPED", JSON.stringify(reprocessed.outcome));
+  assert.equal(reprocessed.outcome.failureCode, "CASE_WITHDRAWN");
+  const afterFirst = await caseOf(caseId);
+  assert.equal(afterFirst?.status, "WITHDRAWN", "重整期间的撤回必须保持生效");
+  assert.equal(afterFirst?.withdrawnSource, "ADMIN");
+  assert.equal(afterFirst?.contentVersion, versionBefore, "迟到结果不得递增版本");
+
+  // 场景二：显式恢复（撤回后重新整理）期间再次撤回 → 旧结果不得覆盖第二次撤回。
+  let secondWithdrawnAt: Date | null = null;
+  const restored = await knowledgeCaseService.reprocessCaseByAdmin(admin(), caseId, {
+    callModelFn: async () => {
+      await knowledgeCaseService.withdrawCase(admin(), caseId);
+      secondWithdrawnAt = (
+        await db.knowledgeCase.findUniqueOrThrow({ where: { id: caseId } })
+      ).withdrawnAt;
+      return regeneratePayload;
+    },
+    embedFn: fakeEmbed,
+  });
+  assert.equal(restored.outcome.status, "SKIPPED", JSON.stringify(restored.outcome));
+  assert.equal(restored.outcome.failureCode, "CASE_WITHDRAWN");
+  const afterSecond = await caseOf(caseId);
+  assert.equal(afterSecond?.status, "WITHDRAWN");
+  assert.equal(afterSecond?.withdrawnSource, "ADMIN");
+  assert.equal(afterSecond?.contentVersion, versionBefore);
+  assert.equal(
+    afterSecond!.withdrawnAt!.getTime(),
+    secondWithdrawnAt!.getTime(),
+    "第二次撤回的时间戳必须保留，不被旧恢复结果覆盖",
+  );
+});
+
+dbTest("回归 P1-4：完全重复在规划与挂接之间被改公开时拒绝挂接（可重试）；正常重复仍复用", async () => {
+  enableFakeModelEnv();
+  const db = getDb();
+  // 候选池需存在带向量的既有案例，确保规划阶段会调用向量接口（本用例的注入点）。
+  const fillerRecord = await createApprovedRecord(MP_A_ID, {
+    deviceModel: "填充机型",
+    content: "电源键无反应，更换电源键后恢复。",
+    result: "COMPLETED",
+  });
+  const filler = await knowledgeCaseService.markTypical(memberA(), fillerRecord, {
+    callModelFn: async () =>
+      JSON.stringify({
+        action: "new",
+        target: null,
+        title: "填充案例",
+        device_model: "填充机型",
+        fault: "电源键无反应",
+        resolution: "更换电源键",
+        evidences: [
+          { source: "S1", field: "fault", quote: "电源键无反应" },
+          { source: "S1", field: "resolution", quote: "更换电源键" },
+        ],
+      }),
+    embedFn: fakeEmbed,
+  });
+  assert.equal(filler.status, "PUBLISHED");
+
+  const unique = `完全重复内容 ${randomUUID().slice(0, 8)}：触摸板失灵，重新插拔排线后恢复。`;
+  const t1 = await createApprovedRecord(MP_A_ID, {
+    deviceModel: "重复机型",
+    content: unique,
+    result: "COMPLETED",
+  });
+  const created = await knowledgeCaseService.markTypical(memberA(), t1, {
+    callModelFn: async () =>
+      JSON.stringify({
+        action: "new",
+        target: null,
+        title: "重复案例",
+        device_model: "重复机型",
+        fault: "触摸板失灵",
+        resolution: "重新插拔排线",
+        evidences: [
+          { source: "S1", field: "fault", quote: "触摸板失灵" },
+          { source: "S1", field: "resolution", quote: "重新插拔排线" },
+        ],
+      }),
+    embedFn: fakeEmbed,
+  });
+  assert.equal(created.status, "PUBLISHED");
+  const caseId = created.caseId!;
+  const versionBefore = (await caseOf(caseId))!.contentVersion;
+
+  // 同一实质内容的第二条来源：规划（含向量调用）期间管理员把目标案例改公开。
+  let flipHappened = false;
+  let modelCalls = 0;
+  const t2 = await createApprovedRecord(MP_B_ID, {
+    deviceModel: "重复机型",
+    content: unique,
+    result: "COMPLETED",
+  });
+  const blocked = await knowledgeCaseService.markTypical(memberB(), t2, {
+    callModelFn: async () => {
+      modelCalls += 1;
+      return "{}";
+    },
+    embedFn: async (_config: unknown, texts: string[]) => {
+      if (!flipHappened) {
+        flipHappened = true;
+        await db.knowledgeCase.update({ where: { id: caseId }, data: { visibility: "PUBLIC" } });
+      }
+      return texts.map(() => [1, 0, 0]);
+    },
+  });
+  assert.ok(flipHappened, "用例注入点必须触发（规划阶段确实调用了向量接口）");
+  assert.equal(modelCalls, 0, "完全重复路径不应调用模型");
+  assert.equal(blocked.status, "FAILED", JSON.stringify(blocked));
+  assert.equal(blocked.failureCode, "CASE_VISIBILITY_CHANGED");
+  const blockedContribution = await contributionOf(t2);
+  assert.equal(blockedContribution?.status, "FAILED");
+  assert.equal(blockedContribution?.caseId, null, "跨范围挂接必须被拒绝");
+  assert.equal(blockedContribution?.processingStartedAt, null, "失败后必须释放租约（可重试）");
+  const stillPublic = await caseOf(caseId);
+  assert.equal(stillPublic?.visibility, "PUBLIC");
+  assert.equal(stillPublic?.contentVersion, versionBefore, "被拒绝的挂接不得改动目标案例");
+  assert.equal(await attachCount(caseId), 1, "被拒绝的来源不得挂入公开案例");
+
+  // 改回内部后：正常完全重复仍复用案例（不调模型、不新增案例）。
+  await db.knowledgeCase.update({ where: { id: caseId }, data: { visibility: "STAFF" } });
+  const t3 = await createApprovedRecord(MP_A_ID, {
+    deviceModel: "重复机型",
+    content: unique,
+    result: "COMPLETED",
+  });
+  const reused = await knowledgeCaseService.markTypical(memberA(), t3, {
+    callModelFn: async () => {
+      modelCalls += 1;
+      return "{}";
+    },
+    embedFn: fakeEmbed,
+  });
+  assert.equal(reused.status, "PUBLISHED", JSON.stringify(reused));
+  assert.equal(reused.caseId, caseId, "内部范围内的完全重复仍复用既有案例");
+  assert.equal(modelCalls, 0);
+  assert.equal(await attachCount(caseId), 2);
+});
+
+dbTest("回归 P2-6：超 8 条来源的重整明确失败不静默丢失；合并到已满案例被拒绝", async () => {
+  enableFakeModelEnv();
+  // 场景一：历史数据 9 条来源 → 重整必须明确拒绝（不静默只用前 8 条生成缺来源的正文）。
+  const record = await createApprovedRecord(MP_A_ID, {
+    deviceModel: "上限机型 A",
+    content: "键盘灯不亮，更换排线后恢复。",
+    result: "COMPLETED",
+  });
+  const created = await knowledgeCaseService.markTypical(memberA(), record, {
+    callModelFn: async () =>
+      JSON.stringify({
+        action: "new",
+        target: null,
+        title: "上限案例 A",
+        device_model: "上限机型 A",
+        fault: "键盘灯不亮",
+        resolution: "更换排线",
+        evidences: [
+          { source: "S1", field: "fault", quote: "键盘灯不亮" },
+          { source: "S1", field: "resolution", quote: "更换排线" },
+        ],
+      }),
+    embedFn: fakeEmbed,
+  });
+  assert.equal(created.status, "PUBLISHED");
+  const caseId = created.caseId!;
+  const versionBefore = (await caseOf(caseId))!.contentVersion;
+  await attachFakeSources(caseId, 8, "P2-6 场景一");
+  assert.equal(await attachCount(caseId), 9);
+
+  let reprocessModelCalls = 0;
+  const reprocessed = await knowledgeCaseService.reprocessCaseByAdmin(admin(), caseId, {
+    callModelFn: async () => {
+      reprocessModelCalls += 1;
+      return "{}";
+    },
+    embedFn: fakeEmbed,
+  });
+  assert.equal(reprocessModelCalls, 0, "超限案例不得调用模型生成缺失来源的正文");
+  assert.equal(reprocessed.outcome.status, "FAILED");
+  assert.equal(reprocessed.outcome.failureCode, "CASE_SOURCE_LIMIT");
+  assert.match(reprocessed.outcome.failureMessage ?? "", /上限/);
+  const failedCase = await caseOf(caseId);
+  assert.equal(failedCase?.status, "FAILED");
+  assert.equal(failedCase?.failureCode, "CASE_SOURCE_LIMIT");
+  assert.equal(failedCase?.contentVersion, versionBefore, "失败不得改变内容版本");
+  assert.equal(await attachCount(caseId), 9, "全部来源必须保留，不静默丢弃");
+
+  // 场景二：已满 8 条的案例，新相似来源合并被明确拒绝（不静默丢第 9 条事实）。
+  const r8 = await createApprovedRecord(MP_A_ID, {
+    deviceModel: "上限机型 B",
+    content: "风扇异响，清理后恢复正常。",
+    result: "COMPLETED",
+  });
+  const full = await knowledgeCaseService.markTypical(memberA(), r8, {
+    callModelFn: async () =>
+      JSON.stringify({
+        action: "new",
+        target: null,
+        title: "上限案例 B",
+        device_model: "上限机型 B",
+        fault: "风扇异响",
+        resolution: "清理风扇",
+        evidences: [
+          { source: "S1", field: "fault", quote: "风扇异响" },
+          { source: "S1", field: "resolution", quote: "清理风扇" },
+        ],
+      }),
+    embedFn: fakeEmbed,
+  });
+  assert.equal(full.status, "PUBLISHED");
+  const fullCaseId = full.caseId!;
+  await attachFakeSources(fullCaseId, 7, "P2-6 场景二");
+  assert.equal(await attachCount(fullCaseId), 8);
+  const fullVersion = (await caseOf(fullCaseId))!.contentVersion;
+
+  const mergeAttempt = await createApprovedRecord(MP_B_ID, {
+    deviceModel: "上限机型 B",
+    content: "同型号风扇异响，清洁扇叶后恢复安静。",
+    result: "COMPLETED",
+  });
+  const merged = await knowledgeCaseService.markTypical(memberB(), mergeAttempt, {
+    callModelFn: async () => JSON.stringify(mergePayload("同型号风扇异响，清洁扇叶后恢复安静", "清洁扇叶")),
+    embedFn: fakeEmbed,
+  });
+  assert.equal(merged.status, "FAILED", JSON.stringify(merged));
+  assert.equal(merged.failureCode, "CASE_SOURCE_LIMIT");
+  assert.equal(await attachCount(fullCaseId), 8, "超限合并必须被拒绝，不得挂入第 9 条");
+  const fullAfter = await caseOf(fullCaseId);
+  assert.equal(fullAfter?.contentVersion, fullVersion);
+  const rejected = await contributionOf(mergeAttempt);
+  assert.equal(rejected?.status, "FAILED");
+  assert.equal(rejected?.caseId, null);
 });

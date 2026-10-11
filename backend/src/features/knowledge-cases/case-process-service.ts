@@ -69,6 +69,7 @@ export const CASE_FAILURE_CODES = {
   CASE_VISIBILITY_CHANGED: "CASE_VISIBILITY_CHANGED",
   CASE_SOURCES_CHANGED: "CASE_SOURCES_CHANGED",
   CASE_STATE_CONFLICT: "CASE_STATE_CONFLICT",
+  CASE_SOURCE_LIMIT: "CASE_SOURCE_LIMIT",
   INTERNAL_ERROR: "INTERNAL_ERROR",
 } as const;
 
@@ -82,8 +83,13 @@ const CASE_WITH_SOURCES = {
 } satisfies Prisma.KnowledgeCaseInclude;
 type CaseWithSources = Prisma.KnowledgeCaseGetPayload<{ include: typeof CASE_WITH_SOURCES }>;
 
-/** 单次处理交给模型判断的候选上限内，每个候选最多渲染的来源条数（防止提示词无限膨胀）。 */
-const MAX_RENDERED_SOURCES_PER_CANDIDATE = 8;
+/**
+ * 单案例来源上限（= 单次渲染上限）：模型一次只能忠实覆盖这么多来源。
+ * 达到上限后的合并/挂接被**明确拒绝**（`CASE_SOURCE_LIMIT`，可人工处理），
+ * 而不是静默只把前 8 条交给模型导致正文抹掉已合入来源的事实。
+ */
+const MAX_SOURCES_PER_CASE = 8;
+const MAX_RENDERED_SOURCES_PER_CANDIDATE = MAX_SOURCES_PER_CASE;
 /** 案例向量：一个案例一个块（displayText），与文档块同维度同 provider 才能参与混合检索。 */
 const MIN_EMBEDDING_BUDGET_MS = 3000;
 
@@ -196,9 +202,13 @@ function similarityQueryOf(material: RepairMaterial): string {
 
 type CandidatePlan = {
   exactDuplicateCaseId: string | null;
+  /** 完全重复目标的规划时可见范围（挂接事务复核用）。 */
+  exactDuplicateVisibility: CaseVisibility | null;
   candidates: CaseModelCandidateInput[];
   /** C 编号 → 案例 ID（服务端白名单）。 */
   candidateMap: Map<string, string>;
+  /** C 编号 → 该候选渲染的来源编号：解析时按实际选择收窄来源集合（防未选中候选污染）。 */
+  candidateSourceLabels: Map<string, string[]>;
   /** S 编号 → 材料文本（引文定位白名单）。 */
   sourceTexts: Map<string, string>;
   /** S 编号 → 维修结果（结果推导用）。 */
@@ -240,13 +250,17 @@ async function planCandidates(params: {
     include: { case: { include: CASE_WITH_SOURCES } },
   });
   let exactDuplicateCaseId: string | null = null;
+  let exactDuplicateVisibility: CaseVisibility | null = null;
   if (duplicate?.case && duplicate.case.status === "PUBLISHED") {
     if (duplicate.case.visibility === "STAFF" || duplicate.case.id === params.preferredCaseId) {
       exactDuplicateCaseId = duplicate.case.id;
+      // 规划时的可见范围快照：挂接事务内必须仍是它（防止规划后目标被改为公开而引入内部来源）。
+      exactDuplicateVisibility = duplicate.case.visibility as CaseVisibility;
     }
   }
 
   const candidateMap = new Map<string, string>();
+  const candidateSourceLabels = new Map<string, string[]>();
   const targetVisibility = new Map<string, CaseVisibility>();
   const targetVersion = new Map<string, number>();
   const targetSourceIds = new Map<string, string[]>();
@@ -371,6 +385,10 @@ async function planCandidates(params: {
     if (row.sources.length > MAX_RENDERED_SOURCES_PER_CANDIDATE) {
       notes.push(`候选 ${caseLabel} 来源较多，仅渲染前 ${MAX_RENDERED_SOURCES_PER_CANDIDATE} 条`);
     }
+    candidateSourceLabels.set(
+      caseLabel,
+      sources.map((source) => source.label),
+    );
     const structured = row.structured as { title?: unknown };
     candidates.push({
       label: caseLabel,
@@ -383,8 +401,10 @@ async function planCandidates(params: {
 
   return {
     exactDuplicateCaseId,
+    exactDuplicateVisibility,
     candidates,
     candidateMap,
+    candidateSourceLabels,
     sourceTexts,
     sourceResults,
     targetVisibility,
@@ -611,6 +631,25 @@ async function publishCase(payload: PublishPayload): Promise<PublishResult> {
           caseId: payload.targetCaseId,
         } as const;
       }
+      // 来源上限（与模型单次可忠实覆盖的来源数一致）：达到上限的合并被明确拒绝，
+      // 而不是让模型只看到前 8 条、静默抹掉其余已合入来源的事实。失败可重试/人工处理。
+      const mergedSourceCount = await tx.knowledgeCaseSource.count({
+        where: { caseId: payload.targetCaseId, status: "PUBLISHED", id: { not: payload.contributionId } },
+      });
+      if (mergedSourceCount >= MAX_SOURCES_PER_CASE) {
+        await failContribution(
+          tx,
+          payload,
+          CASE_FAILURE_CODES.CASE_SOURCE_LIMIT,
+          `目标案例来源已达上限（${MAX_SOURCES_PER_CASE} 条），未自动合并；请人工整理后重试`,
+        );
+        return {
+          kind: "failed",
+          failureCode: CASE_FAILURE_CODES.CASE_SOURCE_LIMIT,
+          failureMessage: `目标案例来源已达上限（${MAX_SOURCES_PER_CASE} 条），未自动合并`,
+          caseId: payload.targetCaseId,
+        } as const;
+      }
       const updated = await tx.knowledgeCase.updateMany({
         where: { id: payload.targetCaseId, contentVersion: payload.expectedCaseVersion ?? caseRow.contentVersion },
         data: {
@@ -710,15 +749,15 @@ async function publishCase(payload: PublishPayload): Promise<PublishResult> {
   });
 }
 
-/** 事务内记录来源处理失败（只在本代次租约仍有效时写入）。 */
+/** 事务内记录来源处理失败并释放租约（只在本代次租约仍有效时写入；失败可重试）。 */
 async function failContribution(
   tx: Prisma.TransactionClient,
-  payload: PublishPayload,
+  lease: { contributionId: string; leaseGeneration: number },
   code: string,
   message: string,
 ): Promise<void> {
   await tx.knowledgeCaseSource.updateMany({
-    where: { id: payload.contributionId, generation: payload.leaseGeneration },
+    where: { id: lease.contributionId, generation: lease.leaseGeneration },
     data: {
       status: "FAILED",
       failureCode: code,
@@ -729,13 +768,21 @@ async function failContribution(
   });
 }
 
-/** 「完全重复」路径：不调用模型，直接把来源挂接到既有案例（内容与向量保持不变）。 */
+/**
+ * 「完全重复」路径：不调用模型，直接把来源挂接到既有案例（内容与向量保持不变）。
+ *
+ * 规划之后目标仍可能变化：事务内复核目标仍 PUBLISHED、可见范围与规划一致、
+ * 来源数未达上限 —— 任一条不满足都以可重试的 FAILED 收尾（释放租约），
+ * 不让内部来源跨范围落进被改成公开的案例，也不越过单案例来源上限。
+ */
 async function attachExactDuplicate(params: {
   recordId: string;
   contributionId: string;
   leaseGeneration: number;
   expectedHash: string;
   targetCaseId: string;
+  /** 规划时的目标可见范围（复核用；null 表示未取得，按冲突处理）。 */
+  expectedVisibility: CaseVisibility | null;
   material: RepairMaterial;
   repairDate: string | null;
   actorUserId: string | null;
@@ -775,10 +822,48 @@ async function attachExactDuplicate(params: {
     }
     const caseRow = await tx.knowledgeCase.findUnique({ where: { id: params.targetCaseId } });
     if (!caseRow || caseRow.status !== "PUBLISHED") {
+      await failContribution(
+        tx,
+        params,
+        CASE_FAILURE_CODES.CASE_STATE_CONFLICT,
+        "重复来源的目标案例已不可用，请重试",
+      );
       return {
         kind: "failed",
         failureCode: CASE_FAILURE_CODES.CASE_STATE_CONFLICT,
         failureMessage: "重复来源的目标案例已不可用，请重试",
+        caseId: params.targetCaseId,
+      } as const;
+    }
+    if (params.expectedVisibility === null || caseRow.visibility !== params.expectedVisibility) {
+      // 规划后目标可见范围被调整：跨范围挂接（内部来源 → 公开案例）必须拒绝，失败可重试。
+      await failContribution(
+        tx,
+        params,
+        CASE_FAILURE_CODES.CASE_VISIBILITY_CHANGED,
+        "目标案例可见范围已调整，未自动挂接，请重试",
+      );
+      return {
+        kind: "failed",
+        failureCode: CASE_FAILURE_CODES.CASE_VISIBILITY_CHANGED,
+        failureMessage: "目标案例可见范围已调整，未自动挂接，请重试",
+        caseId: params.targetCaseId,
+      } as const;
+    }
+    const publishedCount = await tx.knowledgeCaseSource.count({
+      where: { caseId: params.targetCaseId, status: "PUBLISHED", id: { not: params.contributionId } },
+    });
+    if (publishedCount >= MAX_SOURCES_PER_CASE) {
+      await failContribution(
+        tx,
+        params,
+        CASE_FAILURE_CODES.CASE_SOURCE_LIMIT,
+        `目标案例来源已达上限（${MAX_SOURCES_PER_CASE} 条），未自动挂接；请人工整理后重试`,
+      );
+      return {
+        kind: "failed",
+        failureCode: CASE_FAILURE_CODES.CASE_SOURCE_LIMIT,
+        failureMessage: `目标案例来源已达上限（${MAX_SOURCES_PER_CASE} 条），未自动挂接；请人工整理后重试`,
         caseId: params.targetCaseId,
       } as const;
     }
@@ -991,6 +1076,7 @@ export async function processSourceContribution(
         leaseGeneration,
         expectedHash: hash,
         targetCaseId: plan.exactDuplicateCaseId,
+        expectedVisibility: plan.exactDuplicateVisibility,
         material,
         repairDate,
         actorUserId: options.actorUserId,
@@ -1023,6 +1109,9 @@ export async function processSourceContribution(
       sourceTexts: plan.sourceTexts,
       sourceResults: plan.sourceResults,
       candidates: plan.candidateMap,
+      newSourceLabel: "S1",
+      // 按实际选择收窄：new 只有 S1；merge 为 S1 + 选中候选的来源（未选中候选不得污染结果/证据）。
+      candidateSourceLabels: plan.candidateSourceLabels,
     });
     notes.push(...parsed.notes);
 
@@ -1249,6 +1338,21 @@ export async function reprocessCase(
     });
     return { status: "WITHDRAWN", failureCode: null, failureMessage: "没有有效来源，案例已撤下", contentVersion: null, notes };
   }
+  // 超过单次整理上限的历史数据：明确失败并说明（不静默只用前 8 条生成一份缺来源的正文）。
+  if (caseRow.sources.length > MAX_SOURCES_PER_CASE) {
+    const message = `案例来源数（${caseRow.sources.length}）超过单次整理上限（${MAX_SOURCES_PER_CASE}），未重新整理；请人工整理来源后重试`;
+    await db.knowledgeCase.updateMany({
+      where: { id: caseId, contentVersion: caseRow.contentVersion },
+      data: { status: "FAILED", failureCode: CASE_FAILURE_CODES.CASE_SOURCE_LIMIT, failureMessage: message },
+    });
+    return {
+      status: "FAILED",
+      failureCode: CASE_FAILURE_CODES.CASE_SOURCE_LIMIT,
+      failureMessage: message,
+      contentVersion: null,
+      notes,
+    };
+  }
 
   if (
     caseRow.status === "REPROCESSING" &&
@@ -1266,18 +1370,22 @@ export async function reprocessCase(
 
   const expectedVersion = caseRow.contentVersion;
   const expectedSourceIds = caseRow.sources.map((source) => source.id);
+  // 撤回守卫：把「开始时的撤回状态」作为处理代次的一部分。
+  // 重整期间管理员再次撤回（withdrawCase 每次都会刷新 withdrawnAt）会让守卫失配，
+  // 迟到的模型结果不得重新发布，也不能覆盖后来的管理决定。
+  const expectedWithdrawnAt = caseRow.withdrawnAt;
+  const expectedWithdrawnSource = caseRow.withdrawnSource;
   const started = await db.knowledgeCase.updateMany({
-    where: { id: caseId, contentVersion: expectedVersion },
+    where: {
+      id: caseId,
+      contentVersion: expectedVersion,
+      withdrawnAt: expectedWithdrawnAt,
+      withdrawnSource: expectedWithdrawnSource,
+    },
     data: { status: "REPROCESSING", failureCode: null, failureMessage: null },
   });
   if (started.count !== 1) {
-    return {
-      status: "SKIPPED",
-      failureCode: CASE_FAILURE_CODES.CASE_VERSION_CONFLICT,
-      failureMessage: "案例已被其他整理更新，请重试",
-      contentVersion: null,
-      notes,
-    };
+    return staleReprocessOutcome(caseId, notes);
   }
 
   const sourceTexts = new Map<string, string>();
@@ -1349,7 +1457,12 @@ export async function reprocessCase(
         return "sources-changed" as const;
       }
       const updated = await tx.knowledgeCase.updateMany({
-        where: { id: caseId, contentVersion: expectedVersion },
+        where: {
+          id: caseId,
+          contentVersion: expectedVersion,
+          // 撤回守卫：期间的任何撤回（含显式恢复期间再次撤回）都会让本次结果作废。
+          withdrawnAt: expectedWithdrawnAt,
+        },
         data: {
           displayText,
           structured: parsed.content as unknown as Prisma.InputJsonValue,
@@ -1370,7 +1483,13 @@ export async function reprocessCase(
           publishedAt: now,
         },
       });
-      if (updated.count !== 1) return "version-conflict" as const;
+      if (updated.count !== 1) {
+        const current = await tx.knowledgeCase.findUnique({
+          where: { id: caseId },
+          select: { withdrawnSource: true },
+        });
+        return current?.withdrawnSource === "ADMIN" ? ("stale-withdrawn" as const) : ("version-conflict" as const);
+      }
       await appendAuditLog(tx, {
         actor: { requestId: options.requestId },
         actorType: options.actorUserId ? "USER" : "SYSTEM",
@@ -1388,11 +1507,30 @@ export async function reprocessCase(
       return "published" as const;
     });
     if (outcome === "sources-changed") {
-      await markCaseFailure(caseId, expectedVersion, CASE_FAILURE_CODES.CASE_SOURCES_CHANGED, "案例来源在重整期间发生变化，请重试");
+      const written = await markCaseFailure(
+        caseId,
+        expectedVersion,
+        expectedWithdrawnAt,
+        CASE_FAILURE_CODES.CASE_SOURCES_CHANGED,
+        "案例来源在重整期间发生变化，请重试",
+      );
+      if (written === "stale") {
+        // 期间的撤回/更新优先：失败状态不得改写后来的管理决定。
+        return staleReprocessOutcome(caseId, notes);
+      }
       return {
         status: "FAILED",
         failureCode: CASE_FAILURE_CODES.CASE_SOURCES_CHANGED,
         failureMessage: "案例来源在重整期间发生变化，请重试",
+        contentVersion: null,
+        notes,
+      };
+    }
+    if (outcome === "stale-withdrawn") {
+      return {
+        status: "SKIPPED",
+        failureCode: CASE_FAILURE_CODES.CASE_WITHDRAWN,
+        failureMessage: "案例在重整期间被撤回，本次结果未发布",
         contentVersion: null,
         notes,
       };
@@ -1410,7 +1548,10 @@ export async function reprocessCase(
     return { status: "PUBLISHED", failureCode: null, failureMessage: null, contentVersion: expectedVersion + 1, notes };
   } catch (error) {
     const failure = failureOf(error);
-    await markCaseFailure(caseId, expectedVersion, failure.code, failure.message);
+    const written = await markCaseFailure(caseId, expectedVersion, expectedWithdrawnAt, failure.code, failure.message);
+    if (written === "stale") {
+      return staleReprocessOutcome(caseId, notes);
+    }
     return {
       status: "FAILED",
       failureCode: failure.code,
@@ -1421,19 +1562,57 @@ export async function reprocessCase(
   }
 }
 
+/**
+ * 重整代次已过期（撤回 / 版本冲突）时的统一收尾：读当前真实状态，
+ * 如实说明本次结果未发布，不把迟到结果或失败覆盖到新状态上。
+ */
+async function staleReprocessOutcome(caseId: string, notes: string[]): Promise<CaseReprocessOutcome> {
+  const row = await getDb().knowledgeCase.findUnique({
+    where: { id: caseId },
+    select: { status: true, withdrawnSource: true },
+  });
+  if (row?.status === "WITHDRAWN" && row.withdrawnSource === "ADMIN") {
+    return {
+      status: "SKIPPED",
+      failureCode: CASE_FAILURE_CODES.CASE_WITHDRAWN,
+      failureMessage: "案例在重整期间被撤回，本次结果未发布",
+      contentVersion: null,
+      notes,
+    };
+  }
+  return {
+    status: "SKIPPED",
+    failureCode: CASE_FAILURE_CODES.CASE_VERSION_CONFLICT,
+    failureMessage: "案例已被其他整理更新，本次结果未覆盖",
+    contentVersion: null,
+    notes,
+  };
+}
+
 export function caseTitleOf(caseRow: { structured: Prisma.JsonValue }): string {
   const structured = caseRow.structured as { title?: unknown };
   return typeof structured.title === "string" && structured.title.trim() !== "" ? structured.title : "未命名案例";
 }
 
+/**
+ * 标记案例整理失败。只在「仍是本次重整代次」时写入：
+ * 版本未变、仍处于 REPROCESSING、撤回状态未被刷新（期间的管理员撤回优先）。
+ */
 async function markCaseFailure(
   caseId: string,
   expectedVersion: number,
+  expectedWithdrawnAt: Date | null,
   code: string,
   message: string,
-): Promise<void> {
-  await getDb().knowledgeCase.updateMany({
-    where: { id: caseId, contentVersion: expectedVersion, status: "REPROCESSING" },
+): Promise<"written" | "stale"> {
+  const updated = await getDb().knowledgeCase.updateMany({
+    where: {
+      id: caseId,
+      contentVersion: expectedVersion,
+      status: "REPROCESSING",
+      withdrawnAt: expectedWithdrawnAt,
+    },
     data: { status: "FAILED", failureCode: code, failureMessage: message.slice(0, 500) },
   });
+  return updated.count === 1 ? "written" : "stale";
 }

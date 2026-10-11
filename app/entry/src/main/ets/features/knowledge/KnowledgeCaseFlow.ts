@@ -6,6 +6,10 @@
 // - 失败的 originalMessage 原样展示，不伪装成成功或吞掉错误。
 
 import {
+  CASE_STATUS_FAILED,
+  CASE_STATUS_PUBLISHED,
+  CASE_STATUS_REPROCESSING,
+  CASE_STATUS_WITHDRAWN,
   CaseStructuredContent,
   RecordCaseProcessingView,
   RECORD_CASE_STATUS_FAILED,
@@ -55,7 +59,37 @@ function modeOf(status: string): string {
   return PANEL_MODE_UNMARKED;
 }
 
-/** 由服务端状态计算面板模型。 */
+/**
+ * 状态行文案：来源贡献状态与**案例当前状态**分开表达。
+ * 「来源已入库」不等于「案例可检索」——管理员撤回 / 重整中 / 整理失败的案例
+ * 都不参与检索，必须如实显示，不能继续写「已入库可检索」。
+ */
+function summaryOf(view: RecordCaseProcessingView): string {
+  const status: string = view.status;
+  if (status === RECORD_CASE_STATUS_PUBLISHED) {
+    const caseStatus: string | null = view.caseStatus;
+    if (caseStatus === CASE_STATUS_PUBLISHED) {
+      return '已入库可检索';
+    }
+    if (caseStatus === CASE_STATUS_WITHDRAWN) {
+      return '来源已入库，案例已撤回（暂不参与检索）';
+    }
+    if (caseStatus === CASE_STATUS_REPROCESSING) {
+      return '来源已入库，案例重整中（暂不参与检索）';
+    }
+    if (caseStatus === CASE_STATUS_FAILED) {
+      return '来源已入库，案例整理失败（暂不参与检索）';
+    }
+    return '来源已入库';
+  }
+  if (status === RECORD_CASE_STATUS_NONE && view.isTypical) {
+    // 来源被移除（归一为 NONE）但仍是典型：如实说明可重试，不显示「未标记」。
+    return '来源暂未入库';
+  }
+  return recordCaseStatusLabel(status);
+}
+
+/** 由服务端状态计算面板模型。按钮可见性只来自服务端能力标记。 */
 export function typicalPanelModel(view: RecordCaseProcessingView): TypicalPanelModel {
   const mode: string = modeOf(view.status);
   let detail: string = '';
@@ -66,17 +100,34 @@ export function typicalPanelModel(view: RecordCaseProcessingView): TypicalPanelM
     if (view.caseVisibility !== null) {
       detail += view.caseVisibility === 'PUBLIC' ? '（公开可见）' : '（内部可见）';
     }
+    if (view.caseStatus === CASE_STATUS_WITHDRAWN) {
+      detail += '；需管理员在案例库中显式恢复';
+    }
   }
-  const canOpenCase: boolean = mode === PANEL_MODE_PUBLISHED && view.caseId !== null;
   return {
     mode: mode,
-    summary: recordCaseStatusLabel(view.status),
+    summary: summaryOf(view),
     detail: detail,
     showMark: view.canMark && !view.isTypical,
     showUnmark: view.canUnmark && view.isTypical,
-    showRetry: view.canRetry && mode !== PANEL_MODE_UNMARKED,
-    canOpenCase: canOpenCase
+    // 重试完全跟随服务端 canRetry（覆盖 NONE/来源被移除后的恢复入口），客户端不加额外条件。
+    showRetry: view.canRetry,
+    canOpenCase: view.caseId !== null
   };
+}
+
+/**
+ * 写操作上下文守卫：面板的标记/重试/取消响应只能写回**发起时**的备案与代次。
+ * 切换备案（@Watch 触发 load 推进代次）或同一备案刷新后，旧响应一律丢弃——
+ * 否则 A 的迟到结果会覆盖已切到 B 的面板（展示与实际操作对象不一致）。
+ */
+export function isActionContextCurrent(
+  currentRecordId: string,
+  currentGeneration: number,
+  actionRecordId: string,
+  actionGeneration: number,
+): boolean {
+  return actionRecordId === currentRecordId && actionGeneration === currentGeneration;
 }
 
 /** 「原文未提供」清单文案；为空返回空串（不显示空行）。 */

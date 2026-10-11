@@ -43,6 +43,8 @@ function contextFor() {
       ["S2", "NOT_COMPLETED"],
     ]),
     candidates: new Map([["C1", "case-1"]]),
+    // 与真实调用点一致：候选的来源编号映射（用于按实际选择收窄来源集合）。
+    candidateSourceLabels: new Map([["C1", ["S2"]]]),
   };
 }
 
@@ -102,9 +104,11 @@ test("解析：合法输出保留可定位字段，引文按来源编号分桶",
 });
 
 test("解析：结果由来源强制推导（混合结果不允许被模型抹平）", () => {
+  // 合并到 C1：实际来源 = S1 + C1 的来源（S2），一完成一未完成必须 MIXED。
   const parsed = parseCaseModelOutput(
     JSON.stringify({
-      action: "new",
+      action: "merge",
+      target: "C1",
       title: "ThinkPad 键盘问题合并",
       device_model: "ThinkPad E14",
       fault: "键盘失灵",
@@ -114,6 +118,7 @@ test("解析：结果由来源强制推导（混合结果不允许被模型抹�
       result: "COMPLETED",
       category: null,
       differences: null,
+      merge_reason: "同一机型同类故障",
       evidences: [
         { source: "S1", field: "fault", quote: "键盘进水后部分按键失灵" },
         { source: "S2", field: "resolution", quote: "更换键盘模块后恢复" },
@@ -124,6 +129,94 @@ test("解析：结果由来源强制推导（混合结果不允许被模型抹�
   assert.equal(parsed.content.result, "MIXED", "一完成一未完成必须推导为 MIXED");
   assert.match(parsed.content.differences ?? "", /结果不一致/);
   assert.ok(parsed.notes.some((note) => note.includes("服务端补")));
+});
+
+test("解析：new 不受未选中候选的结果与证据影响（审查 P1-1 回归）", () => {
+  // 模型选择 new，却把证据/差异写成来自候选 C1 的来源（S2）：一律不得进入本次案例。
+  const parsed = parseCaseModelOutput(
+    JSON.stringify({
+      action: "new",
+      target: null,
+      title: "ThinkPad E14 键盘进水处理",
+      device_model: "ThinkPad E14",
+      fault: "W 键仍失灵", // 只在 S2（候选来源）里，S1 中不存在
+      investigation: null,
+      cause: null,
+      resolution: "更换键盘模块后恢复", // 同样只在 S2
+      result: "MIXED",
+      category: null,
+      differences: "S1 结果为已完成，S2 结果为未完成。",
+      merge_reason: "知识库中暂无相同来源",
+      evidences: [
+        { source: "S2", field: "fault", quote: "W 键仍失灵" },
+        { source: "S2", field: "resolution", quote: "更换键盘模块后恢复" },
+      ],
+    }),
+    contextFor(),
+  );
+  assert.equal(parsed.action, "new");
+  assert.equal(parsed.targetCaseId, null);
+  assert.equal(parsed.content.result, "COMPLETED", "未选中候选的 NOT_COMPLETED 不得参与结果推导");
+  assert.equal(parsed.content.fault, null, "引文只来自未选中候选时字段必须置为未提供");
+  assert.equal(parsed.content.resolution, null);
+  assert.equal(parsed.content.differences, null, "单一来源的差异说明必然引用未参与资料，必须清空");
+  assert.equal(parsed.evidenceByLabel.get("S2"), undefined, "未选中候选的引文不得保留");
+  assert.ok(parsed.notes.some((note) => note.includes("未选中候选")), "应如实记录被忽略的越界引文");
+});
+
+test("解析：merge 选中 C1 时，C2 的证据与结果不参与（审查 P1-1 回归）", () => {
+  const materialC = materialOf({
+    deviceModel: "ThinkPad E14",
+    category: { name: "硬件维修" },
+    content: "键盘进水后开不了机，烘干主板后恢复。",
+    result: "COMPLETED",
+    remark: null,
+  });
+  const context = {
+    sourceTexts: new Map([
+      ["S1", materialTextOf(materialOf(RECORD_B))], // 待合并的新来源：COMPLETED
+      ["S2", materialTextOf(materialOf(RECORD_A))], // C1 的来源：COMPLETED
+      ["S3", materialTextOf(materialC)], // C2 的来源：NOT_COMPLETED
+    ]),
+    sourceResults: new Map<string, string | null>([
+      ["S1", "COMPLETED"],
+      ["S2", "COMPLETED"],
+      ["S3", "NOT_COMPLETED"],
+    ]),
+    candidates: new Map([
+      ["C1", "case-1"],
+      ["C2", "case-2"],
+    ]),
+    candidateSourceLabels: new Map([
+      ["C1", ["S2"]],
+      ["C2", ["S3"]],
+    ]),
+  };
+  const parsed = parseCaseModelOutput(
+    JSON.stringify({
+      action: "merge",
+      target: "C1",
+      title: "ThinkPad E14 键盘进水处理",
+      device_model: "ThinkPad E14",
+      fault: "键盘失灵",
+      investigation: null,
+      cause: null,
+      resolution: "更换键盘模块",
+      result: "COMPLETED",
+      category: null,
+      differences: null,
+      merge_reason: "与 C1 同类故障",
+      evidences: [
+        { source: "S1", field: "resolution", quote: "更换键盘模块后恢复" },
+        { source: "S3", field: "fault", quote: "烘干主板后恢复" }, // C2（未选中）的引文
+      ],
+    }),
+    context,
+  );
+  assert.equal(parsed.content.result, "COMPLETED", "未选中的 C2（NOT_COMPLETED）不得把结果改成 MIXED");
+  assert.equal(parsed.evidenceByLabel.get("S1")?.length, 1);
+  assert.equal(parsed.evidenceByLabel.get("S3"), undefined, "C2 的引文必须被拒绝");
+  assert.ok(parsed.notes.some((note) => note.includes("未选中候选")));
 });
 
 test("解析：无法定位的引文被丢弃，字段无证据时降级为未提供（宁缺毋造）", () => {

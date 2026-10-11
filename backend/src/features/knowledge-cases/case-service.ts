@@ -573,33 +573,33 @@ async function withdrawCase(actor: AuthorizedActor, caseId: string): Promise<Kno
   const db = getDb();
   const caseRow = await db.knowledgeCase.findUnique({ where: { id: caseId } });
   if (!caseRow) throw new AppError("CASE_NOT_FOUND", "案例不存在", { status: 404 });
-  if (caseRow.status !== "WITHDRAWN" || caseRow.withdrawnSource !== "ADMIN") {
-    await inSerializableTransaction(async (tx) => {
-      const updated = await tx.knowledgeCase.updateMany({
-        where: { id: caseId },
-        data: {
-          status: "WITHDRAWN",
-          withdrawnSource: "ADMIN",
-          withdrawnAt: new Date(),
-          withdrawnByUserId: actor.userId,
-        },
-      });
-      if (updated.count !== 1) {
-        throw new AppError("CASE_STATE_CONFLICT", "案例状态已变化，请刷新后重试", { status: 409 });
-      }
-      await appendAuditLog(tx, {
-        actor,
-        actorType: "USER",
-        actorUserId: actor.userId,
-        action: "knowledge.case.withdrawn",
-        targetType: "KnowledgeCase",
-        targetId: caseId,
-        result: "SUCCESS",
-        before: { status: caseRow.status },
-        after: { status: "WITHDRAWN", withdrawnSource: "ADMIN" },
-      });
+  // 每次显式撤回都刷新 withdrawnAt：它同时是「撤回代次」——重整/恢复流程把它作为
+  // 处理代次守卫的一部分，重复撤回必须能被在途的旧结果察觉（否则恢复会被旧结果顶掉）。
+  await inSerializableTransaction(async (tx) => {
+    const updated = await tx.knowledgeCase.updateMany({
+      where: { id: caseId },
+      data: {
+        status: "WITHDRAWN",
+        withdrawnSource: "ADMIN",
+        withdrawnAt: new Date(),
+        withdrawnByUserId: actor.userId,
+      },
     });
-  }
+    if (updated.count !== 1) {
+      throw new AppError("CASE_STATE_CONFLICT", "案例状态已变化，请刷新后重试", { status: 409 });
+    }
+    await appendAuditLog(tx, {
+      actor,
+      actorType: "USER",
+      actorUserId: actor.userId,
+      action: "knowledge.case.withdrawn",
+      targetType: "KnowledgeCase",
+      targetId: caseId,
+      result: "SUCCESS",
+      before: { status: caseRow.status },
+      after: { status: "WITHDRAWN", withdrawnSource: "ADMIN" },
+    });
+  });
   return getCaseDetail(actor, caseId);
 }
 
