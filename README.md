@@ -8,7 +8,7 @@
 - [02 客户报修与进度查询 #37](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/37)
 - [03 工作人员处理与维修备案 #38](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/38)
 - [04 知识检索与 AI 问答 #39](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/39)
-- [05 案例审核与知识回流 #40](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/40)
+- [05 典型案例自动整理与知识回流 #40](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/40)
 - [06 界面与交互完善 #41](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/41)
 - [07 完整联调与课程演示 #42](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/42)
 
@@ -91,6 +91,7 @@ App 已接入真实登录与会话：登录页、启动恢复会话、退出、�
 - [Issue #38 工作人员处理与维修备案任务书](docs/tasks/issue-38-staff-repair-records.md) · [写手开工提示词](docs/tasks/issue-38-writer-prompt.md)
 - [Issue #38 验证记录：工作人员处理与维修备案](docs/verification/issue-38.md) · [原生工作人员处理与备案接口](backend/docs/native-repairs-api.md)
 - [Issue #39 知识问答任务书](docs/tasks/issue-39-knowledge-ai.md) · [写手开工提示词](docs/tasks/issue-39-writer-prompt.md)
+- [Issue #40 典型案例自动整理与知识回流任务书](docs/tasks/issue-40-typical-case-feedback.md) · [写手开工提示词](docs/tasks/issue-40-writer-prompt.md)
 - [知识问答配置与验证记录](backend/docs/knowledge-ai.md)（知识快照、混合检索、引用与命令）
 - [五张参考截图](docs/reference/my-huawei/README.md)
 - [Agent 开发规则](AGENTS.md)
