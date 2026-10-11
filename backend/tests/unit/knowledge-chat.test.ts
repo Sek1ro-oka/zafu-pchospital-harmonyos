@@ -13,6 +13,8 @@ import {
   UNCITED_ANSWER_MESSAGE,
 } from "../../src/features/knowledge/chat";
 import { ChatModelError } from "../../src/features/knowledge/chat-model";
+import type { EmbeddingConfig } from "../../src/features/knowledge/config";
+import { EmbeddingError } from "../../src/features/knowledge/embedding";
 import { assembleIndex } from "../../src/features/knowledge/index-builder";
 import { resetKnowledgeIndexCacheForTests } from "../../src/features/knowledge/index-store";
 import { searchKnowledge } from "../../src/features/knowledge/service";
@@ -102,27 +104,34 @@ test("原文链接：按固定提交生成并正确编码，内部资料没有�
   );
 });
 
-/** 临时索引 + 注入假模型，验证完整编排。 */
-function withTempIndex(run: (indexPath: string) => Promise<void>): Promise<void> {
+/** 临时索引 + 注入假模型，验证完整编排；withEmbeddings 时生成带 2 维向量的索引（走向量检索路径）。 */
+function withTempIndex(
+  run: (indexPath: string) => Promise<void>,
+  options?: { withEmbeddings?: boolean },
+): Promise<void> {
   const tempDir = mkdtempSync(path.join(os.tmpdir(), "knowledge-chat-test-"));
   const indexPath = path.join(tempDir, "index.json");
-  const { file } = assembleIndex({
-    documents: [
-      {
-        path: "BlackScreen.md",
-        title: "开机黑屏",
-        visibility: "PUBLIC",
-        origin: "snapshot",
-        revision: "abcdef1234567890abcdef1234567890abcdef12",
-        content:
-          "# 开机黑屏\n\n## 排查步骤\n\n先检查电源线与电源指示灯；再尝试外接显示器判断是否屏幕问题。\n\n## 注意事项\n\n拆机前请释放静电，并保留保修贴纸。\n\n## 供电检查\n\n先确认电源适配器指示灯是否亮起，再尝试更换插座与电源线。",
-      },
-    ],
-    embeddings: new Map(),
-    embeddingFingerprint: null,
-    sources: { repo: "https://github.com/ZAFU-PCHospital/ZAFU-PCHospital-Doc.git", revision: "abcdef1234567890abcdef1234567890abcdef12" },
-    builtAt: "2026-10-11T00:00:00.000Z",
-  });
+  const documents = [
+    {
+      path: "BlackScreen.md",
+      title: "开机黑屏",
+      visibility: "PUBLIC" as const,
+      origin: "snapshot" as const,
+      revision: "abcdef1234567890abcdef1234567890abcdef12",
+      content:
+        "# 开机黑屏\n\n## 排查步骤\n\n先检查电源线与电源指示灯；再尝试外接显示器判断是否屏幕问题。\n\n## 注意事项\n\n拆机前请释放静电，并保留保修贴纸。\n\n## 供电检查\n\n先确认电源适配器指示灯是否亮起，再尝试更换插座与电源线。",
+    },
+  ];
+  const sources = { repo: "https://github.com/ZAFU-PCHospital/ZAFU-PCHospital-Doc.git", revision: "abcdef1234567890abcdef1234567890abcdef12" };
+  const builtAt = "2026-10-11T00:00:00.000Z";
+  const draft = assembleIndex({ documents, embeddings: new Map(), embeddingFingerprint: null, sources, builtAt });
+  const embeddings = new Map<string, number[]>();
+  let embeddingFingerprint: { provider: string; model: string; dimensions: number } | null = null;
+  if (options?.withEmbeddings) {
+    for (const chunk of draft.chunks) embeddings.set(chunk.contentSha, [0.25, 0.75]);
+    embeddingFingerprint = { provider: "siliconflow", model: "BAAI/bge-m3", dimensions: 2 };
+  }
+  const { file } = assembleIndex({ documents, embeddings, embeddingFingerprint, sources, builtAt });
   writeFileSync(indexPath, JSON.stringify(file));
   const savedPath = process.env.KNOWLEDGE_INDEX_PATH;
   const savedKey = process.env.AI_API_KEY;
@@ -328,4 +337,81 @@ test("问答总预算：单次调用超时压缩到剩余预算，预算不足�
       else process.env.AI_TOTAL_BUDGET_MS = savedBudget;
     }
   });
+});
+
+test("问答总预算：慢 embedding 也受总预算约束（压缩超时、检索后含无候选统一检查）", async () => {
+  await withTempIndex(
+    async () => {
+      const saved: Record<string, string | undefined> = {
+        AI_TOTAL_BUDGET_MS: process.env.AI_TOTAL_BUDGET_MS,
+        EMBEDDING_TIMEOUT_MS: process.env.EMBEDDING_TIMEOUT_MS,
+        EMBEDDING_API_KEY: process.env.EMBEDDING_API_KEY,
+        EMBEDDING_MODEL: process.env.EMBEDDING_MODEL,
+        EMBEDDING_BASE_URL: process.env.EMBEDDING_BASE_URL,
+      };
+      process.env.AI_TOTAL_BUDGET_MS = "1500";
+      process.env.EMBEDDING_TIMEOUT_MS = "5000";
+      process.env.EMBEDDING_API_KEY = "test-key";
+      process.env.EMBEDDING_MODEL = "BAAI/bge-m3";
+      process.env.EMBEDDING_BASE_URL = "https://api.siliconflow.cn/v1";
+      try {
+        // 慢向量：按收到的（被压缩的）超时睡满后按超时失败，模拟真实适配器的 abort 行为。
+        const observedTimeouts: number[] = [];
+        let modelCalls = 0;
+        const slowEmbed = async (config: EmbeddingConfig): Promise<number[][]> => {
+          observedTimeouts.push(config.timeoutMs);
+          await new Promise((resolve) => setTimeout(resolve, Math.max(config.timeoutMs, 1)));
+          throw new EmbeddingError("timeout", "模拟向量请求超时");
+        };
+        const callModelFn = async (): Promise<string> => {
+          modelCalls += 1;
+          return "{}";
+        };
+
+        // 场景一：关键词有候选，但向量烧完预算 → 504，不进入模型阶段。
+        const started = Date.now();
+        await assert.rejects(
+          () =>
+            answerKnowledgeQuestion({
+              input: { question: "开机黑屏怎么检查", history: [] },
+              includeStaff: false,
+              embedFn: slowEmbed,
+              callModelFn,
+            }),
+          (error: unknown) =>
+            error instanceof Error && "code" in error && (error as { code: string }).code === "AI_PROVIDER_TIMEOUT",
+          "向量请求不得超出总预算；预算耗尽应按 provider 超时处理",
+        );
+        const elapsed = Date.now() - started;
+        assert.equal(modelCalls, 0, "预算耗尽后不得调用模型");
+        assert.equal(observedTimeouts.length, 1);
+        assert.ok(
+          observedTimeouts[0] <= 1500 && observedTimeouts[0] < 5000,
+          `向量超时应压缩到剩余总预算内（配置 5000ms，实际 ${observedTimeouts[0]}ms）`,
+        );
+        assert.ok(elapsed < 3000, `应在总预算附近结束，而不是等向量自身的 5s 超时，实际 ${elapsed}ms`);
+
+        // 场景二：无候选的提前返回也必须先检查预算，不能把「检索烧完预算」伪装成资料不足。
+        await assert.rejects(
+          () =>
+            answerKnowledgeQuestion({
+              input: { question: "zzzzqqqq", history: [] },
+              includeStaff: false,
+              embedFn: slowEmbed,
+              callModelFn,
+            }),
+          (error: unknown) =>
+            error instanceof Error && "code" in error && (error as { code: string }).code === "AI_PROVIDER_TIMEOUT",
+          "预算耗尽时无候选分支也不得返回资料不足",
+        );
+        assert.equal(modelCalls, 0);
+      } finally {
+        for (const [name, value] of Object.entries(saved)) {
+          if (value === undefined) delete process.env[name];
+          else process.env[name] = value;
+        }
+      }
+    },
+    { withEmbeddings: true },
+  );
 });

@@ -39,6 +39,9 @@ export const NO_EVIDENCE_MESSAGE =
   "资料库中没有检索到与该问题相关的证据。请补充机型、系统版本或报错原文后重试；如果是设备故障，可以在客户服务中提交报修。";
 export const UNCITED_ANSWER_MESSAGE =
   "模型没有给出可核实的引用，本条回答已按证据不足处理。可以换一种问法，或补充机型、系统版本与报错原文后重试。";
+const BUDGET_EXHAUSTED_MESSAGE = "本次问答的整体时间预算已用尽，请稍后重试";
+/** 总预算剩余低于此值即视为不可再继续：检索后与每次模型调用前统一检查。 */
+const MIN_REMAINING_BUDGET_MS = 1000;
 
 export function parseChatRequest(rawBody: string): KnowledgeChatRequestInput {
   if (rawBody.length > MAX_REQUEST_BYTES) {
@@ -315,20 +318,32 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
   if (!modelConfig) {
     throw new AppError("AI_NOT_CONFIGURED", "尚未配置回答模型（AI_API_KEY），AI 问答暂不可用", { status: 503 });
   }
-  // 总预算从检索前开始计：embedding 超时 + 各次模型调用（含纠正重试）之和不得超过它，
+  // 总预算从检索前开始计：向量请求 + 各次模型调用（含纠正重试）之和不得超过它，
   // 默认 50s < App 读取超时 60s，避免 App 先超时而后端仍在等待。
   const deadline = Date.now() + modelConfig.totalBudgetMs;
   const index = loadKnowledgeIndex();
   const embedding: EmbeddingConfig | null = readEmbeddingConfig();
+  // 向量请求也受总预算约束：超时取「自身超时」与「剩余总预算」的较小值，
+  // 否则慢 embedding 会把一次问答拖出总预算之外（无候选时还会绕过预算检查）。
+  const budgetedEmbedding =
+    embedding === null
+      ? null
+      : { ...embedding, timeoutMs: Math.min(embedding.timeoutMs, Math.max(0, deadline - Date.now())) };
   const retrievalQuery = buildRetrievalQuery(options.input.question, options.input.history);
   const outcome = await retrieveKnowledge({
     index,
     query: retrievalQuery,
     includeStaff: options.includeStaff,
-    embedding,
+    embedding: budgetedEmbedding,
     topK: CHAT_EVIDENCE_TOP_K,
     embedFn: options.embedFn,
   });
+
+  // 检索结束后统一检查预算（含无候选的提前返回）：预算烧完时如实报 provider 超时，
+  // 不把「检索过慢」伪装成资料不足，也不继续发起不可能完成的模型调用。
+  if (deadline - Date.now() < MIN_REMAINING_BUDGET_MS) {
+    throw new AppError("AI_PROVIDER_TIMEOUT", BUDGET_EXHAUSTED_MESSAGE, { status: 504 });
+  }
 
   const base = {
     retrievalMode: outcome.mode,
@@ -355,8 +370,8 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
     requestMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
   ): Promise<string> => {
     const remaining = deadline - Date.now();
-    if (remaining < 1000) {
-      throw new AppError("AI_PROVIDER_TIMEOUT", "本次问答的整体时间预算已用尽，请稍后重试", { status: 504 });
+    if (remaining < MIN_REMAINING_BUDGET_MS) {
+      throw new AppError("AI_PROVIDER_TIMEOUT", BUDGET_EXHAUSTED_MESSAGE, { status: 504 });
     }
     try {
       return await callModel(

@@ -33,7 +33,7 @@ corepack pnpm dev --port 13080
 | `AI_MODEL` | `deepseek-flash` | 本轮回答模型 |
 | `AI_API_KEY` | 空 | 未配置时问答接口返回 `AI_NOT_CONFIGURED`（503），检索不受影响 |
 | `AI_TIMEOUT_MS` | `45000` | 回答模型**单次**请求超时（覆盖到响应体读取完成）；实际生效值 = min(本值, 剩余总预算) |
-| `AI_TOTAL_BUDGET_MS` | `50000` | 一次问答的总预算（从检索前开始计，含向量检索与必要的纠正重试）；默认 50s < 客户端读取超时 60s，避免 App 先超时而后端仍在等待 |
+| `AI_TOTAL_BUDGET_MS` | `50000` | 一次问答的总预算（从检索前开始计，含向量检索与必要的纠正重试）；向量与模型请求的超时都按剩余预算压缩，检索结束后（含无候选分支）统一检查预算；默认 50s < 客户端读取超时 60s，避免 App 先超时而后端仍在等待 |
 | `AI_MAX_OUTPUT_TOKENS` | `1000` | 回答输出上限 |
 | `EMBEDDING_BASE_URL` | `https://api.siliconflow.cn/v1` | 向量服务（OpenAI 兼容 `/embeddings`） |
 | `EMBEDDING_MODEL` | `BAAI/bge-m3` | 1024 维 |
@@ -123,7 +123,8 @@ data/knowledge/index/                   生成索引 + embedding 缓存（gitign
   `insufficient_evidence`。模型给出 answer 但无有效引用时：纠正重试一次，仍无则按证据不足处理。
 - 失败：provider 超时/限流/坏响应分别返回 5xx 失败（`AI_PROVIDER_TIMEOUT` / `AI_PROVIDER_ERROR`），
   **不伪装成「资料不足」**；不自动重试（仅上述纠正场景重试一次）。超时覆盖到响应体读取完成
-  （上游「先发响应头、慢发正文」不会绕过超时），且一次问答受 `AI_TOTAL_BUDGET_MS` 总预算约束。
+  （上游「先发响应头、慢发正文」不会绕过超时），且一次问答受 `AI_TOTAL_BUDGET_MS` 总预算约束：
+  向量请求超时同样压缩到剩余预算，检索后（含无候选的提前返回）统一检查预算。
 - 会话与历史只在本轮请求内处理，服务端不持久化聊天；App 侧消息只存内存，离开问答、清空或退出登录即清除。
 
 ## 6. 降级语义（degradation.reason）
@@ -206,6 +207,14 @@ HAP 已按本轮 App 改动重建成功（同上英文路径副本，未签名�
 读取超时参数与报修 Idempotency-Key 额外请求头；`HomePage.ets` 客户首页同时保留「我的报修」与
 「知识问答」入口。合并后在合并树重跑：lint 通过、`pnpm test:unit` 384/384 通过（含 #37 用例）、
 `pnpm build` 通过、HAP 重新构建成功；PR 最新提交的 CI `backend-check` 通过，PR 显示 mergeable。
+
+第二次复审补充（同日，仅剩一项 P2「向量阶段未受总预算约束」）：embedding 请求超时压缩到剩余总预算；
+检索结束后（含无候选的提前返回）统一检查预算，预算耗尽一律 `AI_PROVIDER_TIMEOUT`。
+回归用例：`knowledge-chat.test.ts`「慢 embedding 也受总预算约束」（假向量按压缩后的超时睡满后超时；
+断言预算内返回 504、向量超时不超剩余预算、无候选分支不返回资料不足）。
+真实路径复核（本地假 embedding：立即发头、3s 后发正文；预算 1500ms、向量超时 5000ms）：
+**1506ms** 返回 `AI_PROVIDER_TIMEOUT`（修复前约 3009ms），上游向量请求被 abort，模型调用 0 次；
+其后全量 `pnpm test:unit` 385/385 通过、lint 通过（未调用收费模型）。
 
 ## 9. 已知限制与后续依赖
 
