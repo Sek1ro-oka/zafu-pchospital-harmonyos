@@ -202,6 +202,11 @@ data/knowledge/index/                   生成索引 + embedding 缓存（gitign
 检索到原始黑屏主题，evidenceCount=6，模型按文档流程追问指示灯/风扇现象）。
 HAP 已按本轮 App 改动重建成功（同上英文路径副本，未签名；无设备，仍未真机验证）。
 
+分支随后合入 main（含已合并的 #37 报修功能），解决两处冲突：`ApiClient.ets` 同时保留知识问答的
+读取超时参数与报修 Idempotency-Key 额外请求头；`HomePage.ets` 客户首页同时保留「我的报修」与
+「知识问答」入口。合并后在合并树重跑：lint 通过、`pnpm test:unit` 384/384 通过（含 #37 用例）、
+`pnpm build` 通过、HAP 重新构建成功；PR 最新提交的 CI `backend-check` 通过，PR 显示 mergeable。
+
 ## 9. 已知限制与后续依赖
 
 - Embedding 阈值 0.6 基于 bge-m3 与当前语料实测校准；更换模型或大幅扩充语料后需重新校准并重跑混合对比。
