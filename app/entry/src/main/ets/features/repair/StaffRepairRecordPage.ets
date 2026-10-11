@@ -83,6 +83,8 @@ export struct StaffRepairRecordPage {
   private generation: number = 0;
   /** 提交幂等键：重试复用同一个，成功后换新。 */
   private submitKey: string = '';
+  /** 最近一次加载是否为保留编辑缓冲的局部刷新：加载失败后的重试沿用同一模式。 */
+  private lastLoadPreservedEdits: boolean = false;
 
   aboutToAppear(): void {
     this.submitKey = `app-submit-${util.generateRandomUUID(true)}`;
@@ -96,6 +98,7 @@ export struct StaffRepairRecordPage {
    * 保留页面上尚未保存的编辑缓冲——照片上传/删除后不整表覆盖用户输入。
    */
   private async load(preserveEdits: boolean = false): Promise<void> {
+    this.lastLoadPreservedEdits = preserveEdits;
     if (this.param.recordId === '') {
       this.loading = false;
       this.errorText = '缺少备案编号';
@@ -933,7 +936,8 @@ export struct StaffRepairRecordPage {
                   .backgroundColor($r('app.color.brand'))
                   .fontColor(Color.White)
                   .onClick(() => {
-                    this.load();
+                    // 沿用失败那次加载的模式：照片局部刷新失败后的重试不覆盖未保存输入。
+                    this.load(this.lastLoadPreservedEdits);
                   })
               }
               .width('100%')
