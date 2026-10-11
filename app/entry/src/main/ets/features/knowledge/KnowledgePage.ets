@@ -12,31 +12,26 @@ import {
   MAX_QUESTION_CHARS,
   MAX_TOTAL_HISTORY_CHARS
 } from './KnowledgeContract';
+import {
+  appendMessage,
+  ChatMessage,
+  failedMessage,
+  insertAfterUser,
+  KIND_CLARIFY,
+  KIND_INSUFFICIENT,
+  pendingMessage,
+  removeMessageById,
+  replaceMessageById,
+  responseMessage,
+  retryUserIndex,
+  ROLE_ASSISTANT,
+  ROLE_USER,
+  STATUS_DONE,
+  STATUS_FAILED,
+  STATUS_PENDING,
+  userMessage
+} from './KnowledgeFlow';
 import { KnowledgeService } from './KnowledgeService';
-
-const ROLE_USER: string = 'user';
-const ROLE_ASSISTANT: string = 'assistant';
-const STATUS_DONE: string = 'done';
-const STATUS_PENDING: string = 'pending';
-const STATUS_FAILED: string = 'failed';
-
-const KIND_ANSWER: string = 'answer';
-const KIND_CLARIFY: string = 'clarify';
-const KIND_INSUFFICIENT: string = 'insufficient_evidence';
-
-/** 单条消息的完整状态：失败与重试所需的信息都挂在消息上，重试不重复插入用户消息。 */
-interface ChatMessage {
-  id: number;
-  role: string;
-  text: string;
-  status: string;
-  kind: string;
-  citations: KnowledgeCitation[];
-  retrievalMode: string;
-  degradationMessage: string;
-  errorCode: string;
-  errorMessage: string;
-}
 
 const EXAMPLE_QUESTIONS: string[] = [
   '校园网认证失败怎么办？',
@@ -49,6 +44,8 @@ const EXAMPLE_QUESTIONS: string[] = [
  *
  * - 本次对话只保存在页面内存；离开问答功能、清空或退出登录即清除（实例随导航销毁）；
  * - 发送中防重复；失败保留问题可重试；异步返回带代次校验，清空后的旧响应不会恢复旧消息；
+ * - 消息顺序不变量由 KnowledgeFlow 的纯函数保证：回答紧跟对应问题，
+ *   旧问题重试不会跑到新问题之后，重复失败仍可重试；
  * - 会话过期交给上层（onSessionExpired → 现有退出/回登录流程）。
  */
 @Component
@@ -107,18 +104,7 @@ export struct KnowledgePage {
       return;
     }
     this.inputText = '';
-    this.messages.push({
-      id: this.nextId++,
-      role: ROLE_USER,
-      text: question,
-      status: STATUS_DONE,
-      kind: '',
-      citations: [],
-      retrievalMode: '',
-      degradationMessage: '',
-      errorCode: '',
-      errorMessage: ''
-    });
+    this.messages = appendMessage(this.messages, userMessage(this.nextId++, question));
     this.scrollToBottom();
     await this.dispatch(this.messages.length - 1);
   }
@@ -130,25 +116,16 @@ export struct KnowledgePage {
     const generation: number = this.generation;
     const pendingId: number = this.nextId++;
     this.sending = true;
-    this.messages.push({
-      id: pendingId,
-      role: ROLE_ASSISTANT,
-      text: '',
-      status: STATUS_PENDING,
-      kind: '',
-      citations: [],
-      retrievalMode: '',
-      degradationMessage: '',
-      errorCode: '',
-      errorMessage: ''
-    });
+    // 回答插在问题之后（而不是追加到末尾）：旧问题重试不会打乱后续问答顺序。
+    this.messages = insertAfterUser(this.messages, userMessageIndex, pendingMessage(pendingId));
     this.scrollToBottom();
     try {
       const data: KnowledgeChatData = await KnowledgeService.sendChat(question, history);
       if (generation !== this.generation) {
         return;
       }
-      this.applyResponse(pendingId, data);
+      this.messages = replaceMessageById(this.messages, pendingId, responseMessage(pendingId, data));
+      this.scrollToBottom();
     } catch (error) {
       if (generation !== this.generation) {
         return;
@@ -161,7 +138,16 @@ export struct KnowledgePage {
         return;
       }
       const apiError: ApiRequestError | null = error instanceof ApiRequestError ? error : null;
-      this.applyFailure(pendingId, apiError);
+      this.messages = replaceMessageById(
+        this.messages,
+        pendingId,
+        failedMessage(
+          pendingId,
+          apiError !== null ? apiError.code : 'UNKNOWN',
+          apiError !== null ? apiError.message : '请求失败，请重试'
+        )
+      );
+      this.scrollToBottom();
     } finally {
       if (generation === this.generation) {
         this.sending = false;
@@ -169,67 +155,17 @@ export struct KnowledgePage {
     }
   }
 
-  private applyResponse(pendingId: number, data: KnowledgeChatData): void {
-    const index: number = this.messages.findIndex((message: ChatMessage) => message.id === pendingId);
-    if (index < 0) {
-      return;
-    }
-    let text: string = '';
-    if (data.status === KIND_CLARIFY) {
-      text = data.clarifyingQuestion !== null ? data.clarifyingQuestion : '';
-    } else {
-      text = data.answer !== null ? data.answer : '';
-    }
-    this.messages.splice(index, 1, {
-      id: pendingId,
-      role: ROLE_ASSISTANT,
-      text: text,
-      status: STATUS_DONE,
-      kind: data.status,
-      citations: data.citations,
-      retrievalMode: data.retrievalMode,
-      degradationMessage: data.degradation !== null ? data.degradation.message : '',
-      errorCode: '',
-      errorMessage: ''
-    });
-    this.scrollToBottom();
-  }
-
-  private applyFailure(pendingId: number, apiError: ApiRequestError | null): void {
-    const index: number = this.messages.findIndex((message: ChatMessage) => message.id === pendingId);
-    if (index < 0) {
-      return;
-    }
-    this.messages.splice(index, 1, {
-      id: pendingId,
-      role: ROLE_ASSISTANT,
-      text: '',
-      status: STATUS_FAILED,
-      kind: '',
-      citations: [],
-      retrievalMode: '',
-      degradationMessage: '',
-      errorCode: apiError !== null ? apiError.code : 'UNKNOWN',
-      errorMessage: apiError !== null ? apiError.message : '请求失败，请重试'
-    });
-    this.scrollToBottom();
-  }
-
   /** 重试：去掉失败的助手消息，用原问题重发；用户消息不重复插入。 */
   private async retry(failedId: number): Promise<void> {
     if (this.sending) {
       return;
     }
-    const index: number = this.messages.findIndex((message: ChatMessage) => message.id === failedId);
-    if (index < 1) {
+    const userIndex: number = retryUserIndex(this.messages, failedId);
+    if (userIndex < 0) {
       return;
     }
-    const userMessage: ChatMessage = this.messages[index - 1];
-    if (userMessage.role !== ROLE_USER) {
-      return;
-    }
-    this.messages.splice(index, 1);
-    await this.dispatch(index - 1);
+    this.messages = removeMessageById(this.messages, failedId);
+    await this.dispatch(userIndex);
   }
 
   private clearChat(): void {
@@ -282,9 +218,9 @@ export struct KnowledgePage {
   }
 
   @Builder
-  citationCard(citation: KnowledgeCitation, index: number) {
+  citationCard(citation: KnowledgeCitation) {
     Column({ space: 4 }) {
-      Text(`[${index + 1}] ${citation.docTitle}`)
+      Text(`[${citation.label}] ${citation.docTitle}`)
         .fontSize(14)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
@@ -370,8 +306,8 @@ export struct KnowledgePage {
               .fontSize(13)
               .fontWeight(FontWeight.Medium)
               .fontColor($r('app.color.text_secondary'))
-            ForEach(message.citations, (citation: KnowledgeCitation, index: number) => {
-              this.citationCard(citation, index);
+            ForEach(message.citations, (citation: KnowledgeCitation) => {
+              this.citationCard(citation);
             }, (citation: KnowledgeCitation) => citation.sourceId)
           }
         }
