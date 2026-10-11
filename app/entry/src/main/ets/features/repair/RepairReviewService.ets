@@ -24,12 +24,15 @@ async function ready(): Promise<string> {
  * 单条审核的幂等键在**请求体**里（与 Web 管理端一致），不是请求头。
  */
 export class RepairReviewService {
-  /** 待审核列表（分页）。 */
-  static async pendingRecords(page: number): Promise<RepairRecordView[]> {
+  /**
+   * 按状态分页取备案列表（待审核 / 已通过 —— 已通过列表用于标记典型案例，Issue #40）。
+   * 状态值由调用方从白名单给出（PENDING / APPROVED），服务端仍会校验。
+   */
+  static async recordsByStatus(status: string, page: number): Promise<RepairRecordView[]> {
     const token = await ready();
     const items = await ApiClient.get<RepairRecordView[]>(
       ApiConfig.getBaseUrl(),
-      `${ADMIN_LIST_PATH}?status=PENDING&page=${page}`,
+      `${ADMIN_LIST_PATH}?status=${encodeURIComponent(status)}&page=${page}`,
       token
     );
     return items === undefined || items === null ? [] : items;

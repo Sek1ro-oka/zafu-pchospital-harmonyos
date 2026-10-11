@@ -36,6 +36,7 @@ model User {
   repairActivities   RepairActivity[]        @relation("RepairActivityCreator")
   repairOrders       RepairOrder[]           @relation("RepairOrderSubmitter")
   repairOrderEvents  RepairOrderEvent[]      @relation("RepairOrderEventActor")
+  knowledgeCasesWithdrawn KnowledgeCase[]    @relation("KnowledgeCaseWithdrawnBy")
 
   @@index([status, deletedAt], map: "users_status_deleted_idx")
   @@map("users")
@@ -434,6 +435,7 @@ model RepairRecord {
   notifications    Notification[]
   activityRegistration RepairActivityRegistration?
   repairOrder      RepairOrder?            @relation("RepairOrderToRecord")
+  caseSource       KnowledgeCaseSource?
 
   @@index([memberProfileId, status, repairDate], map: "repair_records_member_status_date_idx")
   @@index([status, submittedAt], map: "repair_records_status_submitted_idx")
@@ -657,4 +659,79 @@ model RepairActivityAttendance {
   @@unique([activityId, memberProfileId], map: "repair_activity_attendance_activity_member_uq")
   @@index([memberProfileId], map: "repair_activity_attendance_member_idx")
   @@map("repair_activity_attendances")
+}
+
+/// Issue #40 典型案例（知识自动整理与回流）。
+///
+/// 由已审核维修备案（`isTypical` 标记）经模型整理/自动合并生成，默认内部
+/// （`STAFF`）可见，管理员可调整为 `PUBLIC`。**检索与来源读取以本表为权威**：
+/// 仅 `status = PUBLISHED` 的案例参与混合检索；撤回（`WITHDRAWN`）、重整中
+/// （`REPROCESSING`）、失败（`FAILED`）一律不参与，旧引用按过期处理。
+model KnowledgeCase {
+  id                   String    @id @db.Char(36)
+  /// 展示与检索正文（结构化字段的确定性渲染，模型不直接写这里）。
+  displayText          String    @map("display_text") @db.Text
+  /// 结构化正文：标题/机型/故障现象/排查过程/原因/处置/结果/分类/差异说明/未知项。
+  structured           Json
+  /// PUBLISHED / REPROCESSING / FAILED / WITHDRAWN
+  status               String    @db.VarChar(32)
+  /// STAFF / PUBLIC
+  visibility           String    @db.VarChar(16)
+  /// 内容版本：每次重新发布 +1。引用块 ID 与版本绑定，正文变化后旧版本引用过期。
+  contentVersion       Int       @default(1) @map("content_version")
+  /// displayText 的内容哈希：判断「未变内容」以复用向量缓存。
+  contentHash          String    @map("content_hash") @db.VarChar(64)
+  /// 最近一次发布使用的模型与提示词版本（可追溯）。
+  model                String?   @db.VarChar(64)
+  promptVersion        String?   @map("prompt_version") @db.VarChar(32)
+  /// 案例向量（Float32 LE）与指纹；`embeddingStatus` 如实标注 READY/FAILED/PENDING。
+  embedding            Bytes?    @db.Blob
+  embeddingFingerprint String?   @map("embedding_fingerprint") @db.VarChar(128)
+  embeddingStatus      String    @default("PENDING") @map("embedding_status") @db.VarChar(16)
+  embeddingError       String?   @map("embedding_error") @db.VarChar(500)
+  /// 撤回来源：ADMIN（管理员主动；普通重试/重建不会自动恢复）或 SOURCES_EXHAUSTED（无有效来源自动撤下）。
+  withdrawnSource      String?   @map("withdrawn_source") @db.VarChar(32)
+  withdrawnAt          DateTime? @map("withdrawn_at") @db.DateTime(3)
+  withdrawnByUserId    String?   @map("withdrawn_by_user_id") @db.Char(36)
+  /// 最近一次处理/重整失败的真实原因（不伪装成功）。
+  failureCode          String?   @map("failure_code") @db.VarChar(64)
+  failureMessage       String?   @map("failure_message") @db.VarChar(500)
+  publishedAt          DateTime? @map("published_at") @db.DateTime(3)
+  createdAt            DateTime  @map("created_at") @db.DateTime(3)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  sources              KnowledgeCaseSource[]
+  withdrawnBy          User?     @relation("KnowledgeCaseWithdrawnBy", fields: [withdrawnByUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, visibility, updatedAt], map: "knowledge_cases_status_visibility_idx")
+  @@map("knowledge_cases")
+}
+
+/// 案例来源贡献：一条已审核维修备案当前至多归属一个有效案例（唯一约束保护）。
+///
+/// 备案正文实质变化、取消典型或软删时移除贡献（`caseId` 置空、状态 REMOVED），
+/// 受影响案例自动基于剩余有效来源重整。处理并发由 `generation` 租约控制。
+model KnowledgeCaseSource {
+  id                  String       @id @db.Char(36)
+  repairRecordId      String       @unique(map: "knowledge_case_sources_record_uq") @map("repair_record_id") @db.Char(36)
+  caseId              String?      @map("case_id") @db.Char(36)
+  /// PENDING / PROCESSING / PUBLISHED / FAILED / REMOVED
+  status              String       @db.VarChar(32)
+  /// 备案实质内容哈希（机型/分类/正文/结果/备注归一化后 sha256）。
+  contentHash         String       @map("content_hash") @db.VarChar(64)
+  /// 来源证据快照：备案文字字段与发布时的引用/证据对应关系。
+  evidence            Json?
+  /// 处理代次（租约）：接管过期处理时 +1，旧代次结果不得发布。
+  generation          Int          @default(0)
+  processingStartedAt DateTime?    @map("processing_started_at") @db.DateTime(3)
+  failureCode         String?      @map("failure_code") @db.VarChar(64)
+  failureMessage      String?      @map("failure_message") @db.VarChar(500)
+  processedAt         DateTime?    @map("processed_at") @db.DateTime(3)
+  createdAt           DateTime     @map("created_at") @db.DateTime(3)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.DateTime(3)
+  record              RepairRecord @relation(fields: [repairRecordId], references: [id], onDelete: Restrict)
+  case                KnowledgeCase? @relation(fields: [caseId], references: [id], onDelete: Restrict)
+
+  @@index([caseId, status], map: "knowledge_case_sources_case_status_idx")
+  @@index([status, updatedAt], map: "knowledge_case_sources_status_updated_idx")
+  @@map("knowledge_case_sources")
 }

@@ -163,6 +163,14 @@ Cookie 处理，带原生头也**不能**跳过同源校验。读接口只要真
 | `REPAIR_STATE_CONFLICT` | 409 | 备案状态已变化（重复审核、抢审） |
 | `FORBIDDEN` | 403 | 来源校验失败或角色权限不足 |
 
+## 典型案例（Issue #40）
+
+已通过审核的备案（`APPROVED`）可由作者或审核人员标记为典型案例并自动整理入库：
+`POST/DELETE /api/v1/knowledge-cases/records/[id]/typical`、状态与重试
+`GET /records/[id]/status`、`POST /records/[id]/retry`。标记不改动备案内容与其他字段；
+来源被修改/软删/取消典型时，相关案例自动重整或撤下。契约与状态机见
+[典型案例与知识回流接口](knowledge-cases-api.md)。
+
 ## 已知限制
 
 - App 编辑依赖上面的 POST 别名，原因与等价性写在对应小节；

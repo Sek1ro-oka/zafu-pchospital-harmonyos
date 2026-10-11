@@ -143,9 +143,25 @@ export async function cleanupStaffRepairFixtures(): Promise<void> {
     await db.repairTimelineEvent.deleteMany({ where: { repairRecordId: { in: recordIds } } });
     await db.repairPhoto.deleteMany({ where: { repairRecordId: { in: recordIds } } });
     await db.repairFavorite.deleteMany({ where: { memberProfileId: { in: ALL_PROFILE_IDS } } });
+    // Issue #40：案例来源/案例先于备案删除（FK Restrict）；案例关联的其它来源行也要清掉。
+    const sourceRows = await db.knowledgeCaseSource.findMany({
+      where: { repairRecordId: { in: recordIds } },
+      select: { caseId: true },
+    });
+    const caseIds = [...new Set(sourceRows.map((row) => row.caseId).filter((id): id is string => id !== null))];
+    await db.knowledgeCaseSource.deleteMany({ where: { repairRecordId: { in: recordIds } } });
+    if (caseIds.length > 0) {
+      await db.knowledgeCaseSource.deleteMany({ where: { caseId: { in: caseIds } } });
+      await db.knowledgeCase.deleteMany({ where: { id: { in: caseIds } } });
+    }
     await db.repairRecord.deleteMany({ where: { memberProfileId: { in: ALL_PROFILE_IDS } } });
   }
-  await db.auditLog.deleteMany({ where: { actorUserId: { in: ALL_USER_IDS } } });
+  // 案例处理产生的系统审计没有常规 actor，按目标类型清理，避免测试库残留。
+  await db.auditLog.deleteMany({
+    where: {
+      OR: [{ actorUserId: { in: ALL_USER_IDS } }, { targetType: "KnowledgeCase" }],
+    },
+  });
   await db.authSession.deleteMany({ where: { userId: { in: ALL_USER_IDS } } });
   await db.userRole.deleteMany({ where: { userId: { in: ALL_USER_IDS } } });
   await db.passwordCredential.deleteMany({ where: { userId: { in: ALL_USER_IDS } } });

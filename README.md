@@ -8,7 +8,7 @@
 - [02 客户报修与进度查询 #37](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/37)
 - [03 工作人员处理与维修备案 #38](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/38)
 - [04 知识检索与 AI 问答 #39](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/39)
-- [05 典型案例自动整理与知识回流 #40](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/40)
+- [05 典型案例自动整理与知识回流 #40](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/40)：代码已完成待审查，设备验证待补（PR 待技术主线审查）。
 - [06 界面与交互完善 #41](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/41)
 - [07 完整联调与课程演示 #42](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/42)
 
@@ -71,6 +71,14 @@ $env:Path = 'D:/DevEco Studio/tools/node;' + $env:Path
 
 App 已接入真实登录与会话：登录页、启动恢复会话、退出、按服务端返回的角色进入客户服务/工作人员入口；客户报修（我的报修：提交、列表、进度时间线，#37）与工作人员处理链路（报修队列、受理、推进/取消、维修备案草稿/照片/提交、App 内备案审核，#38）已接入真实接口；知识问答已接入真实语料与模型：混合检索、带引用回答、追问与引用详情（[说明](backend/docs/knowledge-ai.md)），本次对话只存页面内存。后端提供原生 Bearer 会话通道（`/api/v1/auth/native/*`，[接口说明](backend/docs/native-client-api.md)）与报修处理/备案接口（[说明](backend/docs/native-repairs-api.md)），Web Cookie 登录行为保持原样。`RepairRecord` 是工作人员维修备案，不等于客户报修单。
 
+2026-10-11（#40 典型案例自动整理与知识回流）：新增典型案例模型/迁移、备案典型标记（作者/审核人员）、
+真实模型整理与自动去重/相似合并（并发不丢来源）、来源失效与管理员撤回控制、案例并入混合检索与引用详情
+（客户脱敏）、案例库页面与备案页典型面板；lint 0 警告、单测 424/424、数据库集成测试 193/193、
+后端构建与未签名 HAP 构建通过；在开发库用真实 DeepSeek/bge-m3 跑通「建单→建档→真实审核→标记→
+整理→换措辞命中案例引用并打开」，其中真实合并样本（D 并入 B）保留两来源。**无设备：App 的典型面板、
+案例库与引用案例分支均未装机验证**；真实模型两次未达预期（A×B 判为不同故障、客户问答判资料不足）
+如实记录在 [验证记录](docs/verification/issue-40.md)，接口说明见 [典型案例接口](backend/docs/knowledge-cases-api.md)。
+
 2026-10-11（#38 工作人员处理与维修备案）：新增工作人员队列/受理/推进/取消、报修单→备案关联建档、备案编辑走原生通道、App 内管理员审核与照片链路；后端 lint、生产构建通过，单测 397 项、数据库集成测试 175 项全部通过；在本机开发库跑通「客户建单 → 受理 → 处理中 → 完成未建档 → 建档 → 真照片上传 → 提交 → 退回 → 修改重提 → 通过」24 项断言的真实 API 链路；未签名 HAP 构建成功。**无设备（`hdc list targets` 为 `[Empty]`）：受理、备案、照片与审核页面均未装机验证**，详见 [验证记录](docs/verification/issue-38.md)。
 
 2026-10-09（登录里程碑）：在英文路径副本重新构建未签名 HAP 成功；后端 lint、生产构建通过，327 项单测、150 项数据库集成测试全部通过（含新增 22 项鉴权用例）；在 13080 端口以真实开发库验证 health → 客户/工作人员原生登录 → 会话查询 → 退出后令牌失效，以及错误密码、缺失令牌、缺失客户端标识、伪造角色无效、客户/工作人员越权访问均被拒。`hdc list targets` 仍为 `[Empty]`：App 的 health → 登录 → 重启恢复 → 退出链路**未真机验证**（构建成功不等于装机成功）。
@@ -105,6 +113,7 @@ App 已接入真实登录与会话：登录页、启动恢复会话、退出、�
 - [Issue #38 验证记录：工作人员处理与维修备案](docs/verification/issue-38.md) · [原生工作人员处理与备案接口](backend/docs/native-repairs-api.md)
 - [Issue #39 知识问答任务书](docs/tasks/issue-39-knowledge-ai.md) · [写手开工提示词](docs/tasks/issue-39-writer-prompt.md)
 - [Issue #40 典型案例自动整理与知识回流任务书](docs/tasks/issue-40-typical-case-feedback.md) · [写手开工提示词](docs/tasks/issue-40-writer-prompt.md)
+- [Issue #40 验证记录：典型案例自动整理与知识回流](docs/verification/issue-40.md) · [典型案例与知识回流接口](backend/docs/knowledge-cases-api.md)
 - [知识问答配置与验证记录](backend/docs/knowledge-ai.md)（知识快照、混合检索、引用与命令）
 - [五张参考截图](docs/reference/my-huawei/README.md)
 - [Agent 开发规则](AGENTS.md)

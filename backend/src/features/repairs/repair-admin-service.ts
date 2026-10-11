@@ -3,6 +3,11 @@ import { AppError } from "@/lib/api/errors";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
 import { inSerializableTransaction } from "@/lib/db/transaction";
+import { materialHashOf, materialOf } from "@/features/knowledge-cases/case-material";
+import {
+  invalidateRecordSources,
+  scheduleTypicalProcessing,
+} from "@/features/knowledge-cases/case-service";
 import { repairDetailInclude, repairRepository } from "./repair-repository";
 import { changedFields, dataFields, timeline } from "./repair-service";
 import { repairReviewService } from "./repair-review-service";
@@ -66,6 +71,13 @@ export const repairAdminService: RepairAdminServiceContract = {
         include: repairDetailInclude,
       });
     });
+    // Issue #40：isTypical 的写入共同驱动案例处理/失效 ——
+    // 置 true 后台整理；取消时立即移除贡献并按剩余来源重整/撤下。
+    if (before.isTypical && !input.isTypical) {
+      await invalidateRecordSources(recordId, "管理端取消典型标记");
+    } else if (!before.isTypical && input.isTypical) {
+      scheduleTypicalProcessing(recordId);
+    }
     return toRepairView(updated);
   },
 
@@ -123,6 +135,11 @@ export const repairAdminService: RepairAdminServiceContract = {
         include: repairDetailInclude,
       });
     });
+    // Issue #40：备案正文实质变化（哈希口径，忽略 version/时间戳的自增）→
+    // 受影响案例立即停止检索并按剩余来源自动重整。
+    if (materialHashOf(materialOf(before)) !== materialHashOf(materialOf(updated))) {
+      await invalidateRecordSources(recordId, "管理端修改了备案内容");
+    }
     return toRepairView(updated);
   },
 

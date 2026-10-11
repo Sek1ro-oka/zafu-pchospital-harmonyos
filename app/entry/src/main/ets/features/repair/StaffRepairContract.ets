@@ -105,6 +105,9 @@ export interface RepairRecordView {
   result: string | null;
   remark: string | null;
   status: string;
+  /** 疑难/典型案例标记（Issue #40：典型标记才是案例整理的触发条件）。 */
+  isTypical: boolean;
+  isDifficult: boolean;
   version: number;
   submittedAt: string | null;
   reviewedAt: string | null;

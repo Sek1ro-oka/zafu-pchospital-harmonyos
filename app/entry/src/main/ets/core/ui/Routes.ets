@@ -14,6 +14,10 @@ export const ROUTE_STAFF_ORDER_DETAIL: string = 'staff-repair-order-detail';
 export const ROUTE_STAFF_RECORD: string = 'staff-repair-record';
 export const ROUTE_STAFF_REVIEW: string = 'staff-repair-review';
 
+/** 典型案例库与案例详情（Issue #40，知识回流）。 */
+export const ROUTE_CASE_LIBRARY: string = 'knowledge-case-library';
+export const ROUTE_CASE_DETAIL: string = 'knowledge-case-detail';
+
 /**
  * 子页标题的唯一来源：HomePage 的 navDestination 统一用 NavDestination 包裹各页面，
  * 标题从这里取，保证所有子页的系统标题栏与返回按钮样式一致（Issue #41）。
@@ -42,6 +46,12 @@ export function routeTitle(name: string): string {
   }
   if (name === ROUTE_KNOWLEDGE_SOURCE) {
     return '引用详情';
+  }
+  if (name === ROUTE_CASE_LIBRARY) {
+    return '典型案例库';
+  }
+  if (name === ROUTE_CASE_DETAIL) {
+    return '案例详情';
   }
   return name;
 }

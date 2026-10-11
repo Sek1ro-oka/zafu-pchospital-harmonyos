@@ -10,14 +10,17 @@ import {
   parseChatRequest,
   parseModelOutput,
   sourceUrlOf,
+  STALE_EVIDENCE_MESSAGE,
   UNCITED_ANSWER_MESSAGE,
 } from "../../src/features/knowledge/chat";
 import { ChatModelError } from "../../src/features/knowledge/chat-model";
+import type { CaseSourceProvider } from "../../src/features/knowledge/case-blocks";
 import type { EmbeddingConfig } from "../../src/features/knowledge/config";
 import { EmbeddingError } from "../../src/features/knowledge/embedding";
 import { assembleIndex } from "../../src/features/knowledge/index-builder";
 import { resetKnowledgeIndexCacheForTests } from "../../src/features/knowledge/index-store";
 import { searchKnowledge } from "../../src/features/knowledge/service";
+import type { KnowledgeChunk } from "../../src/features/knowledge/types";
 
 /**
  * 问答链路：输入边界（含 system 注入拒绝）、历史检索意图、引用白名单、
@@ -158,6 +161,7 @@ test("问答编排：有候选、模型回答带有效引用时返回引用卡�
     const data = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () => {
         calls += 1;
         return JSON.stringify({ status: "answer", answer: "先检查电源线，再外接显示器判断。", citations: ["S1"] });
@@ -179,11 +183,13 @@ test("引用编号契约：单个非 S1 引用保留模型给出的原始编号"
     const searched = await searchKnowledge({
       input: { query: "开机黑屏怎么检查", topK: 6, retrieval: "keyword" },
       includeStaff: false,
+      caseSource: null,
     });
     assert.ok(searched.results.length >= 2, `夹具应至少给出 2 条候选，实际 ${searched.results.length}`);
     const data = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () =>
         JSON.stringify({ status: "answer", answer: "根据 [S2] 进行电源排查。", citations: ["S2"] }),
     });
@@ -203,11 +209,13 @@ test("引用编号契约：乱序引用按原编号返回，与候选顺序一�
     const searched = await searchKnowledge({
       input: { query: "开机黑屏怎么检查", topK: 6, retrieval: "keyword" },
       includeStaff: false,
+      caseSource: null,
     });
     assert.ok(searched.results.length >= 3, `夹具应至少给出 3 条候选，实际 ${searched.results.length}`);
     const data = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () =>
         JSON.stringify({
           status: "answer",
@@ -232,6 +240,7 @@ test("问答编排：无候选时不调用模型，直接返回资料不足", as
     const data = await answerKnowledgeQuestion({
       input: { question: "zzzzqqqq", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () => {
         calls += 1;
         return "{}";
@@ -250,6 +259,7 @@ test("问答编排：answer 无引用先纠正重试一次，仍无引用按证�
     const data = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () => {
         calls += 1;
         return calls === 1
@@ -266,6 +276,7 @@ test("问答编排：answer 无引用先纠正重试一次，仍无引用按证�
     const data2 = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () => {
         stubborn += 1;
         return JSON.stringify({ status: "answer", answer: "先检查电源。", citations: [] });
@@ -284,6 +295,7 @@ test("问答编排：provider 超时/坏响应是请求失败，不伪装成资�
         answerKnowledgeQuestion({
           input: { question: "开机黑屏怎么检查", history: [] },
           includeStaff: false,
+          caseSource: null,
           callModelFn: async () => {
             throw new ChatModelError("timeout", "超时");
           },
@@ -296,6 +308,7 @@ test("问答编排：provider 超时/坏响应是请求失败，不伪装成资�
         answerKnowledgeQuestion({
           input: { question: "开机黑屏怎么检查", history: [] },
           includeStaff: false,
+          caseSource: null,
           callModelFn: async () => "这不是 JSON",
         }),
       (error: unknown) =>
@@ -316,6 +329,7 @@ test("问答总预算：单次调用超时压缩到剩余预算，预算不足�
           answerKnowledgeQuestion({
             input: { question: "开机黑屏怎么检查", history: [] },
             includeStaff: false,
+            caseSource: null,
             callModelFn: async (config) => {
               calls += 1;
               firstCallTimeoutMs = config.timeoutMs;
@@ -375,6 +389,7 @@ test("问答总预算：慢 embedding 也受总预算约束（压缩超时、检
             answerKnowledgeQuestion({
               input: { question: "开机黑屏怎么检查", history: [] },
               includeStaff: false,
+              caseSource: null,
               embedFn: slowEmbed,
               callModelFn,
             }),
@@ -397,6 +412,7 @@ test("问答总预算：慢 embedding 也受总预算约束（压缩超时、检
             answerKnowledgeQuestion({
               input: { question: "zzzzqqqq", history: [] },
               includeStaff: false,
+              caseSource: null,
               embedFn: slowEmbed,
               callModelFn,
             }),
@@ -414,4 +430,295 @@ test("问答总预算：慢 embedding 也受总预算约束（压缩超时、检
     },
     { withEmbeddings: true },
   );
+});
+
+// ---------- 审查 P1-3 回归：案例证据在回答/检索期间失效，不得继续返回旧内容 ----------
+
+/** 构造一个可被检索命中的案例块（字段与真实 caseChunkOf 产物一致）。 */
+function caseChunk(id: string, content: string): KnowledgeChunk {
+  return {
+    id,
+    sourcePath: `case/${id}`,
+    origin: "case",
+    docTitle: "维修案例",
+    headingPath: ["测试案例"],
+    heading: "测试案例",
+    anchor: "",
+    startLine: 1,
+    endLine: 1,
+    partIndex: null,
+    partTotal: null,
+    visibility: "PUBLIC",
+    revision: "v1",
+    content,
+    contentSha: `sha-${id}`,
+    embedding: null,
+  };
+}
+
+/** 从系统给模型的消息里取出实际渲染的候选编号（证据在 system 消息中，返回不带方括号的 S1/S2…）。 */
+function renderedLabels(messages: Array<{ content: string }>): string[] {
+  const system = messages[0]?.content ?? "";
+  return [...system.matchAll(/\[(S\d+)\]/g)].map((match) => match[1]);
+}
+
+/** 引用全部被渲染候选的假模型：第 N 次调用返回带序号文案，便于区分是否用的重生成结果。 */
+function citeAllLabelsModel(calls: string[]) {
+  return async (_config: unknown, messages: Array<{ content: string }>): Promise<string> => {
+    const labels = renderedLabels(messages);
+    calls.push(labels.join(","));
+    return JSON.stringify({
+      status: "answer",
+      answer: `第${calls.length}次回答：${labels.join("")}`,
+      citations: labels,
+    });
+  };
+}
+
+test("问答返回前复核：混合文档+案例、案例失效时不返回原正文，用剩余证据重新生成", async () => {
+  await withTempIndex(async () => {
+    const modelCalls: string[] = [];
+    const revalidateCalls: Array<{ ids: string[]; includeStaff: boolean }> = [];
+    const data = await answerKnowledgeQuestion({
+      input: { question: "开机黑屏怎么检查", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [caseChunk("kcase_case1_v1", "开机黑屏处理：先检查电源线，再按开机键观察。")],
+        revalidate: async (ids, includeStaff) => {
+          revalidateCalls.push({ ids, includeStaff });
+          // 案例在回答生成期间被改范围/撤回：复核只返回文档类 ID。
+          return new Set(ids.filter((id) => !id.startsWith("kcase_")));
+        },
+      },
+      callModelFn: citeAllLabelsModel(modelCalls),
+    });
+    assert.equal(modelCalls.length, 2, "案例引用失效后应使用剩余证据重新生成一次");
+    assert.ok(modelCalls[0].includes("S1"), "首次应引用到候选");
+    assert.equal(data.status, "answer");
+    assert.ok(String(data.answer).startsWith("第2次回答"), "必须返回重生成后的正文，不能原样返回由失效案例生成的正文");
+    assert.ok(data.citations.length >= 1);
+    assert.ok(
+      data.citations.every((citation) => !citation.sourceId.startsWith("kcase_")),
+      "重生成结果不得再引用失效案例",
+    );
+    assert.equal(revalidateCalls.length, 1);
+    assert.equal(revalidateCalls[0].includeStaff, false, "复核必须携带请求者可见范围");
+    assert.ok(revalidateCalls[0].ids.includes("kcase_case1_v1"));
+    assert.ok(data.notes.some((note) => note.includes("已失效")));
+    assert.ok(data.notes.some((note) => note.includes("重新生成")));
+  });
+});
+
+test("问答返回前复核：复核失败且无剩余证据时整条降级，不返回失效案例生成的正文", async () => {
+  await withTempIndex(async () => {
+    let modelCalls = 0;
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [caseChunk("kcase_case9_v1", "排线故障的处理：更换排线组件后恢复显示。")],
+        revalidate: async () => {
+          throw new Error("模拟复核故障");
+        },
+      },
+      callModelFn: async () => {
+        modelCalls += 1;
+        return JSON.stringify({ status: "answer", answer: "根据案例 [S1]，排线故障可更换排线。", citations: ["S1"] });
+      },
+    });
+    assert.equal(modelCalls, 1, "复核失败后不应再有可用证据重生成");
+    assert.equal(data.status, "insufficient_evidence");
+    assert.equal(data.answer, STALE_EVIDENCE_MESSAGE);
+    assert.deepEqual(data.citations, []);
+    assert.ok(data.notes.some((note) => note.includes("案例引用复核失败")));
+  });
+});
+
+test("问答返回前复核：重生成（clarify）后案例证据再次变化，同样整条降级（不循环重试）", async () => {
+  await withTempIndex(async () => {
+    const modelCalls: string[] = [];
+    let revalidateCount = 0;
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [
+          caseChunk("kcase_a01_v1", "排线故障排查：更换排线后恢复。"),
+          caseChunk("kcase_b01_v1", "排线故障处理：排线重新插紧后恢复显示。"),
+        ],
+        revalidate: async (ids, includeStaff) => {
+          assert.equal(includeStaff, false);
+          revalidateCount += 1;
+          // 第一次复核：A 已失效、B 仍有效；对 B 重生成后再复核：B 也已失效。
+          return revalidateCount === 1
+            ? new Set(ids.filter((id) => id !== "kcase_a01_v1"))
+            : new Set<string>();
+        },
+      },
+      callModelFn: async (_config: unknown, messages: Array<{ content: string }>): Promise<string> => {
+        const labels = renderedLabels(messages);
+        modelCalls.push(labels.join(","));
+        if (modelCalls.length === 1) {
+          return JSON.stringify({ status: "answer", answer: `第1次回答：${labels.join("")}`, citations: labels });
+        }
+        return JSON.stringify({ status: "clarify", clarifying_question: "案例 B 的机型是什么？" });
+      },
+    });
+    assert.equal(modelCalls.length, 2, "最多用剩余证据重生成一次，不做循环");
+    assert.equal(revalidateCount, 2, "重生成结果必须再做一次复核（非 answer 输出同样复核）");
+    assert.equal(data.status, "insufficient_evidence");
+    assert.equal(data.answer, STALE_EVIDENCE_MESSAGE);
+    assert.equal(data.clarifyingQuestion, null, "重生成的追问同样不得返回");
+    assert.deepEqual(data.citations, []);
+    assert.ok(data.notes.some((note) => note.includes("重新生成后案例证据再次变化")));
+  });
+});
+
+test("问答返回前复核：clarify 若基于失效案例生成，不返回旧追问", async () => {
+  await withTempIndex(async () => {
+    let modelCalls = 0;
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [caseChunk("kcase_case7_v1", "排线故障的处理：更换排线组件后恢复显示。")],
+        revalidate: async () => new Set<string>(),
+      },
+      callModelFn: async () => {
+        modelCalls += 1;
+        return JSON.stringify({ status: "clarify", clarifying_question: "案例 [S1] 的机型是什么？" });
+      },
+    });
+    assert.equal(modelCalls, 1, "失效且无剩余证据时不得再送入重生成");
+    assert.equal(data.status, "insufficient_evidence");
+    assert.equal(data.answer, STALE_EVIDENCE_MESSAGE);
+    assert.equal(data.clarifyingQuestion, null, "追问也可能携带失效案例的事实，不得返回");
+  });
+});
+
+test("问答返回前复核：案例仍有效时 clarify 原样返回", async () => {
+  await withTempIndex(async () => {
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [caseChunk("kcase_case8_v1", "排线故障的处理：更换排线组件后恢复显示。")],
+        revalidate: async (ids) => new Set(ids),
+      },
+      callModelFn: async () =>
+        JSON.stringify({ status: "clarify", clarifying_question: "请问是哪台设备的排线？" }),
+    });
+    assert.equal(data.status, "clarify");
+    assert.equal(data.clarifyingQuestion, "请问是哪台设备的排线？");
+    assert.deepEqual(data.citations, []);
+  });
+});
+
+test("问答返回前复核：模型 insufficient_evidence 的正文同样复核（失效时不返回旧事实）", async () => {
+  await withTempIndex(async () => {
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [caseChunk("kcase_case10_v1", "排线故障的处理：更换排线组件后恢复显示。")],
+        revalidate: async () => new Set<string>(),
+      },
+      callModelFn: async () =>
+        JSON.stringify({ status: "insufficient_evidence", answer: "资料提到排线组件更换，但没有说明具体机型。" }),
+    });
+    assert.equal(data.status, "insufficient_evidence");
+    assert.equal(data.answer, STALE_EVIDENCE_MESSAGE, "不得返回由失效案例生成的「资料不足」正文");
+  });
+});
+
+test("问答返回前复核：首次只引用 A 时，同样失效的 B 不得再送入重生成（全集合复核）", async () => {
+  await withTempIndex(async () => {
+    const revalidateCalls: Array<{ ids: string[]; includeStaff: boolean }> = [];
+    let modelCalls = 0;
+    const data = await answerKnowledgeQuestion({
+      input: { question: "排线故障", history: [] },
+      includeStaff: false,
+      caseSource: {
+        loadChunks: async () => [
+          caseChunk("kcase_a01_v1", "排线故障排查：更换排线后恢复。"),
+          caseChunk("kcase_b01_v1", "排线故障处理：排线重新插紧后恢复显示。"),
+        ],
+        revalidate: async (ids, includeStaff) => {
+          revalidateCalls.push({ ids, includeStaff });
+          return new Set<string>(); // A、B 都已失效
+        },
+      },
+      callModelFn: async () => {
+        modelCalls += 1;
+        return JSON.stringify({ status: "answer", answer: "根据 [S1] 处理。", citations: ["S1"] });
+      },
+    });
+    assert.equal(revalidateCalls.length, 1);
+    assert.ok(revalidateCalls[0].ids.includes("kcase_a01_v1"));
+    assert.ok(
+      revalidateCalls[0].ids.includes("kcase_b01_v1"),
+      "复核必须覆盖全部送出的案例证据，而不只是被引用的 A",
+    );
+    assert.equal(modelCalls, 1, "失效案例（含未被引用的 B）不得再送入重生成");
+    assert.equal(data.status, "insufficient_evidence");
+    assert.equal(data.answer, STALE_EVIDENCE_MESSAGE);
+    assert.ok(data.notes.some((note) => note.includes("2 条案例证据已失效")));
+  });
+});
+
+test("搜索返回前复核：等待期间失效/改范围的案例不再返回旧摘要", async () => {
+  await withTempIndex(async () => {
+    const revalidateCalls: Array<{ ids: string[]; includeStaff: boolean }> = [];
+    const makeCaseSource = (
+      content: string,
+      revalidate: CaseSourceProvider["revalidate"],
+    ): CaseSourceProvider => ({
+      loadChunks: async () => [caseChunk("kcase_case5_v1", content)],
+      revalidate,
+    });
+
+    // 只命中案例：复核发现失效后，不得返回旧摘要（先证明确实被检索到，再证明被复核移除）。
+    const staleOnly = await searchKnowledge({
+      input: { query: "排线故障", topK: 6, retrieval: "keyword" },
+      includeStaff: false,
+      caseSource: makeCaseSource("排线故障的处理：更换排线组件后恢复显示。", async (ids, includeStaff) => {
+        revalidateCalls.push({ ids, includeStaff });
+        return new Set<string>();
+      }),
+    });
+    assert.ok(
+      revalidateCalls.some((call) => call.ids.includes("kcase_case5_v1")),
+      "案例候选应参与检索，只是在返回前被复核移除",
+    );
+    assert.equal(staleOnly.results.length, 0, "失效案例的旧摘要不得返回");
+
+    // 文档 + 案例混合：只丢弃失效案例，文档结果保留；复核失败时保守丢弃案例。
+    const mixed = await searchKnowledge({
+      input: { query: "开机黑屏怎么检查", topK: 6, retrieval: "keyword" },
+      includeStaff: false,
+      caseSource: makeCaseSource("开机黑屏处理：先检查电源线，再按开机键观察。", async (ids, includeStaff) => {
+        revalidateCalls.push({ ids, includeStaff });
+        return new Set(ids.filter((id) => !id.startsWith("kcase_")));
+      }),
+    });
+    assert.ok(
+      revalidateCalls.some((call) => call.ids.includes("kcase_case5_v1")),
+      "混合检索中案例候选同样要复核",
+    );
+    assert.ok(mixed.results.length >= 1, "文档结果应保留");
+    assert.ok(
+      mixed.results.every((result) => !result.sourceId.startsWith("kcase_")),
+      "失效案例不得出现在搜索结果里",
+    );
+
+    const throwing = await searchKnowledge({
+      input: { query: "开机黑屏怎么检查", topK: 6, retrieval: "keyword" },
+      includeStaff: false,
+      caseSource: makeCaseSource("开机黑屏处理：先检查电源线，再按开机键观察。", async () => {
+        throw new Error("模拟复核故障");
+      }),
+    });
+    assert.ok(throwing.results.length >= 1, "复核失败时文档结果仍可用");
+    assert.ok(throwing.results.every((result) => !result.sourceId.startsWith("kcase_")));
+  });
 });

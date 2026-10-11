@@ -1,6 +1,9 @@
 import { util } from '@kit.ArkTS';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
+import { ROUTE_CASE_DETAIL } from '../../core/ui/Routes';
 import { CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
+import { CaseDetailParam } from '../knowledge/KnowledgeCaseContract';
+import { TypicalCasePanel } from '../knowledge/TypicalCasePanel';
 import { PhotoThumb } from './PhotoThumb';
 import { formatOrderTime } from './RepairOrderContract';
 import { RepairRecordService } from './RepairRecordService';
@@ -19,19 +22,25 @@ const STATE_READY: number = 1;
 const STATE_EMPTY: number = 2;
 const STATE_ERROR: number = 3;
 const PAGE_SIZE: number = 20;
+const SCOPE_PENDING: string = 'PENDING';
+const SCOPE_APPROVED: string = 'APPROVED';
 
 /**
  * 管理员审核页（App 内业务备案审核，Issue #38）。
  *
  * - 待审核分页列表 + 详情（字段、照片、审核记录）→ 通过 / 退回（原因必填）；
- * - 审核结果不自动改变客户报修处理状态，也不发布知识库（#40 范围）；
+ * - 「已通过」范围列出审核通过的备案，审核人员可在此标记典型案例（Issue #40）；
+ * - 审核结果不自动改变客户报修处理状态；
  * - 重复审核或别人先处理（409）给出真实冲突信息并刷新；
  * - 普通工作人员没有入口也没有权限（服务端 403）。
  */
 @Component
 export struct AdminRepairReviewPage {
+  pathStack: NavPathStack = new NavPathStack();
   onSessionExpired: () => void = () => {
   };
+  /** 列表范围：待审核 / 已通过（已通过用于典型标记）。 */
+  @State scope: string = SCOPE_PENDING;
   @State state: number = STATE_LOADING;
   @State records: RepairRecordView[] = [];
   @State errorText: string = '';
@@ -75,7 +84,7 @@ export struct AdminRepairReviewPage {
     // 若这里不清掉，刷新/切换范围后按钮会永远停在「加载中…」。
     this.loadingMore = false;
     try {
-      const items = await RepairReviewService.pendingRecords(1);
+      const items = await RepairReviewService.recordsByStatus(this.scope, 1);
       if (generation !== this.listGeneration) {
         return;
       }
@@ -103,7 +112,7 @@ export struct AdminRepairReviewPage {
     this.loadMoreErrorText = '';
     try {
       const nextPage = this.currentPage + 1;
-      const items = await RepairReviewService.pendingRecords(nextPage);
+      const items = await RepairReviewService.recordsByStatus(this.scope, nextPage);
       if (generation !== this.listGeneration) {
         return;
       }
@@ -133,6 +142,27 @@ export struct AdminRepairReviewPage {
       return true;
     }
     return false;
+  }
+
+  private switchScope(scope: string): void {
+    if (this.scope === scope) {
+      return;
+    }
+    this.scope = scope;
+    this.closeDetail();
+    this.load();
+  }
+
+  /** 打开典型整理生成的关联案例（典型案例面板注入）。 */
+  private openCase(caseId: string): void {
+    const param: CaseDetailParam = { caseId: caseId, title: '' };
+    this.pathStack.pushPathByName(ROUTE_CASE_DETAIL, param);
+  }
+
+  /** 标记/取消后备案数据变化：刷新详情与列表（典型标记徽标同步）。 */
+  private async refreshAfterCaseChange(recordId: string): Promise<void> {
+    await this.fetchDetail(recordId);
+    await this.load();
   }
 
   private openDetail(record: RepairRecordView): void {
@@ -260,6 +290,19 @@ export struct AdminRepairReviewPage {
   }
 
   @Builder
+  scopeChip(label: string, scope: string) {
+    Text(label)
+      .fontSize(13)
+      .fontColor(this.scope === scope ? Color.White : $r('app.color.text_secondary'))
+      .padding({ left: 14, right: 14, top: 6, bottom: 6 })
+      .backgroundColor(this.scope === scope ? $r('app.color.brand') : $r('app.color.field_bg'))
+      .borderRadius(16)
+      .onClick(() => {
+        this.switchScope(scope);
+      })
+  }
+
+  @Builder
   recordCard(record: RepairRecordView) {
     Column({ space: 8 }) {
       Row({ space: 8 }) {
@@ -270,6 +313,14 @@ export struct AdminRepairReviewPage {
           .layoutWeight(1)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
+        if (record.isTypical) {
+          Text('典型')
+            .fontSize(12)
+            .fontColor($r('app.color.ok'))
+            .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+            .backgroundColor($r('app.color.field_bg'))
+            .borderRadius(8)
+        }
         Text(repairRecordStatusLabel(record.status))
           .fontSize(12)
           .fontColor($r('app.color.brand'))
@@ -465,6 +516,22 @@ export struct AdminRepairReviewPage {
           .alignItems(HorizontalAlign.Start)
         }
 
+        // 已通过的备案：审核人员可直接标记典型案例（业务范围内的备案均可标）。
+        if (this.detail.status === 'APPROVED') {
+          TypicalCasePanel({
+            recordId: this.detailTargetId,
+            onOpenCase: (caseId: string): void => {
+              this.openCase(caseId);
+            },
+            onChanged: (): void => {
+              this.refreshAfterCaseChange(this.detailTargetId);
+            },
+            onSessionExpired: (): void => {
+              this.onSessionExpired();
+            }
+          })
+        }
+
         if (this.detail.status === 'PENDING') {
           Column({ space: 10 }) {
             if (this.reviewError !== '') {
@@ -554,6 +621,12 @@ export struct AdminRepairReviewPage {
         }
         .width('100%')
 
+        Row({ space: 10 }) {
+          this.scopeChip('待审核', SCOPE_PENDING);
+          this.scopeChip('已通过', SCOPE_APPROVED);
+        }
+        .width('100%')
+
         Scroll() {
           Column({ space: 14 }) {
             if (this.detailOpen) {
@@ -566,7 +639,7 @@ export struct AdminRepairReviewPage {
                   .width(36)
                   .height(36)
                   .color($r('app.color.brand'))
-                Text('正在加载待审核备案…')
+                Text('正在加载备案…')
                   .fontSize(14)
                   .fontColor($r('app.color.text_secondary'))
               }
@@ -596,12 +669,15 @@ export struct AdminRepairReviewPage {
               .alignItems(HorizontalAlign.Center)
             } else if (this.state === STATE_EMPTY) {
               Column({ space: 8 }) {
-                Text('暂无待审核备案')
+                Text(this.scope === SCOPE_PENDING ? '暂无待审核备案' : '暂无已通过备案')
                   .fontSize(16)
                   .fontColor($r('app.color.text_primary'))
-                Text('工作人员提交备案后会出现在这里。')
+                Text(this.scope === SCOPE_PENDING
+                  ? '工作人员提交备案后会出现在这里。'
+                  : '审核通过的备案会出现在这里，可标记为典型案例并自动整理入库。')
                   .fontSize(13)
                   .fontColor($r('app.color.text_secondary'))
+                  .textAlign(TextAlign.Center)
               }
               .width('100%')
               .padding(32)
