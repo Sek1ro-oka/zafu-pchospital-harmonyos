@@ -39,11 +39,17 @@ export struct RepairOrdersPage {
   @State noticeText: string = '';
   @State showForm: boolean = false;
   @State selected: RepairOrderView | null = null;
+  /** 详情面板是否打开：与 selected 解耦，首次请求失败时面板也能渲染出加载/错误提示。 */
+  @State detailOpen: boolean = false;
+  /** 当前详情目标订单 ID：加载、错误、重试都围绕它，避免"重试请求错单"。 */
+  @State detailTargetId: string = '';
   @State detailLoading: boolean = false;
   @State detailErrorText: string = '';
   @State currentPage: number = 1;
   @State loadingMore: boolean = false;
   @State hasMore: boolean = false;
+  /** 「加载更多」失败提示：保留列表原样，仅就地提示失败原因。 */
+  @State loadMoreErrorText: string = '';
 
   aboutToAppear(): void {
     this.load();
@@ -83,6 +89,7 @@ export struct RepairOrdersPage {
       return;
     }
     this.loadingMore = true;
+    this.loadMoreErrorText = '';
     try {
       const nextPage: number = this.currentPage + 1;
       const items = await RepairOrderService.listMine('', nextPage);
@@ -92,28 +99,37 @@ export struct RepairOrdersPage {
       }
       this.hasMore = items.length >= PAGE_SIZE;
     } catch (error) {
-      // 加载更多失败不切换全页状态，只提示。
+      // 加载更多失败保留现有列表，就地提示失败原因，用户可再点一次重试。
       if (error instanceof ApiRequestError) {
         if (isSessionExpiredCode(error.code)) {
           this.onSessionExpired();
           return;
         }
+        this.loadMoreErrorText = error.message;
+      } else {
+        this.loadMoreErrorText = '加载更多失败，请重试';
       }
-      // 静默失败，用户可以再点一次"加载更多"。
     } finally {
       this.loadingMore = false;
     }
   }
 
-  private async askDetail(order: RepairOrderView): Promise<void> {
+  private askDetail(order: RepairOrderView): void {
     if (this.detailLoading) {
       return;
     }
+    this.detailOpen = true;
+    this.detailTargetId = order.id;
+    this.fetchDetail(order.id);
+  }
+
+  /** 按订单 ID 拉取详情：加载、错误与重试统一围绕同一个 ID，避免错单。 */
+  private async fetchDetail(id: string): Promise<void> {
     this.detailLoading = true;
     this.detailErrorText = '';
     try {
       // 重新取一次详情而不是复用列表项：列表与详情虽同形状，但进度事件可能已更新。
-      this.selected = await RepairOrderService.detail(order.id);
+      this.selected = await RepairOrderService.detail(id);
     } catch (error) {
       if (error instanceof ApiRequestError) {
         if (isSessionExpiredCode(error.code)) {
@@ -127,6 +143,21 @@ export struct RepairOrdersPage {
     } finally {
       this.detailLoading = false;
     }
+  }
+
+  /** 重试当前目标订单的详情请求，而非重试上一次成功的旧订单。 */
+  private retryDetail(): void {
+    if (this.detailTargetId !== '') {
+      this.fetchDetail(this.detailTargetId);
+    }
+  }
+
+  private closeDetail(): void {
+    this.detailOpen = false;
+    this.selected = null;
+    this.detailTargetId = '';
+    this.detailErrorText = '';
+    this.detailLoading = false;
   }
 
   private async submitOrder(request: RepairOrderSubmitRequest, idempotencyKey: string): Promise<void> {
@@ -221,7 +252,7 @@ export struct RepairOrdersPage {
   }
 
   @Builder
-  detailPanel(order: RepairOrderView) {
+  detailPanel(order: RepairOrderView | null) {
     Column({ space: 10 }) {
       Row({ space: 8 }) {
         Text('报修详情')
@@ -233,7 +264,7 @@ export struct RepairOrdersPage {
           .fontSize(14)
           .fontColor($r('app.color.brand'))
           .onClick(() => {
-            this.selected = null;
+            this.closeDetail();
           })
       }
       .width('100%')
@@ -264,9 +295,7 @@ export struct RepairOrdersPage {
             .backgroundColor($r('app.color.brand'))
             .fontColor(Color.White)
             .onClick(() => {
-              if (order !== null) {
-                this.askDetail(order);
-              }
+              this.retryDetail();
             })
         }
         .width('100%')
@@ -274,7 +303,7 @@ export struct RepairOrdersPage {
         .backgroundColor($r('app.color.surface'))
         .borderRadius(CARD_RADIUS)
         .alignItems(HorizontalAlign.Center)
-      } else {
+      } else if (order !== null) {
         this.detailRow('设备机型', order.deviceModel)
         this.detailRow('设备序列号', order.deviceSerial === null || order.deviceSerial === '' ? '未填写' : order.deviceSerial)
         this.detailRow('联系电话', order.contactPhone)
@@ -440,7 +469,7 @@ export struct RepairOrdersPage {
             })
           }
 
-          if (this.selected !== null) {
+          if (this.detailOpen) {
             this.detailPanel(this.selected)
           }
 
@@ -454,6 +483,14 @@ export struct RepairOrdersPage {
             ForEach(this.orders, (order: RepairOrderView) => {
               this.orderCard(order);
             }, (order: RepairOrderView) => order.id)
+
+            if (this.loadMoreErrorText !== '') {
+              Text(this.loadMoreErrorText)
+                .fontSize(13)
+                .fontColor($r('app.color.danger'))
+                .width('100%')
+                .textAlign(TextAlign.Center)
+            }
 
             this.loadMoreButton();
           }
