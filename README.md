@@ -10,7 +10,7 @@
 - [04 知识检索与 AI 问答 #39](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/39)
 - [05 典型案例自动整理与知识回流 #40](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/40)：代码已完成待审查，设备验证待补（PR 待技术主线审查）。
 - [06 界面与交互完善 #41](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/41)
-- [07 完整联调与课程演示 #42](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/42)
+- [07 完整联调与课程演示 #42](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/42)：本地环境与演示账号就绪，设备之外的完整链路与构建已实测（PR #53 待合入）；设备装机验收与模型链路待补。
 
 依赖和必要验收写在各模块内。接口就绪后可以并行推进，不必等前一个 Issue 全部关闭。测试与审查只覆盖本次改动及受影响链路。
 
@@ -98,6 +98,8 @@ App 已接入真实登录与会话：登录页、启动恢复会话、退出、�
 
 2026-10-11（PR #49 审查修复）：提交成功时若首次列表仍在请求，将刷新排队到当前请求结束后执行，保留普通点击防重；问答页依据 clarify / insufficient_evidence 状态展示追问或资料不足提示，通用说明使用当前账号可访问的资料范围。实际页面方法配合模拟网络的时序回归及既有问答状态测试共 4 项通过，测试文件 lint 通过，未签名 HAP 构建成功；无设备，未做真机验证。
 
+2026-10-11（#42 完整联调与课程演示）：分支 `feat/issue-42-demo-integration` 基于含 #40 的 `upstream/main @ 2c60449`，PR #53 以 `Refs #42` 打开（**未合并、未关闭 Issue**）。本轮在开发库与测试库应用 #40 迁移 `20261011130000_p2_issue40_knowledge_cases`，`db:health` 通过（MySQL 9.6.0 @ `127.0.0.1:3308`）；演示账号用 `corepack pnpm accounts:prepare`（幂等）准备就绪：客户 `100001/customer123`、工作人员 `100002/staff123`（MEMBER + 有效成员档案）、管理员 `100003/admin123`（ADMIN，含 `repair:review`/`repair:flag`，**刻意无成员档案 → 不能受理报修单**）。设备之外的真实链路在开发库跑通：55 次 HTTP 请求无一 5xx，主链 22 步、失败场景 12 项 —— 报修 → 受理 → 推进 → 客户看到变化 → 建档 → 旧版本号写入 409 → 真实照片上传 → 提交审核 → 管理员审核通过，且报修处理状态与备案审核状态相互独立；失败场景含纯管理员受理 `403 MEMBER_REQUIRED`、跳过状态 `409 REPAIR_ORDER_STATE_INVALID`、非法 `toStatus` `400 VALIDATION_FAILED`、空草案提交 `400 REPAIR_SUBMISSION_INCOMPLETE`。演示数据由本轮链路真实产生：报修单 `a60bd281-960c-450b-ab37-f2c6b3d55db9`（COMPLETED）、维修备案 `36fb4958-e7f7-43d3-9af4-ca09577459bb`（APPROVED v4）、照片 `bb37b964-5802-44c7-9556-5efe0b81725b`（image/png 70B）。检查：`pnpm lint` exit 0、`pnpm test:unit` 441/441、`pnpm test:db` 197/197、`pnpm build` exit 0；HAP `hvigorw assembleHap` 以 `BUILD SUCCESSFUL in 1 min 20 s 971 ms` 结束，产物 `app/entry/build/default/outputs/default/entry-default-unsigned.hap`（1 197 149 字节，SHA256 `7D434C01C00FB4971B9E08E2FEF485FCA071C04E9C915AD33C63B62D629C38D2`，**未签名**）。**三项未完成如实记录**：① **未装机** —— 本机 `hdc list targets` 为 `[Empty]`，DevEco 已部署 4 个模拟器机型但无系统镜像、无签名材料（`~/.ohos` 不存在），#42 验收要求的「完整业务链在设备上跑通」目前不成立，**构建成功不等于装机运行正确**；② **模型链路（阶段2b）未执行** —— 本机 `backend/.env` 无 `AI_API_KEY`/`EMBEDDING_API_KEY`，「标记典型 → AI 自动整理/去重或相似合并 → 发布 → 换一种问法检索命中新案例并打开多来源证据」与「无依据问答」已交由具备 Key 的一方接力；③ 演示截图/录像、设备型号与系统版本、四人贡献说明依赖设备，待补。详见 [演示指引](docs/demo/issue-42-demo-guide.md) 与 [验证记录](docs/verification/issue-42.md)。
+
 2026-09-30 合仓后已在英文路径从新克隆的 `app/` 构建未签名 HAP；新 `backend/` 安装依赖、生产构建通过，并临时在 13081 端口启动验证健康接口 HTTP 200、数据库可达。迁移前后端的 318 项单测与 137 项数据库测试已通过；初始化命令另做首次配置与重复运行验证。旧云端实验服务已停用，数据卷保留。
 
 ## 协作与来源
@@ -114,6 +116,7 @@ App 已接入真实登录与会话：登录页、启动恢复会话、退出、�
 - [Issue #39 知识问答任务书](docs/tasks/issue-39-knowledge-ai.md) · [写手开工提示词](docs/tasks/issue-39-writer-prompt.md)
 - [Issue #40 典型案例自动整理与知识回流任务书](docs/tasks/issue-40-typical-case-feedback.md) · [写手开工提示词](docs/tasks/issue-40-writer-prompt.md)
 - [Issue #40 验证记录：典型案例自动整理与知识回流](docs/verification/issue-40.md) · [典型案例与知识回流接口](backend/docs/knowledge-cases-api.md)
+- [Issue #42 验证记录：完整联调与课程演示](docs/verification/issue-42.md) · [Issue #42 课程演示指引](docs/demo/issue-42-demo-guide.md)
 - [知识问答配置与验证记录](backend/docs/knowledge-ai.md)（知识快照、混合检索、引用与命令）
 - [五张参考截图](docs/reference/my-huawei/README.md)
 - [Agent 开发规则](AGENTS.md)
