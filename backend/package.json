@@ -28,6 +28,8 @@
     "db:reset:test": "node tools/db-task.mjs reset-test",
     "db:health": "tsx tools/db-health.ts",
     "accounts:prepare": "tsx tools/prepare-test-accounts.ts",
+    "knowledge:sync": "tsx tools/knowledge-sync.ts",
+    "knowledge:index": "tsx tools/knowledge-index.ts",
     "test": "tsx --test tests/**/*.test.ts",
     "test:unit": "tsx --test tests/unit/**/*.test.ts",
     "test:db": "node tools/db-task.mjs test"

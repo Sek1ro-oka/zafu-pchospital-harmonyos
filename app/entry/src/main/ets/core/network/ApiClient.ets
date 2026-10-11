@@ -68,6 +68,12 @@ function describeNetworkError(error: BusinessError): string {
   return `网络请求失败（错误码 ${error.code}）`;
 }
 
+/** 可选请求参数：知识问答等慢接口可以放宽读取超时；不传保持原有 8 秒行为。 */
+export interface ApiRequestOptions {
+  connectTimeoutMs?: number;
+  readTimeoutMs?: number;
+}
+
 /** 公共 HTTP 客户端：拼接 API 地址、携带原生通道头、拆信封、统一抛 ApiRequestError。 */
 export class ApiClient {
   private static readonly BASE_HEADERS: Record<string, string> = {
@@ -76,12 +82,12 @@ export class ApiClient {
     'User-Agent': 'PC-Hospital-Harmony/0.1.0',
   };
 
-  static async get<T>(baseUrl: string, path: string, token: string): Promise<T> {
-    return ApiClient.request<T>(baseUrl, http.RequestMethod.GET, path, '', token, undefined);
+  static async get<T>(baseUrl: string, path: string, token: string, options?: ApiRequestOptions): Promise<T> {
+    return ApiClient.request<T>(baseUrl, http.RequestMethod.GET, path, '', token, options);
   }
 
-  static async post<T>(baseUrl: string, path: string, body: string, token: string): Promise<T> {
-    return ApiClient.request<T>(baseUrl, http.RequestMethod.POST, path, body, token, undefined);
+  static async post<T>(baseUrl: string, path: string, body: string, token: string, options?: ApiRequestOptions): Promise<T> {
+    return ApiClient.request<T>(baseUrl, http.RequestMethod.POST, path, body, token, options);
   }
 
   /**
@@ -95,7 +101,7 @@ export class ApiClient {
     token: string,
     extraHeaders: Record<string, string>
   ): Promise<T> {
-    return ApiClient.request<T>(baseUrl, http.RequestMethod.POST, path, body, token, extraHeaders);
+    return ApiClient.request<T>(baseUrl, http.RequestMethod.POST, path, body, token, undefined, extraHeaders);
   }
 
   private static async request<T>(
@@ -104,7 +110,8 @@ export class ApiClient {
     path: string,
     body: string,
     token: string,
-    extraHeaders: Record<string, string> | undefined
+    options?: ApiRequestOptions,
+    extraHeaders?: Record<string, string>
   ): Promise<T> {
     const headers: Record<string, string> = {};
     const baseKeys: string[] = Object.keys(ApiClient.BASE_HEADERS);
@@ -120,20 +127,20 @@ export class ApiClient {
     if (token !== '') {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const options: http.HttpRequestOptions = {
+    const requestOptions: http.HttpRequestOptions = {
       method: method,
       header: headers,
       expectDataType: http.HttpDataType.STRING,
-      connectTimeout: 8000,
-      readTimeout: 8000,
+      connectTimeout: options !== undefined && options.connectTimeoutMs !== undefined ? options.connectTimeoutMs : 8000,
+      readTimeout: options !== undefined && options.readTimeoutMs !== undefined ? options.readTimeoutMs : 8000,
     };
     if (body !== '') {
-      options.extraData = body;
+      requestOptions.extraData = body;
     }
     const httpRequest = http.createHttp();
     let response: http.HttpResponse;
     try {
-      response = await httpRequest.request(`${baseUrl}${path}`, options);
+      response = await httpRequest.request(`${baseUrl}${path}`, requestOptions);
     } catch (error) {
       throw new ApiRequestError('NETWORK_ERROR', describeNetworkError(error as BusinessError), 0, '');
     } finally {

@@ -1,0 +1,65 @@
+# Summary
+
+[介绍](Intro.md)
+
+# 软件
+
+- [一些计算机基础]()
+    - [操作系统与文件系统](Basics/OS.md)
+    - [硬件组成简介]()
+    - [常用快捷键与技巧](Basics/Shortcuts.md)
+
+- [校园网]()
+    - [认证相关](ZAFUNetWork/Login.md)
+    - [有线网络配置]()
+    - [无线网络常见问题]()
+    - [校外访问资源](ZAFUNetWork/RemoteAccess.md)
+    - [网络报修流程]()
+
+- [磁盘]()
+    - [查看磁盘健康状态](Disk/Health.md)
+    - [分区管理]()
+    - [磁盘清理与释放空间]()
+    - [数据备份与恢复]()
+
+- [蓝屏]()
+    - [排查方法]()
+    - [常见蓝屏代码速查]()
+
+- [驱动]()
+    - [驱动安装与更新](Driver/Installation.md)
+    - [显卡驱动问题]()
+    - [网卡驱动问题]()
+
+- [软件安装]()
+    - [从正规渠道获取软件]()
+    - [软件冲突与卸载残留]()
+    - [常用工具推荐](Software/Recommended.md)
+
+# 硬件
+
+- [开机异常]()
+    - [开机黑屏](Hardware/BootIssue/BlackScreen.md)
+    - [卡在启动界面]()
+
+- [性能与发热]()
+    - [电脑过热与风扇异响]()
+    - [运行卡顿]()
+
+- [外设问题]()
+    - [键盘 / 鼠标无响应]()
+    - [显示器无信号]()
+
+# 电医维修手册
+
+- [维修守则](Manual/Regulations.md)
+
+- [维修流程](Manual/Workflow.md)
+
+- [品牌官方售后网站](Manual/OfficialSupport.md)
+
+- [周边第三方维修点](Manual/ThirdPartyRepair.md)
+
+- [知识沉淀](Manual/KnowledgeBase/Main.md)
+    - [开机进临时桌面](Manual/KnowledgeBase/WindowsUserProfileService.md)
+    - [暗影精灵开机风扇不转](Manual/KnowledgeBase/OMENFanStop.md)

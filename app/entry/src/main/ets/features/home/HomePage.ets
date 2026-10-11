@@ -1,7 +1,15 @@
 import { HOME_STAFF } from '../../core/auth/AuthContract';
-import { ROUTE_KNOWLEDGE, ROUTE_REPAIR, ROUTE_REPAIR_ORDERS, ROUTE_SERVICE } from '../../core/ui/Routes';
+import {
+  ROUTE_KNOWLEDGE,
+  ROUTE_KNOWLEDGE_SOURCE,
+  ROUTE_REPAIR,
+  ROUTE_REPAIR_ORDERS,
+  ROUTE_SERVICE
+} from '../../core/ui/Routes';
 import { SessionHeader } from '../../core/ui/SessionHeader';
 import { CARD_GAP, CARD_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
+import { CitationDetailPage } from '../knowledge/CitationDetailPage';
+import { KnowledgeSourceParam } from '../knowledge/KnowledgeContract';
 import { KnowledgePage } from '../knowledge/KnowledgePage';
 import { RepairOrdersPage } from '../repair/RepairOrdersPage';
 import { RepairPage } from '../repair/RepairPage';
@@ -17,7 +25,7 @@ function customerEntries(): HomeEntry[] {
   return [
     { title: '我的报修', note: '提交报修与查看进度', route: ROUTE_REPAIR_ORDERS },
     { title: '客户服务', note: '预约与常见问题 · 待接入', route: ROUTE_SERVICE },
-    { title: '知识问答', note: '有出处的 AI 咨询 · 待接入', route: ROUTE_KNOWLEDGE }
+    { title: '知识问答', note: '有出处的 AI 咨询', route: ROUTE_KNOWLEDGE }
   ];
 }
 
@@ -26,7 +34,7 @@ function staffEntries(): HomeEntry[] {
     { title: '待受理报修', note: '客户新报修列表 · 待接入', route: ROUTE_REPAIR },
     { title: '维修备案', note: '维修记录与提交审核 · 待接入', route: ROUTE_REPAIR },
     { title: '案例审核', note: '故障卡审核与发布 · 待接入', route: ROUTE_REPAIR },
-    { title: '知识问答', note: '有出处的 AI 咨询 · 待接入', route: ROUTE_KNOWLEDGE }
+    { title: '知识问答', note: '有出处的 AI 咨询', route: ROUTE_KNOWLEDGE }
   ];
 }
 
@@ -70,7 +78,7 @@ export struct HomePage {
   }
 
   @Builder
-  destination(name: string) {
+  destination(name: string, param: object) {
     if (name === ROUTE_SERVICE) {
       ServicePage();
     } else if (name === ROUTE_REPAIR_ORDERS) {
@@ -82,8 +90,25 @@ export struct HomePage {
     } else if (name === ROUTE_REPAIR) {
       RepairPage();
     } else if (name === ROUTE_KNOWLEDGE) {
-      KnowledgePage();
+      KnowledgePage({
+        pathStack: this.pathStack,
+        onSessionExpired: (): void => {
+          this.expireSession();
+        }
+      });
+    } else if (name === ROUTE_KNOWLEDGE_SOURCE) {
+      CitationDetailPage({
+        param: param as KnowledgeSourceParam,
+        onSessionExpired: (): void => {
+          this.expireSession();
+        }
+      });
     }
+  }
+
+  private async expireSession(): Promise<void> {
+    this.pathStack.clear();
+    await this.onLogout();
   }
 
   build() {
@@ -107,8 +132,8 @@ export struct HomePage {
         }
         .width('100%')
         Text(this.home === HOME_STAFF
-          ? '本轮已接入：真实登录与会话。业务入口仍为骨架页面，未接入数据。'
-          : '本轮已接入：真实登录与会话、我的报修（提交与进度查询）。其余入口仍为骨架页面。')
+          ? '本轮已接入：真实登录与会话、知识问答（回答带可打开的引用）。业务入口仍为骨架页面，未接入数据。'
+          : '本轮已接入：真实登录与会话、我的报修（提交与进度查询）、知识问答（回答带可打开的引用）。其余入口仍为骨架页面。')
           .fontSize(13)
           .fontColor($r('app.color.text_secondary'))
           .width('100%')

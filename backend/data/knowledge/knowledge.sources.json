@@ -1,0 +1,130 @@
+{
+  "snapshot": {
+    "repo": "https://github.com/ZAFU-PCHospital/ZAFU-PCHospital-Doc.git",
+    "revision": "48f43637c8f4be87a7a751feb04defd7e0426849",
+    "syncedAt": "2026-10-11T05:07:07.103Z",
+    "tool": "knowledge-sync@1",
+    "files": [
+      {
+        "path": "Intro.md",
+        "title": "介绍",
+        "summaryOrder": 1,
+        "sha256": "51947572720940a878536d562731d69b46f1924c51cafd39cbb40f52695112c6",
+        "bytes": 1098
+      },
+      {
+        "path": "Basics/OS.md",
+        "title": "操作系统与文件系统",
+        "summaryOrder": 2,
+        "sha256": "be1b93f3335a3c207598bf4f3f1a84d213c7d87ec9683b2ade21e709a8a03b5f",
+        "bytes": 11507
+      },
+      {
+        "path": "Basics/Shortcuts.md",
+        "title": "常用快捷键与技巧",
+        "summaryOrder": 3,
+        "sha256": "c4b803f2db8649dd76f467c5dabbafbaf24b7421a3bf0d8f1445395886af3556",
+        "bytes": 9685
+      },
+      {
+        "path": "ZAFUNetWork/Login.md",
+        "title": "认证相关",
+        "summaryOrder": 4,
+        "sha256": "40fbb923a200dc2a3aca25b61ce52cd6bff392ef0e1f58b94081d7b269319d16",
+        "bytes": 1042
+      },
+      {
+        "path": "ZAFUNetWork/RemoteAccess.md",
+        "title": "校外访问资源",
+        "summaryOrder": 5,
+        "sha256": "94f7737a9becba7958bb6c590dfbd78aa207b3e609e0faccdfa671345f992517",
+        "bytes": 6008
+      },
+      {
+        "path": "Disk/Health.md",
+        "title": "查看磁盘健康状态",
+        "summaryOrder": 6,
+        "sha256": "107c61b4431d5f8ae63bad2b83b99d0ff218626aa0f7057a2117a28d61587db8",
+        "bytes": 3332
+      },
+      {
+        "path": "Driver/Installation.md",
+        "title": "驱动安装与更新",
+        "summaryOrder": 7,
+        "sha256": "c615b1f2af4514886c0d93f0f76b7dfab588010d9b538761c289206c000c7f24",
+        "bytes": 9640
+      },
+      {
+        "path": "Software/Recommended.md",
+        "title": "常用工具推荐",
+        "summaryOrder": 8,
+        "sha256": "dda289679d6846a21c84772c5c768b4ef12b1a2025ef27852a397433d30d6e6c",
+        "bytes": 5513
+      },
+      {
+        "path": "Hardware/BootIssue/BlackScreen.md",
+        "title": "开机黑屏",
+        "summaryOrder": 9,
+        "sha256": "ced4c70adc4497a97c69c11567caef353f95c429ab1293d956753c4dd33f29ff",
+        "bytes": 8539
+      },
+      {
+        "path": "Manual/Regulations.md",
+        "title": "维修守则",
+        "summaryOrder": 10,
+        "sha256": "7dc80cbc2ebf4d2fe343074fdfdb8847183ac9eddbb99a2d83971d59b17e2cd7",
+        "bytes": 2171
+      },
+      {
+        "path": "Manual/Workflow.md",
+        "title": "维修流程",
+        "summaryOrder": 11,
+        "sha256": "e48f4bd4f64b9492f87c116a08f956a855dfab64576551c8303f3f079fd72303",
+        "bytes": 7509
+      },
+      {
+        "path": "Manual/OfficialSupport.md",
+        "title": "品牌官方售后网站",
+        "summaryOrder": 12,
+        "sha256": "10feb60f70ff9b8277a483e8403ade1cf842a3f01050978134b7285248c3616a",
+        "bytes": 6933
+      },
+      {
+        "path": "Manual/ThirdPartyRepair.md",
+        "title": "周边第三方维修点",
+        "summaryOrder": 13,
+        "sha256": "3d3dd4b9086e6f74664f9f3f68aaf80951896996da7bc85c85b9f7d28a643ae5",
+        "bytes": 671
+      },
+      {
+        "path": "Manual/KnowledgeBase/WindowsUserProfileService.md",
+        "title": "开机进临时桌面",
+        "summaryOrder": 15,
+        "sha256": "b7ef499a4cd7c708490f4c79f86d70330c0e8f8bb3f2949e5b7cc6ab0213f3cf",
+        "bytes": 3275
+      },
+      {
+        "path": "Manual/KnowledgeBase/OMENFanStop.md",
+        "title": "暗影精灵开机风扇不转",
+        "summaryOrder": 16,
+        "sha256": "90d8eac9c0a3a831c9ff27c5b85387a0d2e404766d75c6f5752cfb3836ce2982",
+        "bytes": 2206
+      }
+    ],
+    "skipped": [
+      {
+        "path": "Manual/KnowledgeBase/Main.md",
+        "reason": "占位或纯目录内容",
+        "bodyChars": 26
+      }
+    ]
+  },
+  "internal": [
+    {
+      "path": "internal-test/staff-internal-sample.md",
+      "title": "【内部测试资料】工作人员内部流程示例（非真实案例）",
+      "visibility": "STAFF",
+      "note": "明确标注的合成测试资料，仅用于验证可见性过滤，不得当作真实案例或真实校内知识。"
+    }
+  ]
+}

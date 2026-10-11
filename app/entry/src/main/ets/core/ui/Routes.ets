@@ -10,3 +10,4 @@ export const ROUTE_REPAIR: string = 'repair';
  */
 export const ROUTE_REPAIR_ORDERS: string = 'repair-orders';
 export const ROUTE_KNOWLEDGE: string = 'knowledge';
+export const ROUTE_KNOWLEDGE_SOURCE: string = 'knowledgeSource';
