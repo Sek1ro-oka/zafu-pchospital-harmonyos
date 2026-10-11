@@ -158,6 +158,7 @@ test("问答编排：有候选、模型回答带有效引用时返回引用卡�
     const data = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () => {
         calls += 1;
         return JSON.stringify({ status: "answer", answer: "先检查电源线，再外接显示器判断。", citations: ["S1"] });
@@ -179,11 +180,13 @@ test("引用编号契约：单个非 S1 引用保留模型给出的原始编号"
     const searched = await searchKnowledge({
       input: { query: "开机黑屏怎么检查", topK: 6, retrieval: "keyword" },
       includeStaff: false,
+      caseSource: null,
     });
     assert.ok(searched.results.length >= 2, `夹具应至少给出 2 条候选，实际 ${searched.results.length}`);
     const data = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () =>
         JSON.stringify({ status: "answer", answer: "根据 [S2] 进行电源排查。", citations: ["S2"] }),
     });
@@ -203,11 +206,13 @@ test("引用编号契约：乱序引用按原编号返回，与候选顺序一�
     const searched = await searchKnowledge({
       input: { query: "开机黑屏怎么检查", topK: 6, retrieval: "keyword" },
       includeStaff: false,
+      caseSource: null,
     });
     assert.ok(searched.results.length >= 3, `夹具应至少给出 3 条候选，实际 ${searched.results.length}`);
     const data = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () =>
         JSON.stringify({
           status: "answer",
@@ -232,6 +237,7 @@ test("问答编排：无候选时不调用模型，直接返回资料不足", as
     const data = await answerKnowledgeQuestion({
       input: { question: "zzzzqqqq", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () => {
         calls += 1;
         return "{}";
@@ -250,6 +256,7 @@ test("问答编排：answer 无引用先纠正重试一次，仍无引用按证�
     const data = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () => {
         calls += 1;
         return calls === 1
@@ -266,6 +273,7 @@ test("问答编排：answer 无引用先纠正重试一次，仍无引用按证�
     const data2 = await answerKnowledgeQuestion({
       input: { question: "开机黑屏怎么检查", history: [] },
       includeStaff: false,
+      caseSource: null,
       callModelFn: async () => {
         stubborn += 1;
         return JSON.stringify({ status: "answer", answer: "先检查电源。", citations: [] });
@@ -284,6 +292,7 @@ test("问答编排：provider 超时/坏响应是请求失败，不伪装成资�
         answerKnowledgeQuestion({
           input: { question: "开机黑屏怎么检查", history: [] },
           includeStaff: false,
+          caseSource: null,
           callModelFn: async () => {
             throw new ChatModelError("timeout", "超时");
           },
@@ -296,6 +305,7 @@ test("问答编排：provider 超时/坏响应是请求失败，不伪装成资�
         answerKnowledgeQuestion({
           input: { question: "开机黑屏怎么检查", history: [] },
           includeStaff: false,
+          caseSource: null,
           callModelFn: async () => "这不是 JSON",
         }),
       (error: unknown) =>
@@ -316,6 +326,7 @@ test("问答总预算：单次调用超时压缩到剩余预算，预算不足�
           answerKnowledgeQuestion({
             input: { question: "开机黑屏怎么检查", history: [] },
             includeStaff: false,
+            caseSource: null,
             callModelFn: async (config) => {
               calls += 1;
               firstCallTimeoutMs = config.timeoutMs;
@@ -375,6 +386,7 @@ test("问答总预算：慢 embedding 也受总预算约束（压缩超时、检
             answerKnowledgeQuestion({
               input: { question: "开机黑屏怎么检查", history: [] },
               includeStaff: false,
+              caseSource: null,
               embedFn: slowEmbed,
               callModelFn,
             }),
@@ -397,6 +409,7 @@ test("问答总预算：慢 embedding 也受总预算约束（压缩超时、检
             answerKnowledgeQuestion({
               input: { question: "zzzzqqqq", history: [] },
               includeStaff: false,
+              caseSource: null,
               embedFn: slowEmbed,
               callModelFn,
             }),

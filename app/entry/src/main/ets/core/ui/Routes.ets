@@ -19,3 +19,9 @@ export const ROUTE_STAFF_ORDER_DETAIL: string = 'staff-repair-order-detail';
 export const ROUTE_STAFF_RECORD: string = 'staff-repair-record';
 /** 管理员：待审核备案列表与审核操作。 */
 export const ROUTE_STAFF_REVIEW: string = 'staff-repair-review';
+
+// Issue #40：典型案例库（知识回流）。
+/** 工作人员：案例列表（按状态筛选，管理员可进入详情管理）。 */
+export const ROUTE_CASE_LIBRARY: string = 'knowledge-case-library';
+/** 案例详情：结构化正文、多来源证据与管理员动作。 */
+export const ROUTE_CASE_DETAIL: string = 'knowledge-case-detail';

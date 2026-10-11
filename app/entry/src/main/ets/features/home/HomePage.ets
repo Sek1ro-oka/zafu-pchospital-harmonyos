@@ -1,5 +1,7 @@
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import {
+  ROUTE_CASE_DETAIL,
+  ROUTE_CASE_LIBRARY,
   ROUTE_KNOWLEDGE,
   ROUTE_KNOWLEDGE_SOURCE,
   ROUTE_REPAIR_ORDERS,
@@ -11,7 +13,10 @@ import {
 } from '../../core/ui/Routes';
 import { SessionHeader } from '../../core/ui/SessionHeader';
 import { CARD_GAP, CARD_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
+import { CaseDetailPage } from '../knowledge/CaseDetailPage';
+import { CaseLibraryPage } from '../knowledge/CaseLibraryPage';
 import { CitationDetailPage } from '../knowledge/CitationDetailPage';
+import { CaseDetailParam } from '../knowledge/KnowledgeCaseContract';
 import { KnowledgeSourceParam } from '../knowledge/KnowledgeContract';
 import { KnowledgePage } from '../knowledge/KnowledgePage';
 import { AdminRepairReviewPage } from '../repair/AdminRepairReviewPage';
@@ -48,6 +53,7 @@ function staffEntries(permissions: string[]): HomeEntry[] {
   if (permissions.includes('repair:review')) {
     entries.push({ title: '备案审核', note: '待审核维修备案 · 通过 / 退回', route: ROUTE_STAFF_REVIEW });
   }
+  entries.push({ title: '典型案例库', note: '备案自动整理与知识回流', route: ROUTE_CASE_LIBRARY });
   entries.push({ title: '知识问答', note: '有出处的 AI 咨询', route: ROUTE_KNOWLEDGE });
   return entries;
 }
@@ -135,14 +141,30 @@ export struct HomePage {
     } else if (name === ROUTE_STAFF_RECORD) {
       StaffRepairRecordPage({
         param: param as StaffRecordParam,
+        pathStack: this.pathStack,
         onSessionExpired: () => {
           this.onSessionExpired();
         }
       });
     } else if (name === ROUTE_STAFF_REVIEW) {
       AdminRepairReviewPage({
+        pathStack: this.pathStack,
         onSessionExpired: () => {
           this.onSessionExpired();
+        }
+      });
+    } else if (name === ROUTE_CASE_LIBRARY) {
+      CaseLibraryPage({
+        pathStack: this.pathStack,
+        onSessionExpired: (): void => {
+          this.expireSession();
+        }
+      });
+    } else if (name === ROUTE_CASE_DETAIL) {
+      CaseDetailPage({
+        param: param as CaseDetailParam,
+        onSessionExpired: (): void => {
+          this.expireSession();
         }
       });
     }
@@ -174,7 +196,7 @@ export struct HomePage {
         }
         .width('100%')
         Text(this.home === HOME_STAFF
-          ? '本轮已接入：真实登录与会话、报修处理与维修备案（受理 / 推进 / 建档 / 审核）、知识问答（回答带可打开的引用）。'
+          ? '本轮已接入：真实登录与会话、报修处理与维修备案（受理 / 推进 / 建档 / 审核）、典型案例库（备案标记自动整理）、知识问答（回答带可打开的引用）。'
           : '本轮已接入：真实登录与会话、我的报修（提交与进度查询）、知识问答（回答带可打开的引用）。其余入口仍为骨架页面。')
           .fontSize(13)
           .fontColor($r('app.color.text_secondary'))

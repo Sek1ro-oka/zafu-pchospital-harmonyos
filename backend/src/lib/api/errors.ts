@@ -96,6 +96,11 @@ export const ApiErrorCode = [
   "AI_NOT_CONFIGURED",
   "AI_PROVIDER_TIMEOUT",
   "AI_PROVIDER_ERROR",
+  // Issue #40 典型案例：标记/处理/管理状态
+  "CASE_NOT_FOUND",
+  "CASE_RECORD_NOT_ELIGIBLE",
+  "CASE_STATE_CONFLICT",
+  "CASE_NO_VALID_SOURCES",
   "INTERNAL_ERROR",
 ] as const;
 
@@ -202,6 +207,11 @@ const defaultStatus: Record<ApiErrorCode, number> = {
   // 504/502 区分“模型超时”与“模型其他故障”，客户端可分别提示重试。
   AI_PROVIDER_TIMEOUT: 504,
   AI_PROVIDER_ERROR: 502,
+  // Issue #40：案例不存在 404；不再满足标记/处理条件、状态或版本冲突、无有效来源不可恢复 → 409。
+  CASE_NOT_FOUND: 404,
+  CASE_RECORD_NOT_ELIGIBLE: 409,
+  CASE_STATE_CONFLICT: 409,
+  CASE_NO_VALID_SOURCES: 409,
   INTERNAL_ERROR: 500,
 };
 export class AppError extends Error {

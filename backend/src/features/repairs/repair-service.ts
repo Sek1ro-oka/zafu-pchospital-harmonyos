@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
 import { inSerializableTransaction } from "@/lib/db/transaction";
 import { assertCanEditRepair } from "./repair-policy";
+import { invalidateRecordSources } from "@/features/knowledge-cases/case-service";
 import { repairDetailInclude, repairRepository } from "./repair-repository";
 import {
   normalizeDraftFields,
@@ -154,6 +155,8 @@ export const repairService: RepairServiceContract = {
         after: { deleted: true, reason: note },
       });
     });
+    // Issue #40：软删的备案不再是有效来源 —— 案例立即退回重整/撤下。
+    await invalidateRecordSources(recordId, "备案已被软删除");
   },
 };
 

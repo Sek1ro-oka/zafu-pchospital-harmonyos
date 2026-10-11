@@ -1,9 +1,11 @@
 /**
- * 知识检索与问答的共享类型（Issue #39）。
+ * 知识检索与问答的共享类型（Issue #39；案例块扩展为 Issue #40）。
  *
  * 这份文件同时是**客户端契约的来源**：`app/entry/src/main/ets/features/knowledge/KnowledgeContract.ts`
- * 与此处字段一一对应，改动时两边同步（见 backend/docs/knowledge-ai.md）。
+ * 与此处字段一一对应，改动时两边同步（见 backend/docs/knowledge-ai.md 与 knowledge-cases-api.md）。
  */
+
+import type { CaseEvidence, CaseStatus, CaseVisibility } from "@/features/knowledge-cases/case-types";
 
 export const CHUNKER_VERSION = "chunker@1";
 export const INDEX_FORMAT_VERSION = 1;
@@ -43,7 +45,8 @@ export type RetrievalDegradation = {
 /** 问答状态：有据回答 / 澄清追问 / 资料不足。 */
 export type ChatStatus = "answer" | "clarify" | "insufficient_evidence";
 
-export type KnowledgeChunkOrigin = "snapshot" | "internal";
+/** 块来源：文档快照 / 内部测试资料 / 数据库维修案例（Issue #40）。 */
+export type KnowledgeChunkOrigin = "snapshot" | "internal" | "case";
 
 /** 索引分块（embedding 为解码后的向量，检索时使用；序列化形式见 StoredChunk）。 */
 export type KnowledgeChunk = {
@@ -178,8 +181,57 @@ export type KnowledgeSearchData = {
   results: KnowledgeSearchHit[];
 };
 
+/** 引用详情的来源类型：文档块（doc）或数据库案例块（case）。 */
+export type KnowledgeSourceKind = "doc" | "case";
+
+/** 案例引用详情中的单条来源证据（客户只看到可公开的引文，不返回作者姓名与备案 ID）。 */
+export type KnowledgeCaseCitationSource = {
+  index: number;
+  authorName: string | null;
+  repairDate: string | null;
+  categoryName: string | null;
+  deviceModel: string | null;
+  result: string | null;
+  quotes: CaseEvidence[];
+  repairRecordId: string | null;
+  canOpen: boolean;
+};
+
+/** 案例引用详情：本次引用的案例与逐条来源证据。 */
+export type KnowledgeCaseCitationDetail = {
+  caseId: string;
+  title: string;
+  status: CaseStatus;
+  visibility: CaseVisibility;
+  contentVersion: number;
+  /** 结构化正文（客户端按字段渲染）。 */
+  content: {
+    title: string;
+    deviceModel: string | null;
+    fault: string | null;
+    investigation: string | null;
+    cause: string | null;
+    resolution: string | null;
+    result: string;
+    category: string | null;
+    differences: string | null;
+    unknowns: string[];
+    mergeReason: string | null;
+  };
+  /** 确定性渲染的纯文本正文（检索与纯文本展示用）。 */
+  displayText: string;
+  model: string | null;
+  promptVersion: string | null;
+  publishedAt: string | null;
+  updatedAt: string;
+  sources: KnowledgeCaseCitationSource[];
+};
+
 export type KnowledgeSourceData = {
   sourceId: string;
+  /** 文档或案例：案例在 caseDetail 中附带结构化正文与来源证据。 */
+  kind: KnowledgeSourceKind;
+  caseDetail: KnowledgeCaseCitationDetail | null;
   title: string;
   docTitle: string;
   headingPath: string[];

@@ -1,6 +1,8 @@
 // 知识问答契约：字段与后端 /api/v1/knowledge/* 的返回一一对应（见 backend/docs/knowledge-ai.md）。
 // 引用 URL、正文与版本由后端生成；客户端只读展示，不提交任何影响权限的字段。
 
+import { KnowledgeCaseCitationDetail } from './KnowledgeCaseContract';
+
 /** 请求体与历史的上限（与后端契约同步）。 */
 export const MAX_HISTORY_MESSAGES: number = 8;
 export const MAX_MESSAGE_CHARS: number = 2000;
@@ -56,6 +58,12 @@ export interface KnowledgeSearchHit extends KnowledgeCitation {
 
 export interface KnowledgeSourceData {
   sourceId: string;
+  /**
+   * 来源类型：doc（文档快照块）或 case（数据库典型案例块）。
+   * 案例的正文与来源证据在 caseDetail 中，客户拿到的来源没有作者与备案 ID。
+   */
+  kind: string;
+  caseDetail: KnowledgeCaseCitationDetail | null;
   title: string;
   docTitle: string;
   headingPath: string[];

@@ -2,6 +2,17 @@ import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
+import { formatOrderTime } from '../repair/RepairOrderContract';
+import {
+  CaseEvidence,
+  caseEvidenceFieldLabel,
+  caseResultLabel,
+  caseSourceResultLabel,
+  caseStatusLabel,
+  KnowledgeCaseCitationDetail,
+  KnowledgeCaseCitationSource,
+} from './KnowledgeCaseContract';
+import { CaseContentRow, contentRows, unknownsText } from './KnowledgeCaseFlow';
 import {
   headingTrailText,
   KnowledgeSourceData,
@@ -101,6 +112,149 @@ export struct CitationDetailPage {
   }
 
   @Builder
+  caseQuote(quote: CaseEvidence) {
+    Column({ space: 3 }) {
+      Text(caseEvidenceFieldLabel(quote.field))
+        .fontSize(12)
+        .fontColor($r('app.color.brand'))
+      Text(`“${quote.quote}”`)
+        .fontSize(13)
+        .fontColor($r('app.color.text_primary'))
+        .width('100%')
+        .textAlign(TextAlign.Start)
+    }
+    .width('100%')
+    .padding({ left: 10, top: 8, right: 10, bottom: 8 })
+    .backgroundColor($r('app.color.field_bg'))
+    .borderRadius(8)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  caseSource(source: KnowledgeCaseCitationSource) {
+    Column({ space: 6 }) {
+      Text(source.authorName === null ? `来源 ${source.index}` : `来源 ${source.index} · ${source.authorName}`)
+        .fontSize(14)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text_primary'))
+        .width('100%')
+        .textAlign(TextAlign.Start)
+      Text(
+        `${source.repairDate === null ? '日期未填' : source.repairDate} · ${source.deviceModel === null ? '机型未填' : source.deviceModel} · ${caseSourceResultLabel(source.result)}`
+      )
+        .fontSize(12)
+        .fontColor($r('app.color.text_secondary'))
+        .width('100%')
+      ForEach(source.quotes, (quote: CaseEvidence) => {
+        this.caseQuote(quote);
+      }, (quote: CaseEvidence) => `${source.index}:${quote.field}:${quote.quote}`)
+    }
+    .width('100%')
+    .padding(12)
+    .backgroundColor($r('app.color.surface'))
+    .borderRadius(CARD_RADIUS)
+    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  caseMain(detail: KnowledgeCaseCitationDetail) {
+    Column({ space: 10 }) {
+      Text(detail.title)
+        .fontSize(20)
+        .fontWeight(FontWeight.Bold)
+        .fontColor($r('app.color.text_primary'))
+        .width('100%')
+        .textAlign(TextAlign.Start)
+      Row({ space: 8 }) {
+        Text('维修案例')
+          .fontSize(12)
+          .fontColor(Color.White)
+          .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+          .backgroundColor($r('app.color.brand'))
+          .borderRadius(8)
+        Text(caseStatusLabel(detail.status))
+          .fontSize(12)
+          .fontColor($r('app.color.text_secondary'))
+      }
+      .width('100%')
+      this.metaRow('版本', `v${detail.contentVersion} · ${detail.sources.length} 条来源`)
+      if (detail.publishedAt !== null) {
+        this.metaRow('发布', formatOrderTime(detail.publishedAt))
+      }
+      if (detail.visibility === 'STAFF') {
+        Text('内部案例（仅工作人员可见）')
+          .fontSize(12)
+          .fontColor($r('app.color.brand'))
+      }
+      Divider().color($r('app.color.field_bg'))
+      Text(`维修结果：${caseResultLabel(detail.content.result)}`)
+        .fontSize(14)
+        .fontWeight(FontWeight.Medium)
+        .fontColor($r('app.color.text_primary'))
+        .width('100%')
+        .textAlign(TextAlign.Start)
+    }
+    .width('100%')
+    .padding(16)
+    .alignItems(HorizontalAlign.Start)
+    .backgroundColor($r('app.color.surface'))
+    .borderRadius(CARD_RADIUS)
+
+    Column({ space: 10 }) {
+      ForEach(contentRows(detail.content), (row: CaseContentRow) => {
+        Column({ space: 3 }) {
+          Text(row.label)
+            .fontSize(13)
+            .fontColor($r('app.color.text_secondary'))
+            .width('100%')
+          Text(row.value)
+            .fontSize(14)
+            .fontColor($r('app.color.text_primary'))
+            .width('100%')
+            .textAlign(TextAlign.Start)
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+      }, (row: CaseContentRow) => row.label)
+      if (unknownsText(detail.content.unknowns) !== '') {
+        Text(unknownsText(detail.content.unknowns))
+          .fontSize(12)
+          .fontColor($r('app.color.text_secondary'))
+          .width('100%')
+      }
+    }
+    .width('100%')
+    .margin({ top: 10 })
+    .padding(16)
+    .alignItems(HorizontalAlign.Start)
+    .backgroundColor($r('app.color.surface'))
+    .borderRadius(CARD_RADIUS)
+
+    Text(`来源证据（${detail.sources.length}）`)
+      .fontSize(15)
+      .fontWeight(FontWeight.Medium)
+      .fontColor($r('app.color.text_primary'))
+      .width('100%')
+      .margin({ top: 10 })
+      .textAlign(TextAlign.Start)
+    ForEach(detail.sources, (source: KnowledgeCaseCitationSource) => {
+      Column() {
+        this.caseSource(source);
+      }
+      .width('100%')
+      .margin({ top: 8 })
+    }, (source: KnowledgeCaseCitationSource) => `${source.index}`)
+  }
+
+  /** 案例来源分支：data 是本地参数，属性收窄在参数上成立。 */
+  @Builder
+  caseBody(data: KnowledgeSourceData) {
+    if (data.caseDetail !== null) {
+      this.caseMain(data.caseDetail);
+    }
+  }
+
+  @Builder
   body(data: KnowledgeSourceData) {
     Column({ space: 10 }) {
       Text(data.docTitle)
@@ -189,7 +343,11 @@ export struct CitationDetailPage {
       } else if (this.data !== null) {
         Scroll() {
           Column() {
-            this.body(this.data);
+            if (this.data.kind === 'case') {
+              this.caseBody(this.data);
+            } else {
+              this.body(this.data);
+            }
           }
           .width('100%')
         }

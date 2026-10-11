@@ -1,5 +1,6 @@
 import { AppError } from "@/lib/api/errors";
 
+import { citationIndexVersionOf, realCaseSource, withCaseChunks, type CaseSourceProvider } from "./case-blocks";
 import { callChatModel, ChatModelError } from "./chat-model";
 import { readChatModelConfig, readEmbeddingConfig } from "./config";
 import type { EmbeddingConfig } from "./config";
@@ -275,7 +276,7 @@ export function citationOf(candidate: RetrievalCandidate, index: KnowledgeIndex,
     originalUrl: sourceUrlOf(chunk, index.sources?.repo ?? null),
     revision: chunk.revision,
     visibility: chunk.visibility,
-    indexVersion: index.indexVersion,
+    indexVersion: citationIndexVersionOf(chunk, index),
   };
 }
 
@@ -302,6 +303,8 @@ export type AnswerKnowledgeOptions = {
   embedFn?: typeof embedTexts;
   /** 测试注入；默认走真实回答模型。 */
   callModelFn?: typeof callChatModel;
+  /** 案例块来源：默认真实数据库（Issue #40 起文档与案例参与同一检索）；单测注入 null 或桩实现。 */
+  caseSource?: CaseSourceProvider | null;
 };
 
 /** 解析模型输出，把 ChatModelError 统一转换成对外的 AppError（坏响应=请求失败，不是资料不足）。 */
@@ -322,6 +325,23 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
   // 默认 50s < App 读取超时 60s，避免 App 先超时而后端仍在等待。
   const deadline = Date.now() + modelConfig.totalBudgetMs;
   const index = loadKnowledgeIndex();
+  // 案例块按当前数据库状态装配（发布即可检索；撤回/重整中/失败不出现）；
+  // 装配失败按降级处理并如实记录，不伪装成「资料不足」。
+  const caseSource = options.caseSource === undefined ? realCaseSource : options.caseSource;
+  const preNotes: string[] = [];
+  let knowledgeIndex = index;
+  if (caseSource) {
+    try {
+      const caseChunks = await caseSource.loadChunks({
+        includeStaff: options.includeStaff,
+        indexEmbedding: index.embedding,
+      });
+      knowledgeIndex = withCaseChunks(index, caseChunks);
+    } catch (error) {
+      preNotes.push("案例库暂时不可用，本次仅检索文档资料");
+      console.error("[knowledge] 案例块装配失败：", error);
+    }
+  }
   const embedding: EmbeddingConfig | null = readEmbeddingConfig();
   // 向量请求也受总预算约束：超时取「自身超时」与「剩余总预算」的较小值，
   // 否则慢 embedding 会把一次问答拖出总预算之外（无候选时还会绕过预算检查）。
@@ -331,7 +351,7 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
       : { ...embedding, timeoutMs: Math.min(embedding.timeoutMs, Math.max(0, deadline - Date.now())) };
   const retrievalQuery = buildRetrievalQuery(options.input.question, options.input.history);
   const outcome = await retrieveKnowledge({
-    index,
+    index: knowledgeIndex,
     query: retrievalQuery,
     includeStaff: options.includeStaff,
     embedding: budgetedEmbedding,
@@ -348,7 +368,7 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
   const base = {
     retrievalMode: outcome.mode,
     degradation: outcome.degradation,
-    indexVersion: index.indexVersion,
+    indexVersion: knowledgeIndex.indexVersion,
     evidenceCount: outcome.candidates.length,
   } as const;
 
@@ -359,7 +379,7 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
       answer: NO_EVIDENCE_MESSAGE,
       clarifyingQuestion: null,
       citations: [],
-      notes: ["检索无候选证据，未调用回答模型"],
+      notes: [...preNotes, "检索无候选证据，未调用回答模型"],
     };
   }
 
@@ -383,7 +403,7 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
     }
   };
   const raw = await callModelWithinBudget(messages);
-  const notes: string[] = [];
+  const notes: string[] = [...preNotes];
   let output = parseOutputOrThrow(raw, outcome.candidates.length);
 
   if (output.status === "answer" && output.citationIds.length === 0) {
@@ -415,12 +435,43 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
   }
 
   notes.push(...output.notes);
-  const citations =
+  let citations =
     output.status === "answer"
       ? output.citationIds.map((id) =>
-          citationOf(outcome.candidates[Number.parseInt(id.slice(1), 10) - 1], index, id),
+          citationOf(outcome.candidates[Number.parseInt(id.slice(1), 10) - 1], knowledgeIndex, id),
         )
       : [];
+  // 返回前复核案例引用：回答生成期间被撤回/重整/范围调整/版本更新的案例不得继续提供。
+  if (caseSource && citations.some((citation) => citation.sourceId.startsWith("kcase_"))) {
+    const caseChunkIds = citations
+      .filter((citation) => citation.sourceId.startsWith("kcase_"))
+      .map((citation) => citation.sourceId);
+    try {
+      const valid = await caseSource.revalidate(caseChunkIds, options.includeStaff);
+      const before = citations.length;
+      citations = citations.filter(
+        (citation) => !citation.sourceId.startsWith("kcase_") || valid.has(citation.sourceId),
+      );
+      const dropped = before - citations.length;
+      if (dropped > 0) notes.push(`返回前复核发现 ${dropped} 条案例引用已失效，已移除`);
+    } catch (error) {
+      // 复核失败时保守移除案例引用：宁可少给证据，不给可能已失效的证据。
+      console.error("[knowledge] 案例引用复核失败：", error);
+      citations = citations.filter((citation) => !citation.sourceId.startsWith("kcase_"));
+      notes.push("案例引用复核失败，已移除本次案例引用");
+    }
+    if (output.status === "answer" && citations.length === 0) {
+      notes.push("回答所依赖的案例引用均已失效，按证据不足处理");
+      return {
+        ...base,
+        status: "insufficient_evidence",
+        answer: UNCITED_ANSWER_MESSAGE,
+        clarifyingQuestion: null,
+        citations: [],
+        notes,
+      };
+    }
+  }
   return {
     ...base,
     status: output.status,

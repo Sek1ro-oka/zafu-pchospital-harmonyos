@@ -1,6 +1,9 @@
 import { util } from '@kit.ArkTS';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
+import { ROUTE_CASE_DETAIL } from '../../core/ui/Routes';
 import { CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
+import { CaseDetailParam } from '../knowledge/KnowledgeCaseContract';
+import { TypicalCasePanel } from '../knowledge/TypicalCasePanel';
 import { PhotoPicker, PickedImage } from './PhotoPicker';
 import { PhotoThumb } from './PhotoThumb';
 import {
@@ -59,6 +62,7 @@ function formatBytes(bytes: number): string {
 @Component
 export struct StaffRepairRecordPage {
   param: StaffRecordParam = { recordId: '', faultDescription: '' };
+  pathStack: NavPathStack = new NavPathStack();
   onSessionExpired: () => void = () => {
   };
   @State record: RepairRecordDetailView | null = null;
@@ -150,6 +154,12 @@ export struct StaffRepairRecordPage {
     this.result = record.result === null ? '' : record.result;
     this.remark = record.remark === null ? '' : record.remark;
     this.fieldErrors = {};
+  }
+
+  /** 打开典型整理生成的关联案例（典型案例面板注入）。 */
+  private openCase(caseId: string): void {
+    const param: CaseDetailParam = { caseId: caseId, title: '' };
+    this.pathStack.pushPathByName(ROUTE_CASE_DETAIL, param);
   }
 
   /** 保存/提交/上传/删除互斥：任一写操作进行中都不再发起另一个，避免交错请求互相覆盖。 */
@@ -1007,6 +1017,21 @@ export struct StaffRepairRecordPage {
                 .width('100%')
               } else {
                 this.readOnlyView(this.record)
+                // 已通过审核的备案：作者可标记典型并查看真实整理状态（Issue #40）。
+                if (this.record.status === 'APPROVED') {
+                  TypicalCasePanel({
+                    recordId: this.record.id,
+                    onOpenCase: (caseId: string): void => {
+                      this.openCase(caseId);
+                    },
+                    onChanged: (): void => {
+                      this.load(true);
+                    },
+                    onSessionExpired: (): void => {
+                      this.onSessionExpired();
+                    }
+                  })
+                }
               }
             }
           }
