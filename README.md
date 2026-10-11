@@ -69,7 +69,9 @@ $env:Path = 'D:/DevEco Studio/tools/node;' + $env:Path
 
 ## 当前实际进度
 
-App 已接入真实登录与会话：登录页、启动恢复会话、退出、按服务端返回的角色进入客户服务/工作人员入口；知识问答已接入真实语料与模型：混合检索、带引用回答、追问与引用详情（[说明](backend/docs/knowledge-ai.md)），本次对话只存页面内存。报修、备案入口仍为骨架页并标注“未接入”。后端已提供原生 Bearer 会话通道（`/api/v1/auth/native/*`，[接口说明](backend/docs/native-client-api.md)），Web Cookie 登录行为保持原样；通用客户报修尚未实现。`RepairRecord` 是工作人员维修备案，不等于客户报修单。
+App 已接入真实登录与会话：登录页、启动恢复会话、退出、按服务端返回的角色进入客户服务/工作人员入口；客户报修（我的报修：提交、列表、进度时间线，#37）与工作人员处理链路（报修队列、受理、推进/取消、维修备案草稿/照片/提交、App 内备案审核，#38）已接入真实接口；知识问答已接入真实语料与模型：混合检索、带引用回答、追问与引用详情（[说明](backend/docs/knowledge-ai.md)），本次对话只存页面内存。后端提供原生 Bearer 会话通道（`/api/v1/auth/native/*`，[接口说明](backend/docs/native-client-api.md)）与报修处理/备案接口（[说明](backend/docs/native-repairs-api.md)），Web Cookie 登录行为保持原样。`RepairRecord` 是工作人员维修备案，不等于客户报修单。
+
+2026-10-11（#38 工作人员处理与维修备案）：新增工作人员队列/受理/推进/取消、报修单→备案关联建档、备案编辑走原生通道、App 内管理员审核与照片链路；后端 lint、生产构建通过，单测 397 项、数据库集成测试 175 项全部通过；在本机开发库跑通「客户建单 → 受理 → 处理中 → 完成未建档 → 建档 → 真照片上传 → 提交 → 退回 → 修改重提 → 通过」24 项断言的真实 API 链路；未签名 HAP 构建成功。**无设备（`hdc list targets` 为 `[Empty]`）：受理、备案、照片与审核页面均未装机验证**，详见 [验证记录](docs/verification/issue-38.md)。
 
 2026-10-09（登录里程碑）：在英文路径副本重新构建未签名 HAP 成功；后端 lint、生产构建通过，327 项单测、150 项数据库集成测试全部通过（含新增 22 项鉴权用例）；在 13080 端口以真实开发库验证 health → 客户/工作人员原生登录 → 会话查询 → 退出后令牌失效，以及错误密码、缺失令牌、缺失客户端标识、伪造角色无效、客户/工作人员越权访问均被拒。`hdc list targets` 仍为 `[Empty]`：App 的 health → 登录 → 重启恢复 → 退出链路**未真机验证**（构建成功不等于装机成功）。
 
@@ -86,6 +88,8 @@ App 已接入真实登录与会话：登录页、启动恢复会话、退出、�
 [最简 CI](.github/workflows/ci.yml) 在每个指向 `main` 的 PR 创建、更新或重新打开时运行，使用 Ubuntu / Node.js 24 和仓库锁定的 pnpm 依赖，依次执行后端 `pnpm lint`、`pnpm test:unit`。不按文件路径跳过，不需要数据库、服务器或额外凭证。CI 通过仅表示这两项检查通过；HAP/后端构建、数据库集成测试和真机验证仍按改动需要在本机执行。
 
 - [开发方案](docs/development-plan.md)
+- [Issue #38 验证记录：工作人员处理与维修备案](docs/verification/issue-38.md)
+- [原生工作人员处理与备案接口](backend/docs/native-repairs-api.md)
 - [Issue #39 知识问答任务书](docs/tasks/issue-39-knowledge-ai.md) · [写手开工提示词](docs/tasks/issue-39-writer-prompt.md)
 - [知识问答配置与验证记录](backend/docs/knowledge-ai.md)（知识快照、混合检索、引用与命令）
 - [五张参考截图](docs/reference/my-huawei/README.md)
