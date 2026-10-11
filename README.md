@@ -86,6 +86,7 @@ App 已接入真实登录与会话：登录页、启动恢复会话、退出、�
 [最简 CI](.github/workflows/ci.yml) 在每个指向 `main` 的 PR 创建、更新或重新打开时运行，使用 Ubuntu / Node.js 24 和仓库锁定的 pnpm 依赖，依次执行后端 `pnpm lint`、`pnpm test:unit`。不按文件路径跳过，不需要数据库、服务器或额外凭证。CI 通过仅表示这两项检查通过；HAP/后端构建、数据库集成测试和真机验证仍按改动需要在本机执行。
 
 - [开发方案](docs/development-plan.md)
+- [Issue #39 知识问答任务书](docs/tasks/issue-39-knowledge-ai.md) · [写手开工提示词](docs/tasks/issue-39-writer-prompt.md)
 - [五张参考截图](docs/reference/my-huawei/README.md)
 - [Agent 开发规则](AGENTS.md)
 
