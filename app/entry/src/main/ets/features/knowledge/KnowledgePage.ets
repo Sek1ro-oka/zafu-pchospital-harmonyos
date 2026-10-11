@@ -59,14 +59,10 @@ const EXAMPLE_QUESTIONS: string[] = [
 
 /** 「资料不足」回答的引导文案：干净回答应当给出处，没有出处就明确说清可以怎么补问。 */
 const INSUFFICIENT_HINT: string =
-  '公开资料里没有找到足够依据，可补充机型、系统版本或具体报错原文后再问一次。';
+  '现有资料不足以支持回答，可补充机型、系统版本或具体报错原文后再问一次。';
 
 /** 澄清追问的引导文案：后端追问会带上需要补充的信息。 */
 const CLARIFY_HINT: string = '请补充上面的信息后再发一次。';
-
-/** 空态：暂无引用时说明原因，并给出可用操作（重问 / 本次对话不保存）。 */
-const NO_CITATIONS_HINT: string =
-  '本次回答没有匹配到公开文档片段，可换个说法再问，或补充机型和报错原文（本次对话不保存到服务器）。';
 
 /**
  * 知识问答页：客户与工作人员共用，资料范围由服务端按角色过滤。
@@ -222,7 +218,7 @@ export struct KnowledgePage {
         .fontSize(FONT_HEADING)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
-      Text('回答只依据电脑医院公开文档，并给出可打开的引用；资料不足时会追问或说明。')
+      Text('回答依据当前账号可访问的资料，并给出可打开的引用；资料不足时会追问或说明。')
         .fontSize(FONT_TEXT)
         .fontColor($r('app.color.text_secondary'))
       Text('试试这样问：')
@@ -351,11 +347,6 @@ export struct KnowledgePage {
             ForEach(message.citations, (citation: KnowledgeCitation) => {
               this.citationCard(citation);
             }, (citation: KnowledgeCitation) => citation.sourceId)
-          } else {
-            // 引用为空不是错误：如实说明并给出可操作的下一步，而不是留一片空白。
-            Text(NO_CITATIONS_HINT)
-              .fontSize(FONT_CHIP)
-              .fontColor($r('app.color.text_secondary'))
           }
         }
       }

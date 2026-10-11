@@ -79,6 +79,8 @@ export struct RepairOrdersPage {
   @State loadMoreErrorText: string = '';
   /** 列表请求进行中（与 state 分开的私有标记）：防止重试按钮连点触发并发请求。 */
   private requesting: boolean = false;
+  /** 提交成功后的刷新不可被普通请求防重丢弃，等当前请求结束后执行。 */
+  private refreshPending: boolean = false;
 
   aboutToAppear(): void {
     this.load();
@@ -91,6 +93,7 @@ export struct RepairOrdersPage {
   private handleError(error: Object): void {
     if (error instanceof ApiRequestError) {
       if (isSessionExpiredCode(error.code)) {
+        this.refreshPending = false;
         this.onSessionExpired();
         return;
       }
@@ -102,8 +105,11 @@ export struct RepairOrdersPage {
     }
   }
 
-  private async load(): Promise<void> {
+  private async load(refreshAfterSubmit: boolean = false): Promise<void> {
     if (this.requesting) {
+      if (refreshAfterSubmit) {
+        this.refreshPending = true;
+      }
       return;
     }
     this.requesting = true;
@@ -120,6 +126,10 @@ export struct RepairOrdersPage {
       this.handleError(error);
     } finally {
       this.requesting = false;
+      if (this.refreshPending) {
+        this.refreshPending = false;
+        await this.load();
+      }
     }
   }
 
@@ -228,7 +238,7 @@ export struct RepairOrdersPage {
 
   private async afterSubmit(): Promise<void> {
     this.showForm = false;
-    await this.load();
+    await this.load(true);
   }
 
   @Builder
