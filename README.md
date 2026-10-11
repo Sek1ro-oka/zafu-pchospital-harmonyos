@@ -69,7 +69,7 @@ $env:Path = 'D:/DevEco Studio/tools/node;' + $env:Path
 
 ## 当前实际进度
 
-App 已接入真实登录与会话：登录页、启动恢复会话、退出、按服务端返回的角色进入客户服务/工作人员入口；业务入口（报修、备案、问答）仍为骨架页并标注“未接入”。后端已提供原生 Bearer 会话通道（`/api/v1/auth/native/*`，[接口说明](backend/docs/native-client-api.md)），Web Cookie 登录行为保持原样；通用客户报修与 AI 问答尚未实现。`RepairRecord` 是工作人员维修备案，不等于客户报修单。
+App 已接入真实登录与会话：登录页、启动恢复会话、退出、按服务端返回的角色进入客户服务/工作人员入口；知识问答已接入真实语料与模型：混合检索、带引用回答、追问与引用详情（[说明](backend/docs/knowledge-ai.md)），本次对话只存页面内存。报修、备案入口仍为骨架页并标注“未接入”。后端已提供原生 Bearer 会话通道（`/api/v1/auth/native/*`，[接口说明](backend/docs/native-client-api.md)），Web Cookie 登录行为保持原样；通用客户报修尚未实现。`RepairRecord` 是工作人员维修备案，不等于客户报修单。
 
 2026-10-09（登录里程碑）：在英文路径副本重新构建未签名 HAP 成功；后端 lint、生产构建通过，327 项单测、150 项数据库集成测试全部通过（含新增 22 项鉴权用例）；在 13080 端口以真实开发库验证 health → 客户/工作人员原生登录 → 会话查询 → 退出后令牌失效，以及错误密码、缺失令牌、缺失客户端标识、伪造角色无效、客户/工作人员越权访问均被拒。`hdc list targets` 仍为 `[Empty]`：App 的 health → 登录 → 重启恢复 → 退出链路**未真机验证**（构建成功不等于装机成功）。
 
@@ -87,6 +87,7 @@ App 已接入真实登录与会话：登录页、启动恢复会话、退出、�
 
 - [开发方案](docs/development-plan.md)
 - [Issue #39 知识问答任务书](docs/tasks/issue-39-knowledge-ai.md) · [写手开工提示词](docs/tasks/issue-39-writer-prompt.md)
+- [知识问答配置与验证记录](backend/docs/knowledge-ai.md)（知识快照、混合检索、引用与命令）
 - [五张参考截图](docs/reference/my-huawei/README.md)
 - [Agent 开发规则](AGENTS.md)
 

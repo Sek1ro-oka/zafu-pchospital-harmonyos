@@ -25,7 +25,9 @@ corepack pnpm dev --port 13080
 ## 开发范围与检查
 
 - 接口：`src/app/api/v1/`；业务：`src/features/`；模型与迁移：`prisma/`；测试：`tests/`。
-- 原生 Bearer 登录/会话已实现（`/api/v1/auth/native/*`，见 [接口说明](docs/native-client-api.md)）；客户报修/预约、AI 问答尚未实现。`RepairRecord` 是工作人员维修备案。
+- 原生 Bearer 登录/会话已实现（`/api/v1/auth/native/*`，见 [接口说明](docs/native-client-api.md)）；
+  知识检索与 AI 问答已实现（`/api/v1/knowledge/*`，配置、命令与验证记录见
+  [知识问答说明](docs/knowledge-ai.md)）；客户报修/预约等待 #37。`RepairRecord` 是工作人员维修备案。
 - 直接运行本机 Node/MySQL；团队按[开发方案](../docs/development-plan.md)自行安排进度。
 
 ```powershell
