@@ -1,7 +1,7 @@
 /**
  * 知识检索与问答的共享类型（Issue #39）。
  *
- * 这份文件同时是**客户端契约的来源**：`app/entry/src/main/ets/features/knowledge/KnowledgeContract.ets`
+ * 这份文件同时是**客户端契约的来源**：`app/entry/src/main/ets/features/knowledge/KnowledgeContract.ts`
  * 与此处字段一一对应，改动时两边同步（见 backend/docs/knowledge-ai.md）。
  */
 
@@ -19,7 +19,7 @@ export const MAX_ANSWER_CHARS = 6000;
 export const SEARCH_TOP_K_DEFAULT = 5;
 export const SEARCH_TOP_K_MAX = 10;
 export const CHAT_EVIDENCE_TOP_K = 6;
-/** AI 请求客户端读取超时（毫秒）：后端模型超时上限 45s，客户端留出余量。 */
+/** AI 请求客户端读取超时（毫秒）：后端一次问答总预算默认 50s（AI_TOTAL_BUDGET_MS），客户端留出余量。 */
 export const CLIENT_CHAT_READ_TIMEOUT_MS = 60000;
 
 /** 资料可见范围：PUBLIC 所有登录账号；STAFF 仅工作人员（MEMBER/ADMIN）。 */
@@ -135,6 +135,12 @@ export type RetrievalOutcome = {
 /** 引用载荷：URL、正文与版本由后端生成，不接受模型输出。 */
 export type Citation = {
   sourceId: string;
+  /**
+   * 与正文中 [Sx] 标注对应的引用编号（如 "S2"）。
+   * 契约：正文标记与引用卡都使用该编号一一对应，App 不得按数组下标重新编号
+   * （模型可能只引用 S2 或按 S3、S1 乱序引用）。
+   */
+  label: string;
   title: string;
   docTitle: string;
   headingPath: string[];

@@ -29,48 +29,55 @@ export type ChatModelMessage = { role: "system" | "user" | "assistant"; content:
 export async function callChatModel(config: ChatModelConfig, messages: ChatModelMessage[]): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), config.timeoutMs);
-  let response: Response;
+  // 定时器必须覆盖到响应体读取完成：只包住 fetch（收到响应头）时，
+  // 上游「先发头、慢发正文」会绕过超时，App 先超时而后端仍在等待。
   try {
-    response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        temperature: 0.2,
-        max_tokens: config.maxOutputTokens,
-        thinking: { type: "disabled" },
-        response_format: { type: "json_object" },
-      }),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new ChatModelError("timeout", `回答模型请求超时（${config.timeoutMs}ms）`);
+    let response: Response;
+    try {
+      response = await fetch(`${config.baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          temperature: 0.2,
+          max_tokens: config.maxOutputTokens,
+          thinking: { type: "disabled" },
+          response_format: { type: "json_object" },
+        }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new ChatModelError("timeout", `回答模型请求超时（${config.timeoutMs}ms）`);
+      }
+      throw new ChatModelError("http", `回答模型请求失败：${error instanceof Error ? error.message : String(error)}`);
     }
-    throw new ChatModelError("http", `回答模型请求失败：${error instanceof Error ? error.message : String(error)}`);
+
+    if (response.status === 429) {
+      throw new ChatModelError("rate_limited", "回答模型限流（HTTP 429）", 429);
+    }
+    if (!response.ok) {
+      throw new ChatModelError("http", `回答模型返回 HTTP ${response.status}`, response.status);
+    }
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      if (controller.signal.aborted) {
+        throw new ChatModelError("timeout", `回答模型响应读取超时（${config.timeoutMs}ms）`);
+      }
+      throw new ChatModelError("bad_response", "回答模型响应不是合法 JSON", response.status);
+    }
+    const content = (payload as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message?.content;
+    if (typeof content !== "string" || content.trim() === "") {
+      throw new ChatModelError("bad_response", "回答模型响应缺少正文", response.status);
+    }
+    return content;
   } finally {
     clearTimeout(timer);
   }
-
-  if (response.status === 429) {
-    throw new ChatModelError("rate_limited", "回答模型限流（HTTP 429）", 429);
-  }
-  if (!response.ok) {
-    throw new ChatModelError("http", `回答模型返回 HTTP ${response.status}`, response.status);
-  }
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new ChatModelError("bad_response", "回答模型响应不是合法 JSON", response.status);
-  }
-  const content = (payload as { choices?: Array<{ message?: { content?: unknown } }> }).choices?.[0]?.message?.content;
-  if (typeof content !== "string" || content.trim() === "") {
-    throw new ChatModelError("bad_response", "回答模型响应缺少正文", response.status);
-  }
-  return content;
 }

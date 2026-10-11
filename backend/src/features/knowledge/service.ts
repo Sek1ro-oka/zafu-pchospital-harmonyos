@@ -77,8 +77,9 @@ export async function searchKnowledge(options: SearchKnowledgeOptions): Promise<
     retrievalMode: outcome.mode,
     degradation: outcome.degradation,
     indexVersion: index.indexVersion,
-    results: outcome.candidates.map((candidate) => ({
+    results: outcome.candidates.map((candidate, position) => ({
       sourceId: candidate.chunk.id,
+      label: `S${position + 1}`,
       title: candidate.chunk.heading === "" ? candidate.chunk.docTitle : candidate.chunk.heading,
       docTitle: candidate.chunk.docTitle,
       headingPath: candidate.chunk.headingPath,

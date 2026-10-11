@@ -27,58 +27,64 @@ const BATCH_SIZE = 16;
 async function requestBatch(config: EmbeddingConfig, texts: string[]): Promise<number[][]> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), config.timeoutMs);
-  let response: Response;
+  // 定时器覆盖到响应体读取完成：只覆盖 fetch 时，「先发头、慢发正文」会绕过超时。
   try {
-    response = await fetch(`${config.baseUrl}/embeddings`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({ model: config.model, input: texts }),
-      signal: controller.signal,
-    });
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      throw new EmbeddingError("timeout", `embedding 请求超时（${config.timeoutMs}ms）`);
+    let response: Response;
+    try {
+      response = await fetch(`${config.baseUrl}/embeddings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.apiKey}`,
+        },
+        body: JSON.stringify({ model: config.model, input: texts }),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      if (controller.signal.aborted) {
+        throw new EmbeddingError("timeout", `embedding 请求超时（${config.timeoutMs}ms）`);
+      }
+      throw new EmbeddingError("http", `embedding 请求失败：${error instanceof Error ? error.message : String(error)}`);
     }
-    throw new EmbeddingError("http", `embedding 请求失败：${error instanceof Error ? error.message : String(error)}`);
+
+    if (!response.ok) {
+      throw new EmbeddingError("http", `embedding 服务返回 HTTP ${response.status}`, response.status);
+    }
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      if (controller.signal.aborted) {
+        throw new EmbeddingError("timeout", `embedding 响应读取超时（${config.timeoutMs}ms）`);
+      }
+      throw new EmbeddingError("bad_response", "embedding 响应不是合法 JSON", response.status);
+    }
+    const data = (payload as { data?: unknown }).data;
+    if (!Array.isArray(data) || data.length !== texts.length) {
+      throw new EmbeddingError("bad_response", "embedding 响应条目数量与请求不一致", response.status);
+    }
+    const vectors = data
+      .map((entry) => (entry as { embedding?: unknown }).embedding)
+      .map((embedding) => {
+        if (!Array.isArray(embedding) || embedding.length === 0) {
+          throw new EmbeddingError("bad_response", "embedding 响应包含空向量", response.status);
+        }
+        const vector = embedding.map((value) => {
+          if (typeof value !== "number" || !Number.isFinite(value)) {
+            throw new EmbeddingError("bad_response", "embedding 响应包含非有限数值", response.status);
+          }
+          return value;
+        });
+        return vector;
+      });
+    const dimensions = vectors[0].length;
+    if (vectors.some((vector) => vector.length !== dimensions)) {
+      throw new EmbeddingError("bad_response", "同一响应内 embedding 维度不一致", response.status);
+    }
+    return vectors;
   } finally {
     clearTimeout(timer);
   }
-
-  if (!response.ok) {
-    throw new EmbeddingError("http", `embedding 服务返回 HTTP ${response.status}`, response.status);
-  }
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch {
-    throw new EmbeddingError("bad_response", "embedding 响应不是合法 JSON", response.status);
-  }
-  const data = (payload as { data?: unknown }).data;
-  if (!Array.isArray(data) || data.length !== texts.length) {
-    throw new EmbeddingError("bad_response", "embedding 响应条目数量与请求不一致", response.status);
-  }
-  const vectors = data
-    .map((entry) => (entry as { embedding?: unknown }).embedding)
-    .map((embedding) => {
-      if (!Array.isArray(embedding) || embedding.length === 0) {
-        throw new EmbeddingError("bad_response", "embedding 响应包含空向量", response.status);
-      }
-      const vector = embedding.map((value) => {
-        if (typeof value !== "number" || !Number.isFinite(value)) {
-          throw new EmbeddingError("bad_response", "embedding 响应包含非有限数值", response.status);
-        }
-        return value;
-      });
-      return vector;
-    });
-  const dimensions = vectors[0].length;
-  if (vectors.some((vector) => vector.length !== dimensions)) {
-    throw new EmbeddingError("bad_response", "同一响应内 embedding 维度不一致", response.status);
-  }
-  return vectors;
 }
 
 /** 批量生成向量；任何一批失败即整体失败（调用方降级为关键词检索或中止建索引）。 */

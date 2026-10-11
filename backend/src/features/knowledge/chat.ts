@@ -91,19 +91,25 @@ export function parseChatRequest(rawBody: string): KnowledgeChatRequestInput {
 
 const ANAPHORA_PATTERN = /(这个|这些|这个怎么|它|那个|上述|上面|刚才|前文|该问题|此问题|还有|继续|接着|然后|呢)/;
 
-/** 追问意图：当前问题很短或含指代时，与上一条用户消息拼接后再检索。 */
+function isShortOrContextDependent(question: string): boolean {
+  return question.length <= 12 || ANAPHORA_PATTERN.test(question);
+}
+
+/**
+ * 追问意图：当前问题很短或含指代时，向前解析本次对话的用户消息，直到找到含主题的一条。
+ * 连续短追问（如「开机黑屏」→「这个怎么检查」→「然后呢」）不能只拼接上一条，
+ * 否则原始故障主题会丢失、检索无候选。最多拼接 3 条（含当前），总长截断到 300 字。
+ */
 export function buildRetrievalQuery(question: string, history: KnowledgeChatMessageInput[]): string {
-  const needsContext = question.length <= 12 || ANAPHORA_PATTERN.test(question);
-  if (!needsContext) return question.slice(0, 300);
-  let previousUser: string | null = null;
-  for (let index = history.length - 1; index >= 0; index -= 1) {
-    if (history[index].role === "user") {
-      previousUser = history[index].content;
-      break;
-    }
+  if (!isShortOrContextDependent(question)) return question.slice(0, 300);
+  const parts: string[] = [question];
+  for (let index = history.length - 1; index >= 0 && parts.length < 3; index -= 1) {
+    const message = history[index];
+    if (message.role !== "user") continue;
+    parts.unshift(message.content.slice(0, 160));
+    if (!isShortOrContextDependent(message.content)) break;
   }
-  if (previousUser === null) return question.slice(0, 300);
-  return `${previousUser.slice(0, 160)} ${question}`.slice(0, 300);
+  return parts.join(" ").slice(0, 300);
 }
 
 function systemPrompt(candidateCount: number): string {
@@ -254,10 +260,11 @@ export function sourceUrlOf(chunk: {
   return `${blobBase}/src/${encodedPath}${anchor}`;
 }
 
-export function citationOf(candidate: RetrievalCandidate, index: KnowledgeIndex): Citation {
+export function citationOf(candidate: RetrievalCandidate, index: KnowledgeIndex, label: string): Citation {
   const { chunk } = candidate;
   return {
     sourceId: chunk.id,
+    label,
     title: chunk.heading === "" ? chunk.docTitle : chunk.heading,
     docTitle: chunk.docTitle,
     headingPath: chunk.headingPath,
@@ -308,6 +315,9 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
   if (!modelConfig) {
     throw new AppError("AI_NOT_CONFIGURED", "尚未配置回答模型（AI_API_KEY），AI 问答暂不可用", { status: 503 });
   }
+  // 总预算从检索前开始计：embedding 超时 + 各次模型调用（含纠正重试）之和不得超过它，
+  // 默认 50s < App 读取超时 60s，避免 App 先超时而后端仍在等待。
+  const deadline = Date.now() + modelConfig.totalBudgetMs;
   const index = loadKnowledgeIndex();
   const embedding: EmbeddingConfig | null = readEmbeddingConfig();
   const retrievalQuery = buildRetrievalQuery(options.input.question, options.input.history);
@@ -340,12 +350,24 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
 
   const messages = buildMessages(options.input, outcome.candidates);
   const callModel = options.callModelFn ?? callChatModel;
-  let raw: string;
-  try {
-    raw = await callModel(modelConfig, messages);
-  } catch (error) {
-    throw mapChatModelError(error);
-  }
+  /** 每次模型调用的超时 = min(单次超时，剩余总预算)；预算耗尽按 provider 超时处理，不伪装成资料不足。 */
+  const callModelWithinBudget = async (
+    requestMessages: Array<{ role: "system" | "user" | "assistant"; content: string }>,
+  ): Promise<string> => {
+    const remaining = deadline - Date.now();
+    if (remaining < 1000) {
+      throw new AppError("AI_PROVIDER_TIMEOUT", "本次问答的整体时间预算已用尽，请稍后重试", { status: 504 });
+    }
+    try {
+      return await callModel(
+        { ...modelConfig, timeoutMs: Math.min(modelConfig.timeoutMs, remaining) },
+        requestMessages,
+      );
+    } catch (error) {
+      throw mapChatModelError(error);
+    }
+  };
+  const raw = await callModelWithinBudget(messages);
   const notes: string[] = [];
   let output = parseOutputOrThrow(raw, outcome.candidates.length);
 
@@ -361,12 +383,7 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
           `S1…S${outcome.candidates.length}；若资料不足以支持结论，请输出 status=insufficient_evidence。`,
       },
     ];
-    let retryRaw: string;
-    try {
-      retryRaw = await callModel(modelConfig, corrective);
-    } catch (error) {
-      throw mapChatModelError(error);
-    }
+    const retryRaw: string = await callModelWithinBudget(corrective);
     notes.push("首次输出缺少引用，已纠正重试一次");
     output = parseOutputOrThrow(retryRaw, outcome.candidates.length);
     if (output.status === "answer" && output.citationIds.length === 0) {
@@ -385,7 +402,9 @@ export async function answerKnowledgeQuestion(options: AnswerKnowledgeOptions): 
   notes.push(...output.notes);
   const citations =
     output.status === "answer"
-      ? output.citationIds.map((id) => citationOf(outcome.candidates[Number.parseInt(id.slice(1), 10) - 1], index))
+      ? output.citationIds.map((id) =>
+          citationOf(outcome.candidates[Number.parseInt(id.slice(1), 10) - 1], index, id),
+        )
       : [];
   return {
     ...base,

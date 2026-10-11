@@ -13,6 +13,8 @@ export type ChatModelConfig = {
   apiKey: string;
   timeoutMs: number;
   maxOutputTokens: number;
+  /** 一次问答的总预算（含向量检索与必要的纠正重试）：App 读取超时 60s，默认 50s 留余量。 */
+  totalBudgetMs: number;
 };
 
 export type EmbeddingConfig = {
@@ -26,6 +28,7 @@ const DEFAULT_AI_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_AI_MODEL = "deepseek-flash";
 const DEFAULT_AI_TIMEOUT_MS = 45_000;
 const DEFAULT_AI_MAX_OUTPUT_TOKENS = 1000;
+const DEFAULT_AI_TOTAL_BUDGET_MS = 50_000;
 const DEFAULT_EMBEDDING_BASE_URL = "https://api.siliconflow.cn/v1";
 const DEFAULT_EMBEDDING_MODEL = "BAAI/bge-m3";
 const DEFAULT_EMBEDDING_TIMEOUT_MS = 30_000;
@@ -64,6 +67,7 @@ export function readChatModelConfig(env: NodeJS.ProcessEnv = process.env): ChatM
     apiKey,
     timeoutMs: positiveInt(env.AI_TIMEOUT_MS, DEFAULT_AI_TIMEOUT_MS),
     maxOutputTokens: positiveInt(env.AI_MAX_OUTPUT_TOKENS, DEFAULT_AI_MAX_OUTPUT_TOKENS),
+    totalBudgetMs: positiveInt(env.AI_TOTAL_BUDGET_MS, DEFAULT_AI_TOTAL_BUDGET_MS),
   };
 }
 
