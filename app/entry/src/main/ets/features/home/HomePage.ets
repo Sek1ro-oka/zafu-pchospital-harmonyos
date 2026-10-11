@@ -1,13 +1,13 @@
 import { HOME_STAFF } from '../../core/auth/AuthContract';
-import { NavPusher, routeTitle, ROUTE_CASE_DETAIL, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_KNOWLEDGE_SOURCE, ROUTE_REPAIR_ORDERS, ROUTE_SERVICE, ROUTE_STAFF_ORDERS, ROUTE_STAFF_ORDER_DETAIL, ROUTE_STAFF_RECORD, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
-import { EntryCard } from '../../core/ui/EntryCard';
-import { SessionHeader } from '../../core/ui/SessionHeader';
+import { RepairOrderFocusParam, routeTitle, ROUTE_SERVICE, ROUTE_CASE_DETAIL, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_KNOWLEDGE_SOURCE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_ORDER_DETAIL, ROUTE_STAFF_RECORD, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import {
-  FONT_HEADING,
-  FONT_NOTE,
-  FONT_TITLE,
+  CARD_GAP,
+  FONT_CHIP,
   GAP_LG,
-  PAGE_PADDING,
+  TAB_BAR_HEIGHT,
+  TAB_BAR_MARGIN,
+  TAB_BAR_RADIUS,
+  TAB_ICON_SIZE,
 } from '../../core/ui/Theme';
 import { CaseDetailPage } from '../knowledge/CaseDetailPage';
 import { CaseLibraryPage } from '../knowledge/CaseLibraryPage';
@@ -22,45 +22,25 @@ import { StaffRepairOrderDetailPage } from '../repair/StaffRepairOrderDetailPage
 import { StaffRepairOrdersPage } from '../repair/StaffRepairOrdersPage';
 import { StaffRepairRecordPage } from '../repair/StaffRepairRecordPage';
 import { ServicePage } from '../service/ServicePage';
+import { HomeTab } from './HomeTab';
+import { ProfilePage } from '../profile/ProfilePage';
 
-interface HomeEntry {
-  title: string;
-  note: string;
-  route: string;
-  /** 图标砖上的单字（工程无图标资源，见 Theme.ets 的图标风格约定）。 */
-  icon: string;
-  /** false = 业务未接入：图标砖用灰底，点击仍进入如实标注"未接入"的骨架页。 */
-  ready: boolean;
-}
-
-function customerEntries(): HomeEntry[] {
-  return [
-    { title: '我的报修', note: '提交报修与查看进度', route: ROUTE_REPAIR_ORDERS, icon: '修', ready: true },
-    { title: '知识问答', note: '有出处的 AI 咨询', route: ROUTE_KNOWLEDGE, icon: '问', ready: true },
-    { title: '客户服务', note: '设备与服务入口 · 部分待接入', route: ROUTE_SERVICE, icon: '服', ready: true }
-  ];
-}
-
-/** 审核入口按服务器权限展示，实际业务权限仍由服务端检查。 */
-function staffEntries(permissions: string[]): HomeEntry[] {
-  const entries: HomeEntry[] = [
-    { title: '报修工作台', note: '待受理队列与我的处理', route: ROUTE_STAFF_ORDERS, icon: '单', ready: true }
-  ];
-  if (permissions.includes('repair:review')) {
-    entries.push({ title: '备案审核', note: '待审核维修备案 · 通过 / 退回', route: ROUTE_STAFF_REVIEW, icon: '审', ready: true });
-  }
-  entries.push({ title: '典型案例库', note: '备案自动整理与知识回流', route: ROUTE_CASE_LIBRARY, icon: '例', ready: true });
-  entries.push({ title: '知识问答', note: '有出处的 AI 咨询', route: ROUTE_KNOWLEDGE, icon: '问', ready: true });
-  return entries;
-}
+/** Tab 下标：首页 / 服务 / 我的（对照参考图底部胶囊导航，花粉、选购无对应业务不做）。 */
+const TAB_INDEX_HOME: number = 0;
+const TAB_INDEX_SERVICE: number = 1;
+const TAB_INDEX_PROFILE: number = 2;
 
 /**
- * 登录后的主页：客户与工作人员共用布局，入口卡片按服务端返回的 home 分流。
+ * 登录后的主壳（本轮重设计）。
  *
- * 布局对照 docs/reference/my-huawei/service-my-products-repair-entry.jpg：
- * 浅底 + 白卡网格，图标砖在左、标题与说明在右（EntryCard 共用组件）。
- * 首页是客户主入口，聚合已接入的报修与问答；子页统一由 NavDestination
- * 提供标题栏与返回按钮，系统返回手势只弹栈，会话状态保留在本页不丢失。
+ * 根结构对照 docs/reference/my-huawei/ 五图共有的底部悬浮胶囊 Tab 栏，
+ * 落地为 Tabs 三页：首页 / 服务 / 我的；子页仍由本组件的 NavPathStack +
+ * NavDestination 承载，routeTitle / NavPusher / 返回行为与 #41 保持一致。
+ * 参考图的「花粉」「选购」没有对应业务，不做假 Tab（偏差记录在参考图 README）。
+ *
+ * Tab 栏用自绘胶囊（Tabs 的 barHeight(0) 收起自带栏，Stack 底部叠悬浮胶囊），
+ * 白底圆角、选中态品牌蓝，尺寸全部走 Theme 令牌。
+ * 登录/启动流程不变：会话过期时由各 tab 页回调 expireSession 清栈回登录页。
  */
 @Component
 export struct HomePage {
@@ -74,12 +54,8 @@ export struct HomePage {
   onSessionExpired: () => void = () => {
   };
   @State pathStack: NavPathStack = new NavPathStack();
-  /** 统一跳转入口：带防抖，快速双击入口卡片不会把同一页面压栈两次。 */
-  private pusher: NavPusher = new NavPusher();
-
-  private entries(): HomeEntry[] {
-    return this.home === HOME_STAFF ? staffEntries(this.permissions) : customerEntries();
-  }
+  @State currentTab: number = TAB_INDEX_HOME;
+  private tabController: TabsController = new TabsController();
 
   /** 会话失效的统一出口：清空导航栈再回登录页，避免栈底残留子页。 */
   private async expireSession(): Promise<void> {
@@ -88,22 +64,18 @@ export struct HomePage {
   }
 
   @Builder
-  sectionTitle(text: string) {
-    Text(text)
-      .fontSize(FONT_HEADING)
-      .fontWeight(FontWeight.Bold)
-      .fontColor($r('app.color.text_primary'))
-      .width('100%')
-      .textAlign(TextAlign.Start)
-  }
-
-  @Builder
   destination(name: string, param: object) {
     NavDestination() {
       if (name === ROUTE_SERVICE) {
-        ServicePage({ pathStack: this.pathStack });
+        ServicePage({
+          home: this.home, permissions: this.permissions, pathStack: this.pathStack,
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
       } else if (name === ROUTE_REPAIR_ORDERS) {
         RepairOrdersPage({
+          initialDetailId: param !== null && param !== undefined
+            ? (param as RepairOrderFocusParam).orderId
+            : '',
           onSessionExpired: (): void => {
             this.expireSession();
           }
@@ -164,48 +136,103 @@ export struct HomePage {
     .backgroundColor($r('app.color.start_window_background'))
   }
 
+  /** 底部胶囊栏的单个 tab：图标字 + 文字，选中态品牌蓝。 */
+  @Builder
+  tabItem(index: number, icon: string, label: string) {
+    Column({ space: 2 }) {
+      Text(icon)
+        .fontSize(TAB_ICON_SIZE)
+        .fontWeight(FontWeight.Medium)
+        .fontColor(this.currentTab === index ? $r('app.color.brand') : $r('app.color.text_secondary'))
+      Text(label)
+        .fontSize(FONT_CHIP)
+        .fontColor(this.currentTab === index ? $r('app.color.brand') : $r('app.color.text_secondary'))
+    }
+    .layoutWeight(1)
+    .alignItems(HorizontalAlign.Center)
+    .justifyContent(FlexAlign.Center)
+    .height('100%')
+    .onClick(() => {
+      if (this.currentTab !== index) {
+        this.tabController.changeIndex(index);
+      }
+    })
+  }
+
   build() {
     Navigation(this.pathStack) {
-      Column({ space: GAP_LG }) {
-        Text('电脑医院')
-          .fontSize(FONT_TITLE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
-        SessionHeader({
-          displayName: this.displayName,
-          roleText: this.roleText,
-          onLogout: this.onLogout
-        })
-        this.sectionTitle(this.home === HOME_STAFF ? '工作台入口' : '常用功能')
-        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-          ForEach(this.entries(), (entry: HomeEntry) => {
-            EntryCard({
-              icon: entry.icon,
-              title: entry.title,
-              note: entry.note,
-              ready: entry.ready,
-              onSelect: (): void => {
-                this.pusher.push(this.pathStack, entry.route, null);
+      Stack({ alignContent: Alignment.Bottom }) {
+        Tabs({ index: this.currentTab, controller: this.tabController }) {
+          TabContent() {
+            HomeTab({
+              displayName: this.displayName,
+              roleText: this.roleText,
+              home: this.home,
+              permissions: this.permissions,
+              pathStack: this.pathStack,
+              onSessionExpired: (): void => {
+                this.expireSession();
               }
-            });
-          }, (entry: HomeEntry) => entry.title + entry.route)
+            })
+          }
+
+          TabContent() {
+            ServicePage({
+              home: this.home,
+              permissions: this.permissions,
+              pathStack: this.pathStack,
+              onSessionExpired: (): void => {
+                this.expireSession();
+              }
+            })
+          }
+
+          TabContent() {
+            ProfilePage({
+              displayName: this.displayName,
+              roleText: this.roleText,
+              home: this.home,
+              permissions: this.permissions,
+              pathStack: this.pathStack,
+              onLogout: (): Promise<void> => this.onLogout(),
+              onSessionExpired: (): void => {
+                this.expireSession();
+              }
+            })
+          }
+        }
+        .barPosition(BarPosition.End)
+        .barHeight(0)
+        .scrollable(false)
+        .onChange((index: number) => {
+          this.currentTab = index;
+        })
+        .width('100%')
+        .height('100%')
+
+        // 悬浮胶囊 Tab 栏：白底、大圆角，距屏幕边缘留出悬浮边距（对照参考图）。
+        Column() {
+          Row({ space: CARD_GAP }) {
+            this.tabItem(TAB_INDEX_HOME, '首', '首页')
+            this.tabItem(TAB_INDEX_SERVICE, '服', '服务')
+            this.tabItem(TAB_INDEX_PROFILE, '我', '我的')
+          }
+          .width('100%')
+          .height(TAB_BAR_HEIGHT)
+          .padding({ left: GAP_LG, right: GAP_LG })
+          .backgroundColor($r('app.color.surface'))
+          .borderRadius(TAB_BAR_RADIUS)
         }
         .width('100%')
-        Text(this.home === HOME_STAFF
-          ? '已接入：真实登录与会话、报修处理与维修备案（受理 / 推进 / 建档 / 审核）、典型案例库（备案标记自动整理、知识回流）、知识问答（回答带可打开的引用）。'
-          : '已接入：真实登录与会话、我的报修（提交与进度查询）、知识问答（回答带可打开的引用）。客户服务页中未标注「已接入」的入口为骨架，未接入业务数据。')
-          .fontSize(FONT_NOTE)
-          .fontColor($r('app.color.text_secondary'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
+        .padding({
+          left: TAB_BAR_MARGIN,
+          right: TAB_BAR_MARGIN,
+          bottom: TAB_BAR_MARGIN
+        })
       }
       .width('100%')
       .height('100%')
-      .padding(PAGE_PADDING)
-      .alignItems(HorizontalAlign.Start)
-      .backgroundColor($r('app.color.start_window_background'))
+      // 页面四周留白由各 tab 页自行处理，栈壳不叠加内边距避免双重留白。
     }
     .hideTitleBar(true)
     .navDestination(this.destination)

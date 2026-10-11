@@ -3,6 +3,7 @@ import { SessionIdentity } from '../../core/auth/AuthContract';
 import { SessionService } from '../../core/auth/SessionService';
 import { ApiRequestError } from '../../core/network/ApiClient';
 import { ApiConfig } from '../../core/network/ApiConfig';
+import { IconTile } from '../../core/ui/IconTile';
 import {
   CARD_GAP,
   CARD_PADDING,
@@ -130,6 +131,8 @@ export struct LoginPage {
   build() {
     Column({ space: GAP_LG }) {
       Column({ space: GAP_SM }) {
+        // 品牌图标砖：与全局彩色图标系统同一套令牌（纯视觉，不改布局与状态逻辑）。
+        IconTile({ icon: '医', hue: 'blue' })
         Text('鸿蒙电脑医院')
           .fontSize(FONT_DISPLAY)
           .fontWeight(FontWeight.Bold)

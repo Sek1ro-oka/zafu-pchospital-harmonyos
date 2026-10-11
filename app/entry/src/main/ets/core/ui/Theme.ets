@@ -11,7 +11,10 @@
  * - 字号层级：应用名 30 → 页面标题 26 → 分区标题 20 → 卡片标题 16 →
  *   正文 15 → 次要文字 14 → 注释 13 → 标签 12。
  * - 图标风格：工程无 UI 图标资源，统一用「圆角色块 + 单字」图标砖
- *   （ICON_TILE，已接入用 brand_soft/brand，未接入用 field_bg/text_secondary）。
+ *   （ICON_TILE）。配色为本轮重设计扩展的多彩图标砖系统：每个功能有
+ *   柔和底色 + 前景色对（color.json 的 tile_*_bg / tile_*_fg，橙/绿/蓝/
+ *   紫/青/红/金七对），由 core/ui/IconTile.ets 按 hue 键渲染；
+ *   未接入的能力沿用 field_bg/text_secondary 灰砖如实弱化。
  */
 
 // ===== 间距栅格 =====
@@ -43,6 +46,18 @@ export const CARD_RADIUS: number = 16;
 export const CONTROL_RADIUS: number = 12;
 /** 状态标签（chip）圆角。 */
 export const CHIP_RADIUS: number = 8;
+
+// ===== 底部 Tab 栏（本轮重设计新增） =====
+/** 悬浮胶囊 Tab 栏高度。 */
+export const TAB_BAR_HEIGHT: number = 60;
+/** 悬浮胶囊 Tab 栏的圆角（高度的一半，正胶囊）。 */
+export const TAB_BAR_RADIUS: number = 30;
+/** Tab 栏距屏幕左右与底部的悬浮边距。 */
+export const TAB_BAR_MARGIN: number = 12;
+/** 三个 tab 页根布局的底部额外内边距：给悬浮 Tab 栏让位（栏高 + 上下悬浮边距）。 */
+export const TAB_PAGE_BOTTOM_INSET: number = TAB_BAR_HEIGHT + TAB_BAR_MARGIN * 2;
+/** Tab 栏单个图标字的尺寸（不用图标砖底色的裸字样式）。 */
+export const TAB_ICON_SIZE: number = 24;
 
 // ===== 控件尺寸 =====
 /** 主控件高度（登录/提交按钮、输入框）。 */
