@@ -79,7 +79,9 @@ App 已接入真实登录与会话：登录页、启动恢复会话、退出、�
 
 ## 协作与来源
 
-前后端接口变更可在同一提交中完成。提交前运行相关检查，分别记录构建、接口和真机结果。克隆公开仓库不需要邀请；直接推送仍需仓库写入权限，由维护者添加 Collaborator。
+前后端接口变更可在同一提交中完成。提交前运行相关检查，分别记录构建、接口和真机结果。克隆公开仓库不需要邀请；向本仓库推送功能分支需要写入权限，由维护者添加 Collaborator，也可从个人 fork 提交 PR。
+
+`main` 已启用 [main-protection](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/rules/24866387)：必须通过 PR，且仅使用普通 Merge（Create a merge commit）；禁止直接推送、强推和删除主分支，无绕过名单。合入前解决审查讨论，不要求另一位成员批准，不强制 CI；不使用 Squash 或 Rebase，未启用与普通 Merge 冲突的线性历史要求。
 
 - [开发方案](docs/development-plan.md)
 - [五张参考截图](docs/reference/my-huawei/README.md)
