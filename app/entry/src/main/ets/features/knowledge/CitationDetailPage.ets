@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
+import { CARD_GAP, CARD_PADDING, CARD_RADIUS, CONTROL_HEIGHT, CONTROL_HEIGHT_SM, CONTROL_RADIUS, FONT_BODY, FONT_CHIP, FONT_HEADING, FONT_NOTE, FONT_SUBTITLE, FONT_TEXT, GAP_SM, PAGE_PADDING } from '../../core/ui/Theme';
 import {
   headingTrailText,
   KnowledgeSourceData,
@@ -86,13 +86,13 @@ export struct CitationDetailPage {
 
   @Builder
   metaRow(label: string, value: string) {
-    Row({ space: 8 }) {
+    Row({ space: GAP_SM }) {
       Text(label)
-        .fontSize(13)
+        .fontSize(FONT_NOTE)
         .fontColor($r('app.color.text_secondary'))
         .width(72)
       Text(value)
-        .fontSize(13)
+        .fontSize(FONT_NOTE)
         .fontColor($r('app.color.text_primary'))
         .layoutWeight(1)
     }
@@ -102,9 +102,9 @@ export struct CitationDetailPage {
 
   @Builder
   body(data: KnowledgeSourceData) {
-    Column({ space: 10 }) {
+    Column({ space: GAP_SM }) {
       Text(data.docTitle)
-        .fontSize(20)
+        .fontSize(FONT_HEADING)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
       this.metaRow('章节', headingTrailText(data.headingPath));
@@ -112,12 +112,12 @@ export struct CitationDetailPage {
       this.metaRow('版本', `${data.revision !== null ? data.revision.substring(0, 10) : '内部资料'} · ${data.indexVersion}`);
       if (data.visibility === 'STAFF') {
         Text('内部资料（仅工作人员可见）')
-          .fontSize(12)
+          .fontSize(FONT_CHIP)
           .fontColor($r('app.color.brand'))
       }
       Divider().color($r('app.color.field_bg'))
       Text(data.content)
-        .fontSize(15)
+        .fontSize(FONT_BODY)
         .fontColor($r('app.color.text_primary'))
         .textSelectable(TextSelectableMode.SELECTABLE_UNFOCUSABLE)
         .width('100%')
@@ -125,7 +125,7 @@ export struct CitationDetailPage {
         Button('在浏览器打开原文')
           .width('100%')
           .height(CONTROL_HEIGHT)
-          .fontSize(15)
+          .fontSize(FONT_BODY)
           .backgroundColor($r('app.color.brand'))
           .borderRadius(CONTROL_RADIUS)
           .onClick(() => {
@@ -133,56 +133,56 @@ export struct CitationDetailPage {
           })
       } else {
         Text('内部测试资料：没有外部原文链接')
-          .fontSize(12)
+          .fontSize(FONT_CHIP)
           .fontColor($r('app.color.text_secondary'))
       }
     }
     .width('100%')
-    .padding(16)
+    .padding(CARD_PADDING)
     .alignItems(HorizontalAlign.Start)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
   }
 
   build() {
-    Column({ space: 12 }) {
+    Column({ space: CARD_GAP }) {
       if (this.loading) {
-        Row({ space: 8 }) {
+        Row({ space: GAP_SM }) {
           LoadingProgress().width(22).height(22)
           Text('正在加载引用正文…')
-            .fontSize(14)
+            .fontSize(FONT_TEXT)
             .fontColor($r('app.color.text_secondary'))
         }
       } else if (this.notFound) {
-        Column({ space: 8 }) {
+        Column({ space: GAP_SM }) {
           Text('引用已过期或不存在')
-            .fontSize(16)
+            .fontSize(FONT_SUBTITLE)
             .fontWeight(FontWeight.Medium)
             .fontColor($r('app.color.text_primary'))
           Text(`${this.errorMessage}。请返回对话重新提问，用最新结果打开引用。`)
-            .fontSize(14)
+            .fontSize(FONT_TEXT)
             .fontColor($r('app.color.text_secondary'))
         }
         .width('100%')
-        .padding(16)
+        .padding(CARD_PADDING)
         .alignItems(HorizontalAlign.Start)
         .backgroundColor($r('app.color.surface'))
         .borderRadius(CARD_RADIUS)
       } else if (this.failed) {
-        Column({ space: 8 }) {
+        Column({ space: GAP_SM }) {
           Text(this.errorMessage)
-            .fontSize(14)
+            .fontSize(FONT_TEXT)
             .fontColor($r('app.color.danger'))
           Button('重试')
-            .height(34)
-            .fontSize(14)
+            .height(CONTROL_HEIGHT_SM)
+            .fontSize(FONT_TEXT)
             .backgroundColor($r('app.color.brand'))
             .onClick(() => {
               this.load();
             })
         }
         .width('100%')
-        .padding(16)
+        .padding(CARD_PADDING)
         .alignItems(HorizontalAlign.Start)
         .backgroundColor($r('app.color.surface'))
         .borderRadius(CARD_RADIUS)

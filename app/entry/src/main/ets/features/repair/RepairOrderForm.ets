@@ -1,6 +1,17 @@
 import { util } from '@kit.ArkTS';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS } from '../../core/ui/Theme';
+import {
+  CARD_PADDING,
+  CARD_RADIUS,
+  CONTROL_HEIGHT,
+  CONTROL_RADIUS,
+  FONT_HEADING,
+  FONT_NOTE,
+  FONT_SUBTITLE,
+  FONT_TEXT,
+  GAP_LG,
+  GAP_SM,
+} from '../../core/ui/Theme';
 import {
   REPAIR_ORDER_LIMITS,
   RepairOrderSubmitRequest,
@@ -170,9 +181,9 @@ export struct RepairOrderForm {
 
   @Builder
   labeledInput(label: string, placeholder: string, value: string, name: string, onChange: (v: string) => void) {
-    Column({ space: 6 }) {
+    Column({ space: GAP_SM }) {
       Text(label)
-        .fontSize(14)
+        .fontSize(FONT_TEXT)
         .fontColor($r('app.color.text_secondary'))
         .width('100%')
         .textAlign(TextAlign.Start)
@@ -185,7 +196,7 @@ export struct RepairOrderForm {
         })
       if (this.fieldError(name) !== '') {
         Text(this.fieldError(name))
-          .fontSize(13)
+          .fontSize(FONT_NOTE)
           .fontColor($r('app.color.danger'))
           .width('100%')
           .textAlign(TextAlign.Start)
@@ -196,9 +207,9 @@ export struct RepairOrderForm {
   }
 
   build() {
-    Column({ space: 14 }) {
+    Column({ space: GAP_LG }) {
       Text('提交报修')
-        .fontSize(20)
+        .fontSize(FONT_HEADING)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
         .width('100%')
@@ -210,9 +221,9 @@ export struct RepairOrderForm {
       this.labeledInput('设备序列号（选填）', '如 PF2ABCDE', this.deviceSerial, 'deviceSerial', (v: string) => {
         this.deviceSerial = v;
       })
-      Column({ space: 6 }) {
+      Column({ space: GAP_SM }) {
         Text('故障描述（必填）')
-          .fontSize(14)
+          .fontSize(FONT_TEXT)
           .fontColor($r('app.color.text_secondary'))
           .width('100%')
           .textAlign(TextAlign.Start)
@@ -225,7 +236,7 @@ export struct RepairOrderForm {
           })
         if (this.fieldError('faultDescription') !== '') {
           Text(this.fieldError('faultDescription'))
-            .fontSize(13)
+            .fontSize(FONT_NOTE)
             .fontColor($r('app.color.danger'))
             .width('100%')
             .textAlign(TextAlign.Start)
@@ -240,7 +251,7 @@ export struct RepairOrderForm {
 
       if (this.errorText !== '') {
         Text(this.errorText)
-          .fontSize(14)
+          .fontSize(FONT_TEXT)
           .fontColor($r('app.color.danger'))
           .width('100%')
           .textAlign(TextAlign.Start)
@@ -249,7 +260,7 @@ export struct RepairOrderForm {
       Button(this.busy ? '提交中…' : '提交报修')
         .width('100%')
         .height(CONTROL_HEIGHT)
-        .fontSize(17)
+        .fontSize(FONT_SUBTITLE)
         .backgroundColor($r('app.color.brand'))
         .fontColor(Color.White)
         .enabled(!this.busy)
@@ -258,7 +269,7 @@ export struct RepairOrderForm {
         })
     }
     .width('100%')
-    .padding(16)
+    .padding(CARD_PADDING)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
     .alignItems(HorizontalAlign.Start)

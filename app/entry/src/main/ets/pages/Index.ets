@@ -3,7 +3,7 @@ import { roleLabelFor, SessionIdentity } from '../core/auth/AuthContract';
 import { SessionService } from '../core/auth/SessionService';
 import { ApiRequestError } from '../core/network/ApiClient';
 import { ApiConfig } from '../core/network/ApiConfig';
-import { PAGE_PADDING } from '../core/ui/Theme';
+import { CONTROL_HEIGHT_MD, FONT_BODY, FONT_DISPLAY, FONT_TEXT, GAP_LG, PAGE_PADDING } from '../core/ui/Theme';
 import { LoginPage } from '../features/auth/LoginPage';
 import { HomePage } from '../features/home/HomePage';
 
@@ -85,26 +85,26 @@ struct Index {
 
   @Builder
   bootView() {
-    Column({ space: 16 }) {
+    Column({ space: GAP_LG }) {
       Text('鸿蒙电脑医院')
-        .fontSize(30)
+        .fontSize(FONT_DISPLAY)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
       if (this.bootFailed) {
         Text(this.bootText)
-          .fontSize(15)
+          .fontSize(FONT_BODY)
           .fontColor($r('app.color.danger'))
           .width('100%')
           .textAlign(TextAlign.Start)
         Button('重试')
-          .height(44)
+          .height(CONTROL_HEIGHT_MD)
           .backgroundColor($r('app.color.brand'))
           .fontColor(Color.White)
           .onClick(() => {
             this.boot();
           })
         Text('清除本地登录状态并重新登录')
-          .fontSize(14)
+          .fontSize(FONT_TEXT)
           .fontColor($r('app.color.brand'))
           .onClick(() => {
             this.resetToLogin();
@@ -115,7 +115,7 @@ struct Index {
           .height(36)
           .color($r('app.color.brand'))
         Text(this.bootText)
-          .fontSize(15)
+          .fontSize(FONT_BODY)
           .fontColor($r('app.color.text_secondary'))
       }
     }

@@ -1,5 +1,23 @@
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { CARD_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
+import {
+  CARD_GAP,
+  CARD_PADDING,
+  CARD_PADDING_LG,
+  CARD_RADIUS,
+  CHIP_RADIUS,
+  CONTROL_HEIGHT_MD,
+  CONTROL_HEIGHT_SM,
+  FONT_BODY,
+  FONT_CHIP,
+  FONT_HEADING,
+  FONT_NOTE,
+  FONT_SUBTITLE,
+  FONT_TEXT,
+  GAP_LG,
+  GAP_SM,
+  GAP_XS,
+  PAGE_PADDING,
+} from '../../core/ui/Theme';
 import {
   RepairOrderEventView,
   RepairOrderSubmitRequest,
@@ -199,19 +217,19 @@ export struct RepairOrdersPage {
   @Builder
   statusChip(status: string) {
     Text(repairOrderStatusLabel(status))
-      .fontSize(12)
+      .fontSize(FONT_CHIP)
       .fontColor($r('app.color.brand'))
-      .padding({ left: 8, right: 8, top: 3, bottom: 3 })
+      .padding({ left: GAP_SM, right: GAP_SM, top: 3, bottom: 3 })
       .backgroundColor($r('app.color.brand_soft'))
-      .borderRadius(8)
+      .borderRadius(CHIP_RADIUS)
   }
 
   @Builder
   orderCard(order: RepairOrderView) {
-    Column({ space: 8 }) {
-      Row({ space: 8 }) {
+    Column({ space: GAP_SM }) {
+      Row({ space: GAP_SM }) {
         Text(order.deviceModel)
-          .fontSize(16)
+          .fontSize(FONT_SUBTITLE)
           .fontWeight(FontWeight.Medium)
           .fontColor($r('app.color.text_primary'))
           .layoutWeight(1)
@@ -222,7 +240,7 @@ export struct RepairOrdersPage {
       .width('100%')
 
       Text(order.faultDescription)
-        .fontSize(14)
+        .fontSize(FONT_TEXT)
         .fontColor($r('app.color.text_secondary'))
         .maxLines(2)
         .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -230,13 +248,13 @@ export struct RepairOrdersPage {
         .textAlign(TextAlign.Start)
 
       Text(`提交时间 ${formatOrderTime(order.createdAt)}`)
-        .fontSize(12)
+        .fontSize(FONT_CHIP)
         .fontColor($r('app.color.text_secondary'))
         .width('100%')
         .textAlign(TextAlign.Start)
     }
     .width('100%')
-    .padding(16)
+    .padding(CARD_PADDING)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
     .alignItems(HorizontalAlign.Start)
@@ -247,25 +265,25 @@ export struct RepairOrdersPage {
 
   @Builder
   timelineEvent(event: RepairOrderEventView) {
-    Row({ space: 10 }) {
+    Row({ space: GAP_SM }) {
       Text('●')
         .fontSize(10)
         .fontColor($r('app.color.brand'))
-      Column({ space: 4 }) {
+      Column({ space: GAP_XS }) {
         Text(repairOrderStatusLabel(event.toStatus))
-          .fontSize(14)
+          .fontSize(FONT_TEXT)
           .fontColor($r('app.color.text_primary'))
           .width('100%')
           .textAlign(TextAlign.Start)
         if (event.note !== null && event.note !== '') {
           Text(event.note)
-            .fontSize(13)
+            .fontSize(FONT_NOTE)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')
             .textAlign(TextAlign.Start)
         }
         Text(formatOrderTime(event.createdAt))
-          .fontSize(12)
+          .fontSize(FONT_CHIP)
           .fontColor($r('app.color.text_secondary'))
           .width('100%')
           .textAlign(TextAlign.Start)
@@ -279,15 +297,15 @@ export struct RepairOrdersPage {
 
   @Builder
   detailPanel(order: RepairOrderView | null) {
-    Column({ space: 10 }) {
-      Row({ space: 8 }) {
+    Column({ space: GAP_SM }) {
+      Row({ space: GAP_SM }) {
         Text('报修详情')
-          .fontSize(18)
+          .fontSize(FONT_HEADING)
           .fontWeight(FontWeight.Medium)
           .fontColor($r('app.color.text_primary'))
           .layoutWeight(1)
         Text('收起')
-          .fontSize(14)
+          .fontSize(FONT_TEXT)
           .fontColor($r('app.color.brand'))
           .onClick(() => {
             this.closeDetail();
@@ -296,28 +314,28 @@ export struct RepairOrdersPage {
       .width('100%')
 
       if (this.detailLoading) {
-        Column({ space: 8 }) {
+        Column({ space: CARD_GAP }) {
           LoadingProgress()
             .width(28)
             .height(28)
             .color($r('app.color.brand'))
           Text('正在加载详情…')
-            .fontSize(13)
+            .fontSize(FONT_NOTE)
             .fontColor($r('app.color.text_secondary'))
         }
         .width('100%')
-        .padding(20)
+        .padding(CARD_PADDING)
         .justifyContent(FlexAlign.Center)
       } else if (this.detailErrorText !== '') {
-        Column({ space: 12 }) {
+        Column({ space: CARD_GAP }) {
           Text(this.detailErrorText)
-            .fontSize(14)
+            .fontSize(FONT_TEXT)
             .fontColor($r('app.color.danger'))
             .width('100%')
             .textAlign(TextAlign.Center)
           Button('重试')
-            .fontSize(14)
-            .height(40)
+            .fontSize(FONT_TEXT)
+            .height(CONTROL_HEIGHT_MD)
             .backgroundColor($r('app.color.brand'))
             .fontColor(Color.White)
             .onClick(() => {
@@ -325,7 +343,7 @@ export struct RepairOrdersPage {
             })
         }
         .width('100%')
-        .padding(20)
+        .padding(CARD_PADDING)
         .backgroundColor($r('app.color.surface'))
         .borderRadius(CARD_RADIUS)
         .alignItems(HorizontalAlign.Center)
@@ -337,7 +355,7 @@ export struct RepairOrdersPage {
         this.detailRow('故障描述', order.faultDescription)
 
         Text('进度')
-          .fontSize(15)
+          .fontSize(FONT_BODY)
           .fontWeight(FontWeight.Medium)
           .fontColor($r('app.color.text_primary'))
           .width('100%')
@@ -345,7 +363,7 @@ export struct RepairOrdersPage {
 
         if (order.events.length === 0) {
           Text('暂无进度记录')
-            .fontSize(13)
+            .fontSize(FONT_NOTE)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')
             .textAlign(TextAlign.Start)
@@ -357,7 +375,7 @@ export struct RepairOrdersPage {
       }
     }
     .width('100%')
-    .padding(16)
+    .padding(CARD_PADDING)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
     .alignItems(HorizontalAlign.Start)
@@ -365,14 +383,14 @@ export struct RepairOrdersPage {
 
   @Builder
   detailRow(label: string, value: string) {
-    Row({ space: 12 }) {
+    Row({ space: CARD_GAP }) {
       Text(label)
-        .fontSize(13)
+        .fontSize(FONT_NOTE)
         .fontColor($r('app.color.text_secondary'))
         .width(88)
         .textAlign(TextAlign.Start)
       Text(value)
-        .fontSize(14)
+        .fontSize(FONT_TEXT)
         .fontColor($r('app.color.text_primary'))
         .layoutWeight(1)
         .textAlign(TextAlign.Start)
@@ -383,32 +401,32 @@ export struct RepairOrdersPage {
 
   @Builder
   loadingView() {
-    Column({ space: 12 }) {
+    Column({ space: CARD_GAP }) {
       LoadingProgress()
         .width(36)
         .height(36)
         .color($r('app.color.brand'))
       Text('正在加载报修记录…')
-        .fontSize(14)
+        .fontSize(FONT_TEXT)
         .fontColor($r('app.color.text_secondary'))
     }
     .width('100%')
-    .padding(32)
+    .padding(CARD_PADDING_LG)
     .justifyContent(FlexAlign.Center)
   }
 
   @Builder
   emptyView() {
-    Column({ space: 8 }) {
+    Column({ space: GAP_SM }) {
       Text('还没有报修记录')
-        .fontSize(16)
+        .fontSize(FONT_SUBTITLE)
         .fontColor($r('app.color.text_primary'))
       Text('点击上方「我要报修」提交第一条。')
-        .fontSize(13)
+        .fontSize(FONT_NOTE)
         .fontColor($r('app.color.text_secondary'))
     }
     .width('100%')
-    .padding(32)
+    .padding(CARD_PADDING_LG)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
     .alignItems(HorizontalAlign.Center)
@@ -416,15 +434,15 @@ export struct RepairOrdersPage {
 
   @Builder
   errorView() {
-    Column({ space: 12 }) {
+    Column({ space: CARD_GAP }) {
       Text(this.errorText === '' ? '加载失败，请重试' : this.errorText)
-        .fontSize(14)
+        .fontSize(FONT_TEXT)
         .fontColor($r('app.color.danger'))
         .width('100%')
         .textAlign(TextAlign.Center)
       Button('重试')
-        .fontSize(14)
-        .height(40)
+        .fontSize(FONT_TEXT)
+        .height(CONTROL_HEIGHT_MD)
         .backgroundColor($r('app.color.brand'))
         .fontColor(Color.White)
         .onClick(() => {
@@ -432,7 +450,7 @@ export struct RepairOrdersPage {
         })
     }
     .width('100%')
-    .padding(32)
+    .padding(CARD_PADDING_LG)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
     .alignItems(HorizontalAlign.Center)
@@ -443,8 +461,8 @@ export struct RepairOrdersPage {
     if (this.hasMore) {
       Button(this.loadingMore ? '加载中…' : '加载更多')
         .width('100%')
-        .height(42)
-        .fontSize(14)
+        .height(CONTROL_HEIGHT_MD)
+        .fontSize(FONT_TEXT)
         .backgroundColor($r('app.color.surface'))
         .fontColor($r('app.color.brand'))
         .enabled(!this.loadingMore)
@@ -455,18 +473,13 @@ export struct RepairOrdersPage {
   }
 
   build() {
-    Column({ space: 14 }) {
-      // 标题栏：固定在顶部，不随列表滚动
-      Row({ space: 12 }) {
-        Text('我的报修')
-          .fontSize(26)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Start)
+    Column({ space: GAP_LG }) {
+      // 工具栏：页面标题在 NavDestination 标题栏，这里只放报修入口，固定不随列表滚动。
+      Row({ space: CARD_GAP }) {
+        Blank()
         Button(this.showForm ? '取消' : '我要报修')
-          .fontSize(14)
-          .height(38)
+          .fontSize(FONT_TEXT)
+          .height(CONTROL_HEIGHT_SM)
           .backgroundColor($r('app.color.brand_soft'))
           .fontColor($r('app.color.brand'))
           .onClick(() => {
@@ -478,7 +491,7 @@ export struct RepairOrdersPage {
 
       if (this.noticeText !== '') {
         Text(this.noticeText)
-          .fontSize(13)
+          .fontSize(FONT_NOTE)
           .fontColor($r('app.color.ok'))
           .width('100%')
           .textAlign(TextAlign.Start)
@@ -486,7 +499,7 @@ export struct RepairOrdersPage {
 
       // 可滚动内容区：表单、详情、列表都在这里
       Scroll() {
-        Column({ space: 14 }) {
+        Column({ space: GAP_LG }) {
           if (this.showForm) {
             RepairOrderForm({
               onSubmitted: () => this.afterSubmit(),
@@ -512,7 +525,7 @@ export struct RepairOrdersPage {
 
             if (this.loadMoreErrorText !== '') {
               Text(this.loadMoreErrorText)
-                .fontSize(13)
+                .fontSize(FONT_NOTE)
                 .fontColor($r('app.color.danger'))
                 .width('100%')
                 .textAlign(TextAlign.Center)
