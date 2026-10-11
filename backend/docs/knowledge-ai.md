@@ -32,7 +32,8 @@ corepack pnpm dev --port 13080
 | `AI_BASE_URL` | `https://api.deepseek.com` | 回答模型（OpenAI 兼容） |
 | `AI_MODEL` | `deepseek-flash` | 本轮回答模型 |
 | `AI_API_KEY` | 空 | 未配置时问答接口返回 `AI_NOT_CONFIGURED`（503），检索不受影响 |
-| `AI_TIMEOUT_MS` | `45000` | 回答模型单次请求超时；客户端读取超时 60s 留出余量 |
+| `AI_TIMEOUT_MS` | `45000` | 回答模型**单次**请求超时（覆盖到响应体读取完成）；实际生效值 = min(本值, 剩余总预算) |
+| `AI_TOTAL_BUDGET_MS` | `50000` | 一次问答的总预算（从检索前开始计，含向量检索与必要的纠正重试）；默认 50s < 客户端读取超时 60s，避免 App 先超时而后端仍在等待 |
 | `AI_MAX_OUTPUT_TOKENS` | `1000` | 回答输出上限 |
 | `EMBEDDING_BASE_URL` | `https://api.siliconflow.cn/v1` | 向量服务（OpenAI 兼容 `/embeddings`） |
 | `EMBEDDING_MODEL` | `BAAI/bge-m3` | 1024 维 |
@@ -58,6 +59,7 @@ data/knowledge/index/                   生成索引 + embedding 缓存（gitign
 - `corepack pnpm knowledge:index`：校验快照 sha256 → 分段 → 生成/复用向量 → 原子替换索引。
   失败（网络、坏响应、维度不一致）不会覆盖上一份完整索引；embedding 缓存以
   `provider + model + 分段规则版本 + 内容哈希` 为键，未变化的块不重复调用；
+  **每个成功批次校验后立即原子落盘**（中途失败时本轮已生成的批次可续用，重跑不重复调用）；
   provider/model 或缓存维度变化时整体重建，不混用新旧向量；删除的正文不会残留在新索引中。
 
 ## 4. 接口契约（原生 Bearer + `X-Client-Type: native`；沿用 `{success,data|error,meta}` 信封）
@@ -81,7 +83,9 @@ data/knowledge/index/                   生成索引 + embedding 缓存（gitign
   evidenceCount: number,               // 送入模型的授权候选数
   notes: string[]                      // 校验说明（如下调的无效引用编号）
 }
-// Citation: { sourceId, title, docTitle, headingPath[], snippet, originalUrl, revision, visibility, indexVersion }
+// Citation: { sourceId, label, title, docTitle, headingPath[], snippet, originalUrl, revision, visibility, indexVersion }
+// label 是模型在正文中使用的原始引用编号（如 "S2"）；客户端展示时必须使用它，
+// 不得按引用数组下标重新编号（模型可能只引用 S2 或按 S3、S1 的顺序引用）。
 ```
 
 ### POST /api/v1/knowledge/search
@@ -110,13 +114,16 @@ data/knowledge/index/                   生成索引 + embedding 缓存（gitign
   域外问题最高 0.50–0.55；换模型需重新校准）。
 - 融合：RRF（k=20）合并两个排名，不直接相加原始分数。
 - 可见性：排名前过滤——客户请求的语料中根本不含 STAFF 块；来源详情同样按服务端角色检查。
-- 多轮：追问/指代（如「这个怎么检查」）与上一条用户消息拼接后再检索；历史仅作为对话上下文传给模型，
-  并明确告知历史中的编号与结论不是证据；引用编号 S1…Sn 由后端按本次授权候选生成，
-  返回前逐个校验（非法编号丢弃并在 `notes` 说明），URL 一律由后端生成。
+- 多轮：追问/指代（如「这个怎么检查」）会向前解析本次对话的用户消息，拼接最近的问题主题后再检索
+  （连续短追问如「开机黑屏」→「这个怎么检查」→「然后呢」不会丢失原始故障主题；最多拼接 3 条、总长截断）；
+  历史仅作为对话上下文传给模型，并明确告知历史中的编号与结论不是证据；引用编号 S1…Sn 由后端按本次
+  授权候选生成，返回前逐个校验（非法编号丢弃并在 `notes` 说明），并用 `label` 原样返回给客户端；
+  URL 一律由后端生成。
 - 状态：`answer` 必须带有效引用；`clarify` 允许无引用；无候选证据时不调用模型直接返回
   `insufficient_evidence`。模型给出 answer 但无有效引用时：纠正重试一次，仍无则按证据不足处理。
 - 失败：provider 超时/限流/坏响应分别返回 5xx 失败（`AI_PROVIDER_TIMEOUT` / `AI_PROVIDER_ERROR`），
-  **不伪装成「资料不足」**；不自动重试（仅上述纠正场景重试一次）。
+  **不伪装成「资料不足」**；不自动重试（仅上述纠正场景重试一次）。超时覆盖到响应体读取完成
+  （上游「先发响应头、慢发正文」不会绕过超时），且一次问答受 `AI_TOTAL_BUDGET_MS` 总预算约束。
 - 会话与历史只在本轮请求内处理，服务端不持久化聊天；App 侧消息只存内存，离开问答、清空或退出登录即清除。
 
 ## 6. 降级语义（degradation.reason）
@@ -135,8 +142,9 @@ data/knowledge/index/                   生成索引 + embedding 缓存（gitign
 - `KNOWLEDGE_INDEX_UNAVAILABLE`：未建索引或索引损坏/维度不一致 → 重跑 `corepack pnpm knowledge:index`；
   维度不一致说明 embedding 配置变过，需要重建（禁止手工拼接新旧向量）。
 - `AI_NOT_CONFIGURED`：后端 `.env` 缺 `AI_API_KEY`。
-- `AI_PROVIDER_TIMEOUT`：模型 45s 未返回；客户端 60s 读取超时，页面可重试。连续失败先看 provider 状态。
-- `knowledge:index` 中途失败：旧索引保留；embedding 缓存按批写入，重跑续用已成功的块。
+- `AI_PROVIDER_TIMEOUT`：模型单次 45s 未返回、响应体读取超时或总预算（`AI_TOTAL_BUDGET_MS`，默认 50s）
+  用尽；客户端 60s 读取超时，页面可重试。连续失败先看 provider 状态。
+- `knowledge:index` 中途失败：旧索引保留；embedding 缓存每个成功批次已原子落盘，重跑续用已成功的块。
 - `knowledge:sync` 失败：旧快照保留（先写 staging 后原子替换），检查网络与提交号。
 
 ## 8. 本轮验证记录（2026-10-11）
@@ -175,6 +183,24 @@ data/knowledge/index/                   生成索引 + embedding 缓存（gitign
   **未真机验证**；HAP 已构建：英文路径副本
   `E:/codes/pchospital-build/app` 未签名构建成功（entry-default-unsigned.hap）。
   构建成功不等于装机成功。
+
+### 8.1 审查反馈修复记录（PR #47 审查，同日）
+
+审查发现 5 个 P2 问题，已全部修复并补对应回归用例（未扩大测试范围）：
+
+| 问题 | 修复 | 回归用例 |
+| --- | --- | --- |
+| 正文 [Sx] 编号在 API→App 间丢失（App 按数组下标重编号） | `Citation.label` 原样返回模型使用的编号（后端由 `parseModelOutput` 白名单校验后透传）；App 引用卡显示 `[label]` | `knowledge-chat.test.ts`「引用编号契约」2 例（单个非 S1、乱序 S3→S1，映射与检索候选顺序比对）；真实 API 复核 1 次 |
+| 超时只覆盖响应头，正文读取可无限等待 | `callChatModel`/`embedding.requestBatch` 的 AbortController 定时器覆盖到 `response.json()` 完成，读取阶段 AbortError 映射为 timeout；新增 `AI_TOTAL_BUDGET_MS`（默认 50s）总预算，单次调用超时 = min(AI_TIMEOUT_MS, 剩余预算)，预算耗尽按 `AI_PROVIDER_TIMEOUT` 返回 | `knowledge-provider-timeout.test.ts` 4 例（fetch 桩：头立即返回/正文延迟时必须超时且 abort 上游；正文在超时内正常返回）；`knowledge-chat.test.ts` 总预算 1 例（超时压缩、预算不足不重试） |
+| 连续短追问丢失原始故障主题 | `buildRetrievalQuery` 向前解析用户消息，最多拼接 3 条并截断（含主题的一条为锚点） | `knowledge-chat.test.ts`「连续短追问保留更早的原始故障主题」1 例；真实 API 复核 1 次（两轮短追问后 evidenceCount=6） |
+| 重试旧失败消息打乱顺序、二次失败后按钮失效 | 新增 `KnowledgeFlow.ts` 纯函数：回答一律插到对应问题之后（`insertAfterUser`），重试定位原问题消息（`retryUserIndex`，前一条不是用户消息则拒绝）；App 页面与用例共用同一实现 | `knowledge-app-flow.test.ts` 3 例（A 失败→B 成功→重试 A 顺序正确；二次失败仍可重试；结构不符拒绝发送） |
+| 建索引中途失败丢本轮成功批次，重跑重复付费 | 抽出 `index-embedding.ts`：每个成功批次校验后原子落盘缓存；完整索引仍待全量成功才替换 | `knowledge-index-embedding.test.ts` 3 例（第 2 批失败后前 16 块已落盘、重跑只请求缺失 4 块；不兼容缓存整体丢弃；维度不一致批次不写入） |
+
+第二轮验证（2026-10-11，同一环境）：`pnpm lint` 0 warning；`pnpm test:unit` **369/369 通过**
+（较第一轮 355 项新增 14 项回归用例）；`pnpm build` 通过。真实 API 复核 2 次 `/knowledge/chat`：
+引用编号契约（answer，5 条引用 label=S1…S5，hybrid）；连续短追问（「然后呢」在两条短追问之后仍
+检索到原始黑屏主题，evidenceCount=6，模型按文档流程追问指示灯/风扇现象）。
+HAP 已按本轮 App 改动重建成功（同上英文路径副本，未签名；无设备，仍未真机验证）。
 
 ## 9. 已知限制与后续依赖
 
