@@ -84,6 +84,12 @@ export const ApiErrorCode = [
   "ACTIVITY_REGISTRATION_STATE_INVALID",
   "ACTIVITY_CATEGORY_MISSING",
   "ACTIVITY_CONSENT_REQUIRED",
+  // Issue #39 知识问答：索引/引用状态与回答模型失败（provider 故障不伪装成“资料不足”）
+  "KNOWLEDGE_INDEX_UNAVAILABLE",
+  "KNOWLEDGE_SOURCE_NOT_FOUND",
+  "AI_NOT_CONFIGURED",
+  "AI_PROVIDER_TIMEOUT",
+  "AI_PROVIDER_ERROR",
   "INTERNAL_ERROR",
 ] as const;
 
@@ -179,6 +185,14 @@ const defaultStatus: Record<ApiErrorCode, number> = {
   ACTIVITY_CATEGORY_MISSING: 500,
   // 400 而不是 409：请求本身缺了「已同意」这一项，不是系统状态不允许。
   ACTIVITY_CONSENT_REQUIRED: 400,
+  // Issue #39：索引未构建/损坏用 503 让客户端提示“稍后重试/联系维护者”；
+  // 引用不存在或已过期（含越权不可见）用 404，不泄露内部资料存在性。
+  KNOWLEDGE_INDEX_UNAVAILABLE: 503,
+  KNOWLEDGE_SOURCE_NOT_FOUND: 404,
+  AI_NOT_CONFIGURED: 503,
+  // 504/502 区分“模型超时”与“模型其他故障”，客户端可分别提示重试。
+  AI_PROVIDER_TIMEOUT: 504,
+  AI_PROVIDER_ERROR: 502,
   INTERNAL_ERROR: 500,
 };
 export class AppError extends Error {
