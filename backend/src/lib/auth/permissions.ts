@@ -1,6 +1,25 @@
 import { AppError } from "@/lib/api/errors";
 import type { AuthorizedActor, Permission, RoleCode } from "@/types/contracts";
 
+/**
+ * 客户基础权限（Issue #37）。
+ *
+ * 客户在本模型里是**没有 `MEMBER` / `ADMIN` 角色的普通账号**，`roles` 为空数组。
+ * 若只按角色取权限，客户将得到空集、被 `requirePermission` 全拒，
+ * 因此这里为「无角色」这一情形单独定义一份最小权限：只能操作**自己的**报修单。
+ *
+ * 数据归属不靠权限码保证：`repair.order:read` 只表示「可读报修单」，
+ * 「只能读本人」由 repair-order-policy 按 `submittedByUserId` 逐条校验。
+ * 这样 MEMBER / ADMIN 也能复用同一个权限码读全部单据（#38 处理报修用）。
+ *
+ * ⚠️ 保持 `roles` 响应仍为 `[]`（方案 B），不新增 `CUSTOMER` 角色码，
+ * 以免改变 Issue #36 已验收的登录响应契约。
+ */
+export const customerPermissions: readonly Permission[] = [
+  "repair.order:create",
+  "repair.order:read",
+];
+
 export const rolePermissions: Readonly<Record<RoleCode, readonly Permission[]>> = {
   MEMBER: [
     "invite:redeem",
@@ -18,6 +37,9 @@ export const rolePermissions: Readonly<Record<RoleCode, readonly Permission[]>> 
     "notification:read",
     "analytics:read_internal",
     "activity:staff",
+    // 工作人员需要看客户报修单才能受理（#38）；本 Issue 只用到读。
+    "repair.order:create",
+    "repair.order:read",
   ],
   ADMIN: [
     "join:read",
@@ -54,10 +76,18 @@ export const rolePermissions: Readonly<Record<RoleCode, readonly Permission[]>> 
     "settings:manage",
     "activity:admin",
     "activity:staff",
+    // 管理员处理客户报修（#38）；本 Issue 只用到读。
+    "repair.order:create",
+    "repair.order:read",
   ],
 };
 
+/**
+ * 角色 → 权限。**无角色即客户**（方案 B，2026-10-10 用户拍板）：
+ * 空角色数组返回客户基础权限，而不是空集。
+ */
 export function permissionsForRoles(roles: readonly RoleCode[]): Permission[] {
+  if (roles.length === 0) return [...customerPermissions];
   return [...new Set(roles.flatMap((role) => rolePermissions[role]))];
 }
 

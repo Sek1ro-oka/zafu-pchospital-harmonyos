@@ -6,6 +6,8 @@ export interface ApiMeta {
 export interface ApiErrorBody {
   code: string;
   message: string;
+  /** 字段级错误：键为字段名，值为该字段的错误文案列表（后端 VALIDATION_FAILED 返回）。 */
+  fieldErrors?: Record<string, string[]>;
 }
 
 export interface ApiSuccess<T> {
