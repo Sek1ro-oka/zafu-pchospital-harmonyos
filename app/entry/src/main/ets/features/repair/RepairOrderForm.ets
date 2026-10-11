@@ -1,6 +1,18 @@
 import { util } from '@kit.ArkTS';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS } from '../../core/ui/Theme';
+import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
+import {
+  CARD_PADDING,
+  CARD_RADIUS,
+  CONTROL_HEIGHT,
+  CONTROL_RADIUS,
+  FONT_HEADING,
+  FONT_NOTE,
+  FONT_SUBTITLE,
+  FONT_TEXT,
+  GAP_LG,
+  GAP_SM,
+} from '../../core/ui/Theme';
 import {
   REPAIR_ORDER_LIMITS,
   RepairOrderSubmitRequest,
@@ -158,7 +170,10 @@ export struct RepairOrderForm {
         const serverFields = this.readServerFieldErrors(error);
         this.fieldErrors = serverFields;
         // 服务端给出的字段级提示已经足够具体时，不再叠一句笼统的总错误。
-        this.errorText = Object.keys(serverFields).length > 0 ? '' : error.message;
+        // 网络错误补一句排查引导，业务错误直接用后端信封文案，两类提示可区分。
+        this.errorText = Object.keys(serverFields).length > 0
+          ? ''
+          : (isNetworkErrorCode(error.code) ? `${error.message}（请检查网络与服务器地址后重试）` : error.message);
         // 失败时不换键：用户重试仍带同一个 Idempotency-Key，服务端会去重。
       } else {
         this.errorText = '提交失败，请重试';
@@ -170,9 +185,9 @@ export struct RepairOrderForm {
 
   @Builder
   labeledInput(label: string, placeholder: string, value: string, name: string, onChange: (v: string) => void) {
-    Column({ space: 6 }) {
+    Column({ space: GAP_SM }) {
       Text(label)
-        .fontSize(14)
+        .fontSize(FONT_TEXT)
         .fontColor($r('app.color.text_secondary'))
         .width('100%')
         .textAlign(TextAlign.Start)
@@ -185,7 +200,7 @@ export struct RepairOrderForm {
         })
       if (this.fieldError(name) !== '') {
         Text(this.fieldError(name))
-          .fontSize(13)
+          .fontSize(FONT_NOTE)
           .fontColor($r('app.color.danger'))
           .width('100%')
           .textAlign(TextAlign.Start)
@@ -196,9 +211,9 @@ export struct RepairOrderForm {
   }
 
   build() {
-    Column({ space: 14 }) {
+    Column({ space: GAP_LG }) {
       Text('提交报修')
-        .fontSize(20)
+        .fontSize(FONT_HEADING)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
         .width('100%')
@@ -210,9 +225,9 @@ export struct RepairOrderForm {
       this.labeledInput('设备序列号（选填）', '如 PF2ABCDE', this.deviceSerial, 'deviceSerial', (v: string) => {
         this.deviceSerial = v;
       })
-      Column({ space: 6 }) {
+      Column({ space: GAP_SM }) {
         Text('故障描述（必填）')
-          .fontSize(14)
+          .fontSize(FONT_TEXT)
           .fontColor($r('app.color.text_secondary'))
           .width('100%')
           .textAlign(TextAlign.Start)
@@ -225,7 +240,7 @@ export struct RepairOrderForm {
           })
         if (this.fieldError('faultDescription') !== '') {
           Text(this.fieldError('faultDescription'))
-            .fontSize(13)
+            .fontSize(FONT_NOTE)
             .fontColor($r('app.color.danger'))
             .width('100%')
             .textAlign(TextAlign.Start)
@@ -239,26 +254,37 @@ export struct RepairOrderForm {
       })
 
       if (this.errorText !== '') {
+        // 提交/网络失败的就地提示：文案已含排查引导，下方按钮即为重试入口。
         Text(this.errorText)
-          .fontSize(14)
+          .fontSize(FONT_TEXT)
           .fontColor($r('app.color.danger'))
           .width('100%')
           .textAlign(TextAlign.Start)
       }
 
-      Button(this.busy ? '提交中…' : '提交报修')
-        .width('100%')
-        .height(CONTROL_HEIGHT)
-        .fontSize(17)
-        .backgroundColor($r('app.color.brand'))
-        .fontColor(Color.White)
-        .enabled(!this.busy)
-        .onClick(() => {
-          this.handleSubmit();
-        })
+      Button() {
+        Row({ space: GAP_SM }) {
+          if (this.busy) {
+            LoadingProgress()
+              .width(18)
+              .height(18)
+              .color(Color.White)
+          }
+          Text(this.busy ? '提交中…' : (this.errorText !== '' ? '重试提交' : '提交报修'))
+            .fontSize(FONT_SUBTITLE)
+            .fontColor(Color.White)
+        }
+      }
+      .width('100%')
+      .height(CONTROL_HEIGHT)
+      .backgroundColor($r('app.color.brand'))
+      .enabled(!this.busy)
+      .onClick(() => {
+        this.handleSubmit();
+      })
     }
     .width('100%')
-    .padding(16)
+    .padding(CARD_PADDING)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
     .alignItems(HorizontalAlign.Start)
