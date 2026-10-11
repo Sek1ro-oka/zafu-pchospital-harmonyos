@@ -6,11 +6,13 @@ export const MAX_HISTORY_MESSAGES: number = 8;
 export const MAX_MESSAGE_CHARS: number = 2000;
 export const MAX_QUESTION_CHARS: number = 1000;
 export const MAX_TOTAL_HISTORY_CHARS: number = 8000;
-/** AI 请求的读取超时：后端模型超时上限 45s，这里留出余量。 */
+/** AI 请求的读取超时：后端一次问答总预算默认 50s（AI_TOTAL_BUDGET_MS），这里留出余量。 */
 export const CHAT_READ_TIMEOUT_MS: number = 60000;
 
 export interface KnowledgeCitation {
   sourceId: string;
+  /** 与正文 [Sx] 标注对应的编号（如 "S2"）：引用卡必须显示它，不能按数组下标重新编号。 */
+  label: string;
   title: string;
   docTitle: string;
   headingPath: string[];
