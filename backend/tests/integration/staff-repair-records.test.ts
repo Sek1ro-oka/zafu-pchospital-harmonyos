@@ -274,6 +274,85 @@ dbTest("并发建档：并发请求只落一份备案且没有孤立记录", asy
   );
 });
 
+dbTest("幂等键跨报修隔离：复用其他报修单的键返回冲突且不建立关联", async () => {
+  const staffA = await bearerFor(STAFF_A_ID);
+  const orderA = await newAcceptedOrder();
+  const key = `it-${randomUUID()}`;
+  const createdA = await createRecordAs(staffA, orderA, key);
+  assert.equal(createdA.status, 201, JSON.stringify(createdA.json));
+  const recordAId = dataOf(createdA.json).id as string;
+
+  // 同一受理人对另一台机器复用 A 的键：不能把 A 的备案当成 B 的结果返回。
+  const orderB = await newAcceptedOrder();
+  const reused = await createRecordAs(staffA, orderB, key);
+  assert.equal(reused.status, 409, JSON.stringify(reused.json));
+  assert.equal(errorCodeOf(reused.json), "IDEMPOTENCY_CONFLICT");
+
+  const orderBRow = await getDb().repairOrder.findUniqueOrThrow({ where: { id: orderB } });
+  assert.equal(orderBRow.repairRecordId, null, "冲突返回后 B 不能留下关联");
+  assert.equal(
+    await getDb().repairRecord.count({ where: { createRequestKey: key } }),
+    1,
+    "键仍只对应 A 的那一份备案",
+  );
+  const orderARow = await getDb().repairOrder.findUniqueOrThrow({ where: { id: orderA } });
+  assert.equal(orderARow.repairRecordId, recordAId, "A 的关联原样保留");
+
+  // 换新键后 B 正常建档。
+  const fresh = await createRecordAs(staffA, orderB, `it-${randomUUID()}`);
+  assert.equal(fresh.status, 201, JSON.stringify(fresh.json));
+  const orderBAfter = await getDb().repairOrder.findUniqueOrThrow({ where: { id: orderB } });
+  assert.equal(orderBAfter.repairRecordId, dataOf(fresh.json).id);
+});
+
+dbTest("取消与建档并发：取消先提交时建档被拒且不留关联与孤立记录", async () => {
+  const orderId = await newAcceptedOrder();
+  const staffA = await bearerFor(STAFF_A_ID);
+  const key = `it-${randomUUID()}`;
+  const db = getDb();
+
+  // 用独立连接锁住订单行，让建档请求完成外层检查后阻塞在事务内读取上；
+  // 期间把订单改成 CANCELLED 并提交——精确复现「检查之后管理员先取消」的时序。
+  let releaseLock: () => void = () => {};
+  const lockReleased = new Promise<void>((resolve) => {
+    releaseLock = resolve;
+  });
+  let notifyLocked: () => void = () => {};
+  const lockAcquired = new Promise<void>((resolve) => {
+    notifyLocked = resolve;
+  });
+  const holder = db.$transaction(
+    async (tx) => {
+      await tx.$queryRaw`SELECT id FROM repair_orders WHERE id = ${orderId} FOR UPDATE`;
+      notifyLocked();
+      await lockReleased;
+      await tx.repairOrder.update({
+        where: { id: orderId },
+        data: { status: "CANCELLED", updatedAt: new Date() },
+      });
+    },
+    { timeout: 10_000 },
+  );
+
+  await lockAcquired;
+  const createPromise = createRecordAs(staffA, orderId, key);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  releaseLock();
+  await holder;
+
+  const response = await createPromise;
+  assert.equal(response.status, 409, JSON.stringify(response.json));
+  assert.equal(errorCodeOf(response.json), "REPAIR_ORDER_STATE_INVALID");
+  const orderRow = await getDb().repairOrder.findUniqueOrThrow({ where: { id: orderId } });
+  assert.equal(orderRow.status, "CANCELLED");
+  assert.equal(orderRow.repairRecordId, null, "取消后的单不能留下备案关联");
+  assert.equal(
+    await getDb().repairRecord.count({ where: { createRequestKey: key } }),
+    0,
+    "事务回滚后不能留下孤立记录",
+  );
+});
+
 dbTest("编辑规则：版本冲突 409；仅本人可编辑，管理员不能改别人的草稿", async () => {
   const orderId = await newAcceptedOrder();
   const staffA = await bearerFor(STAFF_A_ID);

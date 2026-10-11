@@ -77,7 +77,6 @@ export struct StaffRepairRecordPage {
   @State repairDate: string = '';
   @State durationText: string = '';
   @State categoryId: string = '';
-  @State deviceModel: string = '';
   @State content: string = '';
   @State result: string = '';
   @State remark: string = '';
@@ -90,7 +89,13 @@ export struct StaffRepairRecordPage {
     this.load();
   }
 
-  private async load(): Promise<void> {
+  /**
+   * 加载备案。
+   *
+   * `preserveEdits` 为 true 时只更新服务端权威状态（照片/状态/版本），
+   * 保留页面上尚未保存的编辑缓冲——照片上传/删除后不整表覆盖用户输入。
+   */
+  private async load(preserveEdits: boolean = false): Promise<void> {
     if (this.param.recordId === '') {
       this.loading = false;
       this.errorText = '缺少备案编号';
@@ -98,14 +103,21 @@ export struct StaffRepairRecordPage {
     }
     this.generation = this.generation + 1;
     const generation = this.generation;
-    this.loading = true;
+    if (!preserveEdits) {
+      this.loading = true;
+    }
     this.errorText = '';
     try {
       const record = await RepairRecordService.detail(this.param.recordId);
       if (generation !== this.generation) {
         return;
       }
-      this.applyRecord(record);
+      if (preserveEdits && this.record !== null) {
+        this.record = record;
+        this.clearFieldError('photos');
+      } else {
+        this.applyRecord(record);
+      }
       if (this.categories.length === 0) {
         const categories = await RepairRecordService.categories();
         if (generation !== this.generation) {
@@ -131,11 +143,15 @@ export struct StaffRepairRecordPage {
     this.repairDate = record.repairDate === null ? '' : record.repairDate;
     this.durationText = record.durationMinutes === null ? '' : `${record.durationMinutes}`;
     this.categoryId = record.category === null ? '' : record.category.id;
-    this.deviceModel = record.deviceModel === null ? '' : record.deviceModel;
     this.content = record.content === null ? '' : record.content;
     this.result = record.result === null ? '' : record.result;
     this.remark = record.remark === null ? '' : record.remark;
     this.fieldErrors = {};
+  }
+
+  /** 保存/提交/上传/删除互斥：任一写操作进行中都不再发起另一个，避免交错请求互相覆盖。 */
+  private isBusy(): boolean {
+    return this.saving || this.submitting || this.uploading || this.deletingPhotoId !== '';
   }
 
   private isSessionExpired(error: Object): boolean {
@@ -247,7 +263,7 @@ export struct StaffRepairRecordPage {
 
   private async saveDraft(): Promise<void> {
     const record = this.record;
-    if (record === null || this.saving || this.submitting || this.uploading) {
+    if (record === null || this.isBusy()) {
       return;
     }
     const local = this.localFieldErrorsForSave();
@@ -272,7 +288,7 @@ export struct StaffRepairRecordPage {
 
   private async submitForReview(): Promise<void> {
     const record = this.record;
-    if (record === null || this.saving || this.submitting || this.uploading) {
+    if (record === null || this.isBusy()) {
       return;
     }
     const local = this.localSubmitErrors();
@@ -319,7 +335,7 @@ export struct StaffRepairRecordPage {
 
   private async addPhotos(): Promise<void> {
     const record = this.record;
-    if (record === null || this.uploading) {
+    if (record === null || this.isBusy()) {
       return;
     }
     this.actionError = '';
@@ -360,7 +376,7 @@ export struct StaffRepairRecordPage {
     this.uploading = true;
     try {
       await RepairRecordService.uploadPhotos(record.id, accepted);
-      await this.load();
+      await this.load(true);
       this.noticeText = `已上传 ${accepted.length} 张照片。`;
       this.bumpRecordRevision();
     } catch (error) {
@@ -372,7 +388,7 @@ export struct StaffRepairRecordPage {
 
   private async removePhoto(photoId: string): Promise<void> {
     const record = this.record;
-    if (record === null || this.deletingPhotoId !== '') {
+    if (record === null || this.isBusy()) {
       return;
     }
     this.actionError = '';
@@ -380,7 +396,7 @@ export struct StaffRepairRecordPage {
     this.deletingPhotoId = photoId;
     try {
       await RepairRecordService.removePhoto(record.id, photoId);
-      await this.load();
+      await this.load(true);
       this.noticeText = '照片已删除。';
       this.bumpRecordRevision();
     } catch (error) {
@@ -630,13 +646,23 @@ export struct StaffRepairRecordPage {
 
       Column({ space: 6 }) {
         this.fieldLabel('设备机型')
-        TextInput({ text: this.deviceModel, placeholder: '如 ThinkPad X1 Carbon' })
-          .height(CONTROL_HEIGHT)
-          .backgroundColor($r('app.color.field_bg'))
-          .borderRadius(CONTROL_RADIUS)
-          .onChange((next: string) => {
-            this.deviceModel = next;
-          })
+        Row() {
+          Text(record.deviceModel === null || record.deviceModel === '' ? '未填写' : record.deviceModel)
+            .fontSize(15)
+            .fontColor($r('app.color.text_primary'))
+            .layoutWeight(1)
+            .textAlign(TextAlign.Start)
+        }
+        .width('100%')
+        .height(CONTROL_HEIGHT)
+        .padding({ left: 12, right: 12 })
+        .backgroundColor($r('app.color.field_bg'))
+        .borderRadius(CONTROL_RADIUS)
+        Text('机型取自报修单，备案内不可修改。')
+          .fontSize(12)
+          .fontColor($r('app.color.text_secondary'))
+          .width('100%')
+          .textAlign(TextAlign.Start)
       }
       .width('100%')
       .alignItems(HorizontalAlign.Start)
@@ -959,7 +985,7 @@ export struct StaffRepairRecordPage {
                     .fontSize(17)
                     .backgroundColor($r('app.color.brand'))
                     .fontColor(Color.White)
-                    .enabled(!this.submitting && !this.saving && !this.uploading)
+                    .enabled(!this.isBusy())
                     .onClick(() => {
                       this.submitForReview();
                     })
@@ -969,7 +995,7 @@ export struct StaffRepairRecordPage {
                     .fontSize(16)
                     .backgroundColor($r('app.color.brand_soft'))
                     .fontColor($r('app.color.brand'))
-                    .enabled(!this.submitting && !this.saving && !this.uploading)
+                    .enabled(!this.isBusy())
                     .onClick(() => {
                       this.saveDraft();
                     })

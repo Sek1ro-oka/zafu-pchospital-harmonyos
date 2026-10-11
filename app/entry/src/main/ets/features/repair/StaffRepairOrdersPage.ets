@@ -65,6 +65,9 @@ export struct StaffRepairOrdersPage {
     this.errorText = '';
     this.loadMoreErrorText = '';
     this.currentPage = 1;
+    // 新列表代重置分页状态：旧代的 loadMore 在 finally 里不再回写本代，
+    // 若这里不清掉，刷新/切换范围后按钮会永远停在「加载中…」。
+    this.loadingMore = false;
     try {
       const items = await StaffRepairOrderService.queue(this.scope, '', 1);
       if (generation !== this.generation) {

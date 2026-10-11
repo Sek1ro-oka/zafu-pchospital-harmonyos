@@ -21,6 +21,9 @@ const IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 /** 推进接口只接受这两个目标：受理走 accept，取消走 cancel（说明必填）。 */
 const PROGRESS_TARGETS: readonly StaffProgressTarget[] = ["REPAIRING", "COMPLETED"];
 
+/** 建档允许关联的订单状态，与 `repairOrderStaffActions.canCreateRecord` 保持一致。 */
+const RECORD_LINKABLE_STATUSES: readonly string[] = ["ACCEPTED", "REPAIRING", "COMPLETED"];
+
 function normalizeNote(note: string | undefined): string | null {
   const trimmed = note?.trim() ?? "";
   if (trimmed === "") return null;
@@ -265,8 +268,32 @@ export const repairOrderStaffService = {
       if (existing) {
         if (existing.memberProfileId !== member.id || existing.deletedAt)
           throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已被使用");
+        // 幂等回放必须属于当前报修单：同一键曾被其他报修单用来建档时，
+        // 直接返回那份备案会把调用者带到另一台机器的记录上，且本单仍无关联。
+        const replayOrder = await tx.repairOrder.findUnique({
+          where: { id },
+          select: { repairRecordId: true, deletedAt: true },
+        });
+        if (!replayOrder || replayOrder.deletedAt)
+          throw new AppError("REPAIR_ORDER_NOT_FOUND", "报修单不存在");
+        if (replayOrder.repairRecordId !== existing.id)
+          throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已被其他报修单使用");
         return existing;
       }
+      // 事务内重读订单：外层检查之后管理员可能已取消、归属可能已变化。
+      // 这里给出准确错误，下面的条件更新再做原子兜底。
+      const fresh = await tx.repairOrder.findUnique({
+        where: { id },
+        select: { status: true, assigneeMemberProfileId: true, repairRecordId: true, deletedAt: true },
+      });
+      if (!fresh || fresh.deletedAt)
+        throw new AppError("REPAIR_ORDER_NOT_FOUND", "报修单不存在");
+      if (fresh.repairRecordId)
+        throw new AppError("REPAIR_ORDER_STATE_CONFLICT", "该报修单已关联维修备案");
+      if (fresh.assigneeMemberProfileId !== member.id)
+        throw new AppError("REPAIR_FORBIDDEN", "只有受理人可以为该报修单建立备案");
+      if (fresh.status === "CANCELLED")
+        throw new AppError("REPAIR_ORDER_STATE_INVALID", "已取消的报修单不能建立备案");
       const recordId = randomUUID();
       await tx.repairRecord.create({
         data: {
@@ -285,13 +312,20 @@ export const repairOrderStaffService = {
           createdAt: now,
         },
       });
+      // 只允许受理人本人的可处理状态订单建立关联：事务取消后状态不匹配即回滚，
+      // 不会给已取消的订单新建备案，也不留孤立记录。
       const linked = await tx.repairOrder.updateMany({
-        where: { id, repairRecordId: null, deletedAt: null },
+        where: {
+          id,
+          repairRecordId: null,
+          deletedAt: null,
+          assigneeMemberProfileId: member.id,
+          status: { in: [...RECORD_LINKABLE_STATUSES] },
+        },
         data: { repairRecordId: recordId, updatedAt: now },
       });
-      // 并发生成了另一份备案：整个事务回滚，不留下未关联的孤立记录。
       if (linked.count !== 1)
-        throw new AppError("REPAIR_ORDER_STATE_CONFLICT", "该报修单已关联其他维修备案");
+        throw new AppError("REPAIR_ORDER_STATE_CONFLICT", "报修单状态已变化，请刷新后重试");
       await timeline(tx, recordId, actor.userId, "CREATED", { status: "DRAFT", source: "repair_order" }, now);
       return tx.repairRecord.findUniqueOrThrow({
         where: { id: recordId },

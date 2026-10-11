@@ -53,13 +53,14 @@ export struct AdminRepairReviewPage {
   @State previewPhotoId: string = '';
   private listGeneration: number = 0;
   private detailGeneration: number = 0;
-  /** 审核幂等键：各自重试复用，成功后换新；换一种决定用另一个键。 */
-  private approveKey: string = '';
-  private rejectKey: string = '';
+  /**
+   * 审核幂等键按备案隔离：同一次「结果不确定」的重试复用同一键（服务端回放），
+   * 换备案必须换键；审核成功后作废，重新提交再审核时用新键。
+   */
+  private approveKeys: Map<string, string> = new Map<string, string>();
+  private rejectKeys: Map<string, string> = new Map<string, string>();
 
   aboutToAppear(): void {
-    this.approveKey = `app-approve-${util.generateRandomUUID(true)}`;
-    this.rejectKey = `app-reject-${util.generateRandomUUID(true)}`;
     this.load();
   }
 
@@ -70,6 +71,9 @@ export struct AdminRepairReviewPage {
     this.errorText = '';
     this.loadMoreErrorText = '';
     this.currentPage = 1;
+    // 新列表代重置分页状态：旧代的 loadMore 在 finally 里不再回写本代，
+    // 若这里不清掉，刷新/切换范围后按钮会永远停在「加载中…」。
+    this.loadingMore = false;
     try {
       const items = await RepairReviewService.pendingRecords(1);
       if (generation !== this.listGeneration) {
@@ -177,6 +181,28 @@ export struct AdminRepairReviewPage {
     this.rejectNote = '';
   }
 
+  /** 发起时记录上下文是否仍是当前展示的详情（收起或切到另一条后为 false）。 */
+  private isSameDetailContext(recordId: string, generation: number): boolean {
+    return this.detailTargetId === recordId && this.detailGeneration === generation;
+  }
+
+  /** 该备案该决定的幂等键：不存在则生成；结果不确定的重试复用同一键。 */
+  private reviewKey(decision: string, recordId: string): string {
+    const store = decision === 'APPROVED' ? this.approveKeys : this.rejectKeys;
+    let key = store.get(recordId);
+    if (key === undefined) {
+      const prefix = decision === 'APPROVED' ? 'app-approve' : 'app-reject';
+      key = `${prefix}-${util.generateRandomUUID(true)}`;
+      store.set(recordId, key);
+    }
+    return key;
+  }
+
+  private clearReviewKeys(recordId: string): void {
+    this.approveKeys.delete(recordId);
+    this.rejectKeys.delete(recordId);
+  }
+
   private async submitReview(decision: string): Promise<void> {
     const detail = this.detail;
     if (detail === null || this.reviewBusy) {
@@ -186,23 +212,25 @@ export struct AdminRepairReviewPage {
       this.reviewError = '退回必须填写原因';
       return;
     }
+    // 审核操作绑定发起时的备案与详情代次：完成后只改写仍属于该上下文的 UI，
+    // 迟到的响应不会把当前查看的另一条详情覆盖回去，也不清掉它的退回输入。
+    const recordId = detail.id;
+    const generation = this.detailGeneration;
     this.reviewBusy = true;
     this.reviewError = '';
     this.noticeText = '';
     try {
-      const key = decision === 'APPROVED' ? this.approveKey : this.rejectKey;
+      const key = this.reviewKey(decision, recordId);
       const note = decision === 'REJECTED' ? this.rejectNote.trim() : '';
-      await RepairReviewService.review(detail.id, decision, note, key);
-      if (decision === 'APPROVED') {
-        this.approveKey = `app-approve-${util.generateRandomUUID(true)}`;
-      } else {
-        this.rejectKey = `app-reject-${util.generateRandomUUID(true)}`;
+      await RepairReviewService.review(recordId, decision, note, key);
+      this.clearReviewKeys(recordId);
+      if (this.isSameDetailContext(recordId, generation)) {
+        this.rejectOpen = false;
+        this.rejectNote = '';
+        this.noticeText = decision === 'APPROVED' ? '已通过该备案。' : '已退回该备案。';
+        // 审核后刷新详情（显示终态），再刷新列表（移除已处理项）。
+        await this.fetchDetail(recordId);
       }
-      this.rejectOpen = false;
-      this.rejectNote = '';
-      this.noticeText = decision === 'APPROVED' ? '已通过该备案。' : '已退回该备案。';
-      // 审核后刷新列表与详情：详情显示终态，列表移除已处理项。
-      await this.fetchDetail(detail.id);
       await this.load();
     } catch (error) {
       if (error instanceof ApiRequestError) {
@@ -210,12 +238,20 @@ export struct AdminRepairReviewPage {
           this.onSessionExpired();
           return;
         }
-        this.reviewError = error.message;
+        if (error.code === 'IDEMPOTENCY_CONFLICT') {
+          // 键已绑定到不同内容（正常流程下不会发生）：换键后允许重新发起。
+          this.clearReviewKeys(recordId);
+        }
+        if (this.isSameDetailContext(recordId, generation)) {
+          this.reviewError = error.message;
+        }
         if (error.code === 'REPAIR_STATE_CONFLICT' || error.code === 'IDEMPOTENCY_CONFLICT') {
-          await this.fetchDetail(detail.id);
+          if (this.isSameDetailContext(recordId, generation)) {
+            await this.fetchDetail(recordId);
+          }
           await this.load();
         }
-      } else {
+      } else if (this.isSameDetailContext(recordId, generation)) {
         this.reviewError = '审核失败，请重试';
       }
     } finally {
