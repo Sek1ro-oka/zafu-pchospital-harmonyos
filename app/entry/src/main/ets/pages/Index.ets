@@ -22,6 +22,7 @@ struct Index {
   @State displayName: string = '';
   @State roleText: string = '';
   @State home: string = '';
+  @State permissions: string[] = [];
   @State bootText: string = '正在恢复登录状态…';
   @State bootFailed: boolean = false;
 
@@ -59,6 +60,7 @@ struct Index {
     this.displayName = name;
     this.roleText = roleLabelFor(identity.roles);
     this.home = identity.home;
+    this.permissions = identity.permissions;
     this.phase = PHASE_HOME;
   }
 
@@ -141,6 +143,7 @@ struct Index {
         displayName: this.displayName,
         roleText: this.roleText,
         home: this.home,
+        permissions: this.permissions,
         onLogout: () => this.handleLogout(),
         onSessionExpired: () => this.handleSessionExpired()
       })

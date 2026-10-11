@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { clientIp } from "../../src/lib/api/client-ip";
 import { AppError } from "../../src/lib/api/errors";
-import { assertSameOrigin } from "../../src/lib/auth/request";
+import { assertSameOrigin, assertWriteAccess } from "../../src/lib/auth/request";
 import { resetServerEnvForTests } from "../../src/lib/env";
 
 const REQUIRED_ENV = {
@@ -113,6 +113,67 @@ test("APP_BASE_URL 非法时显式报配置错误，而不是静默放行", () =
     assert.throws(
       () => assertSameOrigin(request({ origin: "https://pczafu.cn" })),
       (error) => error instanceof AppError && error.code === "INTERNAL_ERROR",
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #38：写接口按令牌来源分流（assertWriteAccess）
+// ---------------------------------------------------------------------------
+
+test("Bearer + 原生头：无 Origin 的原生写请求放行（App 真实路径）", () => {
+  withEnv({ APP_BASE_URL: "https://pczafu.cn" }, () => {
+    assert.doesNotThrow(() =>
+      assertWriteAccess(
+        request({ authorization: "Bearer token-1", "x-client-type": "native" }),
+      ),
+    );
+  });
+});
+
+test("Bearer 缺原生头：浏览器伪装的写请求被拒", () => {
+  withEnv({ APP_BASE_URL: "https://pczafu.cn" }, () => {
+    assert.throws(
+      () => assertWriteAccess(request({ authorization: "Bearer token-1" })),
+      (error) => error instanceof AppError && error.code === "FORBIDDEN",
+    );
+  });
+});
+
+test("Cookie 优先：同时带 Bearer 与原生头也不能跳过同源检查", () => {
+  withEnv({ APP_BASE_URL: "https://pczafu.cn" }, () => {
+    const cookieAndNative = request({
+      cookie: "pc_hospital_session=cookie-token",
+      authorization: "Bearer bearer-token",
+      "x-client-type": "native",
+    });
+    // 令牌来源是 Cookie → 走 assertSameOrigin，缺 Origin 必拒。
+    assert.throws(
+      () => assertWriteAccess(cookieAndNative),
+      (error) => error instanceof AppError && error.code === "FORBIDDEN",
+    );
+    assert.throws(
+      () => assertWriteAccess(request({ cookie: "pc_hospital_session=cookie-token" })),
+      (error) => error instanceof AppError && error.code === "FORBIDDEN",
+    );
+  });
+});
+
+test("Cookie 请求带合法同源 Origin 照常放行（Web 行为不变）", () => {
+  withEnv({ APP_BASE_URL: "https://pczafu.cn" }, () => {
+    assert.doesNotThrow(() =>
+      assertWriteAccess(
+        request({ cookie: "pc_hospital_session=cookie-token", origin: "https://pczafu.cn" }),
+      ),
+    );
+  });
+});
+
+test("无凭证写请求：先按原生通道拒绝，不泄露后续鉴权逻辑", () => {
+  withEnv({ APP_BASE_URL: "https://pczafu.cn" }, () => {
+    assert.throws(
+      () => assertWriteAccess(request({})),
+      (error) => error instanceof AppError && error.code === "FORBIDDEN",
     );
   });
 });

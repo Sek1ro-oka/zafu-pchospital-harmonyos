@@ -1,7 +1,7 @@
 // 客户报修单契约（Issue #37）：字段与后端 /api/v1/repair-orders 的返回一一对应。
 //
 // ⚠️ 与「维修备案」是**两个不同对象**：备案是工作人员对维修过程的记录，
-// 由 RepairPage 承载；本文件描述的是客户提交的故障申报。
+// 由工作人员工作台（Issue #38）承载；本文件描述的是客户提交的故障申报。
 // 后端刻意不返回 createRequestKey / assigneeMemberProfileId / repairRecordId，
 // 客户端因此也拿不到，不要在这里补上。
 

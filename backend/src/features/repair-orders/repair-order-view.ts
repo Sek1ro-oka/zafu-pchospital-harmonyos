@@ -1,4 +1,6 @@
-import type { RepairOrderStatus } from "@/types/contracts";
+import type { AuthorizedActor, RepairOrderStatus } from "@/types/contracts";
+import { repairOrderStaffActions, type RepairOrderStaffActions } from "./repair-order-policy";
+import type { RepairOrderStaffRow } from "./repair-order-repository";
 
 /** 进度事件对外形状：客户端只读，不含内部字段。 */
 export type RepairOrderEventView = {
@@ -67,5 +69,54 @@ export function toRepairOrderView(row: RepairOrderRow): RepairOrderView {
       note: event.note,
       createdAt: event.createdAt.toISOString(),
     })),
+  };
+}
+
+/** 关联备案摘要：只带工作人员处理需要的状态位，不返回备注、照片与内部时间线。 */
+export type StaffRepairOrderRecordSummary = {
+  id: string;
+  status: string;
+  result: string | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+};
+
+/**
+ * 工作人员视角的报修单（详情与队列共用）。
+ *
+ * 在客户形状上追加：受理人、关联备案摘要与**服务端计算的允许动作**。
+ * 客户端据此渲染按钮，但不作为授权依据 —— 每个写接口都会重新校验。
+ */
+export type StaffRepairOrderView = RepairOrderView & {
+  assignee: { memberProfileId: string; name: string } | null;
+  record: StaffRepairOrderRecordSummary | null;
+  actions: RepairOrderStaffActions;
+};
+
+/** 受理人 / 成员显示名，与 `repair-view.ts` 的成员名解析保持同一优先级。 */
+function memberDisplayName(row: { nickname: string | null; realName: string; user: { displayName: string | null } }): string {
+  return row.nickname || row.realName || row.user.displayName || "成员";
+}
+
+export function toStaffRepairOrderView(
+  row: RepairOrderStaffRow,
+  actor: AuthorizedActor,
+  memberProfileId: string | null,
+): StaffRepairOrderView {
+  return {
+    ...toRepairOrderView(row),
+    assignee: row.assignee
+      ? { memberProfileId: row.assignee.id, name: memberDisplayName(row.assignee) }
+      : null,
+    record: row.repairRecord
+      ? {
+          id: row.repairRecord.id,
+          status: row.repairRecord.status,
+          result: row.repairRecord.result,
+          submittedAt: row.repairRecord.submittedAt?.toISOString() ?? null,
+          reviewedAt: row.repairRecord.reviewedAt?.toISOString() ?? null,
+        }
+      : null,
+    actions: repairOrderStaffActions(actor, row, memberProfileId),
   };
 }

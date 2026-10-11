@@ -60,6 +60,24 @@ export function assertNativeClient(request: Request): void {
     throw new AppError("FORBIDDEN", "请求来源无效");
 }
 
+/**
+ * 写接口的来源防线按**令牌实际来源**分流（Issue #38 起供备案写路由复用）：
+ * - Cookie（Web 浏览器）：`assertSameOrigin()` —— 浏览器会自动携带 Cookie，必须确认来源白名单；
+ * - Bearer（鸿蒙 App）：要求显式 `x-client-type: native`，浏览器无法伪造该自定义头，
+ *   且原生请求本就不带 Origin，硬套同源校验会把合法请求全部 403。
+ *
+ * Cookie 优先：两凭证同时存在时按 Cookie 处理，带 native 头也不能跳过同源检查。
+ */
+export function assertWriteAccess(request: Request): void {
+  const presented = readPresentedToken(request);
+  if (presented?.source === "cookie") {
+    assertSameOrigin(request);
+  } else {
+    // Bearer 或无凭证（之后会 401）：要求显式原生头，杜绝浏览器伪造成原生通道。
+    assertNativeClient(request);
+  }
+}
+
 export async function authenticateRequest(
   request: Request,
   requestId: string,
