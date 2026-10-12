@@ -15,7 +15,7 @@ Environment=NODE_OPTIONS=--max-old-space-size=256
 ExecStart=/opt/pchospital-shared/runtime/node-v24.16.0-linux-x64/bin/node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 13080
 Restart=on-failure
 RestartSec=10
-MemoryHigh=300M
+MemoryHigh=360M
 MemoryMax=384M
 CPUQuota=100%
 OOMScoreAdjust=400

@@ -1,25 +1,8 @@
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { NavPusher, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
+import { ROUTE_CASE_LIBRARY, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
-import { QuickEntry } from '../../core/ui/QuickEntry';
-import {
-  CARD_GAP,
-  CARD_PADDING,
-  CARD_PADDING_LG,
-  CARD_RADIUS,
-  CHIP_RADIUS,
-  CONTROL_HEIGHT_SM,
-  FONT_CHIP,
-  FONT_HEADING,
-  FONT_NOTE,
-  FONT_TEXT,
-  FONT_TITLE,
-  GAP_LG,
-  GAP_SM,
-  PAGE_PADDING,
-  TAB_PAGE_BOTTOM_INSET,
-} from '../../core/ui/Theme';
+import { ReferenceRoundAction, ReferenceShortcut, REFERENCE_BACKGROUND } from '../../core/ui/ReferencePage';
 import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
 import { RepairOrderView, REPAIR_ORDER_COMPLETED, REPAIR_ORDER_ACCEPTED, REPAIR_ORDER_REPAIRING, REPAIR_ORDER_SUBMITTED } from '../repair/RepairOrderContract';
 import { RepairOrderService } from '../repair/RepairOrderService';
@@ -31,23 +14,13 @@ const STATS_ERROR: number = 2;
 
 interface ProfileEntry {
   title: string;
-  icon: string;
-  hue: string;
+  icon: Resource;
+  note: string;
   route: string;
 }
 
-/** 后端默认页大小（与 RepairOrdersPage 一致），用于统计口径说明。 */
-const PAGE_SIZE: number = 20;
-
-/**
- * 我的 tab（本轮重设计，参考 docs/reference/my-huawei/my-account-service-record-entry.jpg）。
- *
- * - 白色个人卡：圆形头像取姓名首字符（UI 元素，非业务数据），
- *   姓名与角色 chip 来自 SessionService 传递的真实身份，退出按钮逻辑与原 SessionHeader 相同。
- * - 统计行：报修单计数来自 RepairOrderService 本人列表（最近一页），
- *   加载失败如实显示，不用假数字。
- * - 「我的信息」入口网格：四列图标卡，样式对照参考图；
- *   工作人员登录时换成工作人员工作台等入口，双角色保持。
+/** 我的主页面对照②：真实会话卡、最近一页统计、信息宫格与常用服务。
+ * 未接入功能直接标注；维修记录不复用报修列表冒充 RepairRecord。
  */
 @Component
 export struct ProfilePage {
@@ -60,7 +33,6 @@ export struct ProfilePage {
   };
   onSessionExpired: () => void = () => {
   };
-  private pusher: NavPusher = new NavPusher();
   @State statsState: number = STATS_LOADING;
   @State totalCount: number = 0;
   @State pendingCount: number = 0;
@@ -68,12 +40,16 @@ export struct ProfilePage {
   @State statsErrorText: string = '';
   @State logoutBusy: boolean = false;
   private requesting: boolean = false;
+  private generation: number = 0;
+  onOpen: (route: string, param: Object | null) => void = () => {};
 
   aboutToAppear(): void {
     if (this.home !== HOME_STAFF) {
       this.loadStats();
     }
   }
+
+  aboutToDisappear(): void { this.generation += 1; this.requesting = false; }
 
   private handleError(error: Object): void {
     if (error instanceof ApiRequestError) {
@@ -93,43 +69,58 @@ export struct ProfilePage {
     if (this.requesting) {
       return;
     }
+    const generation = ++this.generation;
     this.requesting = true;
     this.statsState = STATS_LOADING;
     this.statsErrorText = '';
     try {
       const items = await RepairOrderService.listMine('', 1);
+      if (generation !== this.generation) return;
       this.totalCount = items.length;
       this.completedCount = items.filter((order: RepairOrderView) => order.status === REPAIR_ORDER_COMPLETED).length;
       this.pendingCount = items.filter((order: RepairOrderView) =>
         order.status === REPAIR_ORDER_SUBMITTED || order.status === REPAIR_ORDER_ACCEPTED || order.status === REPAIR_ORDER_REPAIRING).length;
       this.statsState = STATS_READY;
     } catch (error) {
+      if (generation !== this.generation) return;
       this.statsState = STATS_ERROR;
       this.handleError(error);
     } finally {
-      this.requesting = false;
+      if (generation === this.generation) this.requesting = false;
     }
   }
 
   private customerEntries(): ProfileEntry[] {
     return [
-      { title: '我的报修', icon: '修', hue: 'orange', route: ROUTE_REPAIR_ORDERS },
-      { title: '知识问答', icon: '问', hue: 'blue', route: ROUTE_KNOWLEDGE },
-      { title: '服务记录', icon: '录', hue: 'green', route: ROUTE_REPAIR_ORDERS }
+      { title: '我的报修', icon: $r('app.media.ref_document'), note: '', route: ROUTE_REPAIR_ORDERS },
+      { title: '维修记录', icon: $r('app.media.ref_grid'), note: '暂未接入', route: '' },
+      { title: '活动报名', icon: $r('app.media.ref_flag'), note: '暂未接入', route: '' },
+      { title: '收藏', icon: $r('app.media.ref_star'), note: '暂未接入', route: '' },
+      { title: '消息', icon: $r('app.media.ref_message'), note: '暂未接入', route: '' },
+      { title: '个人资料', icon: $r('app.media.ref_profile'), note: '编辑未接入', route: '' }
     ];
   }
 
-  /** 审核入口按服务器权限展示，实际业务权限仍由服务端检查。 */
   private staffEntries(): ProfileEntry[] {
     const entries: ProfileEntry[] = [
-      { title: '工作人员工作台', icon: '单', hue: 'purple', route: ROUTE_STAFF_ORDERS }
+      { title: '进入工作台', icon: $r('app.media.ref_document'), note: '', route: ROUTE_STAFF_ORDERS },
+      { title: '典型案例库', icon: $r('app.media.ref_grid'), note: '', route: ROUTE_CASE_LIBRARY },
+      { title: '知识问答', icon: $r('app.media.ref_star'), note: '', route: ROUTE_KNOWLEDGE }
     ];
     if (this.permissions.includes('repair:review')) {
-      entries.push({ title: '备案审核', icon: '审', hue: 'red', route: ROUTE_STAFF_REVIEW });
+      entries.push({ title: '备案审核', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_STAFF_REVIEW });
     }
-    entries.push({ title: '典型案例库', icon: '例', hue: 'gold', route: ROUTE_CASE_LIBRARY });
-    entries.push({ title: '知识问答', icon: '问', hue: 'blue', route: ROUTE_KNOWLEDGE });
+    entries.push({ title: '消息', icon: $r('app.media.ref_message'), note: '暂未接入', route: '' });
+    entries.push({ title: '个人资料', icon: $r('app.media.ref_profile'), note: '编辑未接入', route: '' });
     return entries;
+  }
+
+  private openEntry(entry: ProfileEntry): void {
+    if (entry.route === '') {
+      this.getUIContext().getPromptAction().showToast({ message: `${entry.title}暂未接入` });
+    } else {
+      this.onOpen(entry.route, null);
+    }
   }
 
   private async handleLogout(): Promise<void> {
@@ -144,176 +135,118 @@ export struct ProfilePage {
     }
   }
 
-  @Builder
-  sectionTitle(text: string) {
-    Text(text)
-      .fontSize(FONT_HEADING)
-      .fontWeight(FontWeight.Bold)
-      .fontColor($r('app.color.text_primary'))
-      .width('100%')
-      .textAlign(TextAlign.Start)
-  }
 
   @Builder
-  statCell(label: string, value: number) {
-    Column({ space: GAP_SM }) {
-      Text(`${value}`)
-        .fontSize(FONT_HEADING)
-        .fontWeight(FontWeight.Bold)
-        .fontColor($r('app.color.text_primary'))
-      Text(label)
-        .fontSize(FONT_NOTE)
-        .fontColor($r('app.color.text_secondary'))
-    }
-    .layoutWeight(1)
-    .alignItems(HorizontalAlign.Center)
+  profileShortcut(title: string, icon: Resource, route: string) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 6 }) {
+        Image(icon).width(18).height(18)
+        Text(title).fontSize(12).fontWeight(FontWeight.Medium).fontColor('#3A4145')
+      }.justifyContent(FlexAlign.Center).width('100%')
+    }.width('33.33%').height(42).backgroundColor(Color.Transparent).borderRadius(8)
+      .onClick(() => { this.onOpen(route, null); })
   }
 
   @Builder
   profileCard() {
-    Row({ space: CARD_GAP }) {
-      // 圆形头像：取姓名首字符，是界面元素而不是服务端数据。
-      Text(this.displayName === '' ? '客' : this.displayName.substring(0, 1))
-        .fontSize(FONT_TITLE)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.brand'))
-        .width(64)
-        .height(64)
-        .textAlign(TextAlign.Center)
-        .backgroundColor($r('app.color.brand_soft'))
-        .borderRadius(32)
-      Column({ space: GAP_SM }) {
-        Text(this.displayName === '' ? '未命名用户' : this.displayName)
-          .fontSize(FONT_HEADING)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(this.roleText)
-          .fontSize(FONT_CHIP)
-          .fontColor($r('app.color.brand'))
-          .padding({ left: GAP_SM, right: GAP_SM, top: 2, bottom: 2 })
-          .backgroundColor($r('app.color.brand_soft'))
-          .borderRadius(CHIP_RADIUS)
-      }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1)
+    Column({ space: 16 }) {
+      Row({ space: 12 }) {
+        Text(this.displayName === '' ? '客' : this.displayName.substring(0, 1))
+          .fontSize(26).fontWeight(FontWeight.Medium).fontColor(Color.White)
+          .width(50).height(50).textAlign(TextAlign.Center).backgroundColor('#B8AFC8').borderRadius(25)
+        Column({ space: 6 }) {
+          Text(this.displayName === '' ? '未命名用户' : this.displayName).fontSize(20).fontWeight(FontWeight.Bold)
+            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Text(this.roleText).fontSize(11).fontWeight(FontWeight.Medium).fontColor('#6F5B35')
+            .padding({ left: 8, right: 8, top: 2, bottom: 2 }).backgroundColor('#F3E8D0').borderRadius(12)
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Button(this.logoutBusy ? '退出中…' : '退出 ›').fontSize(13).height(32)
+          .fontColor('#737A80').backgroundColor(Color.Transparent).enabled(!this.logoutBusy)
+          .onClick(() => { this.handleLogout(); })
+      }.width('100%')
+      Row() {
+        Text('我的电脑医院').fontSize(15).fontWeight(FontWeight.Medium).fontColor('#62686D').layoutWeight(1)
+        Button(this.home === HOME_STAFF ? '进入工作台' : '我的报修').fontSize(13).height(31)
+          .fontColor('#6D5733').backgroundColor('#E6CF9E')
+          .onClick(() => { this.onOpen(this.home === HOME_STAFF ? ROUTE_STAFF_ORDERS : ROUTE_REPAIR_ORDERS, null); })
+      }.width('100%')
+      Row() {
+        this.profileShortcut('维修指南', $r('app.media.ref_document'), ROUTE_PUBLIC_GUIDES)
+        this.profileShortcut('故障问诊', $r('app.media.home_headset'), ROUTE_KNOWLEDGE)
+        this.profileShortcut('服务进度', $r('app.media.ref_flag'), this.home === HOME_STAFF ? ROUTE_STAFF_ORDERS : ROUTE_REPAIR_ORDERS)
+      }.width('100%').backgroundColor('#F7F8F9').borderRadius(12)
+    }.width('100%').padding(14).backgroundColor(Color.White).borderRadius(20)
+  }
 
-      Button(this.logoutBusy ? '退出中…' : '退出')
-        .fontSize(FONT_TEXT)
-        .height(CONTROL_HEIGHT_SM)
-        .backgroundColor($r('app.color.brand_soft'))
-        .fontColor($r('app.color.brand'))
-        .enabled(!this.logoutBusy)
-        .onClick(() => {
-          this.handleLogout();
-        })
-    }
-    .width('100%')
-    .padding(CARD_PADDING)
-    .alignItems(VerticalAlign.Center)
-    .backgroundColor($r('app.color.surface'))
-    .borderRadius(CARD_RADIUS)
+  @Builder
+  statCell(label: string, value: number, icon: Resource) {
+    Column({ space: 6 }) {
+      Image(icon).width(28).height(28)
+      Text(label).fontSize(12).fontColor('#252B2F')
+      Text(`${value}`).fontSize(12).fontColor('#7B8287')
+    }.layoutWeight(1).alignItems(HorizontalAlign.Center)
   }
 
   @Builder
   statsSection() {
-    if (this.statsState === STATS_LOADING) {
-      LoadingPanel({ text: '正在加载报修统计…' })
-    } else if (this.statsState === STATS_ERROR) {
-      ErrorPanel({
-        message: this.statsErrorText,
-        onRetry: (): void => {
-          this.loadStats();
-        }
-      })
-    } else {
-      if (this.totalCount === 0) {
-        Text('最近一页暂无报修记录，可从下方「我的报修」提交。')
-          .fontSize(FONT_NOTE)
-          .fontColor($r('app.color.text_secondary'))
+    Column({ space: 10 }) {
+      if (this.statsState === STATS_LOADING) {
+        LoadingPanel({ text: '正在加载报修统计…' })
+      } else if (this.statsState === STATS_ERROR) {
+        ErrorPanel({ message: this.statsErrorText, onRetry: (): void => { this.loadStats(); } })
+      } else {
+        Row() {
+          this.statCell('报修单', this.totalCount, $r('app.media.ref_disk'))
+          this.statCell('处理中', this.pendingCount, $r('app.media.ref_activity'))
+          this.statCell('已完结', this.completedCount, $r('app.media.ref_shield'))
+        }.width('100%')
+        Text('最近一页本人报修单（最多 20 条）').fontSize(10).fontColor('#8E969C')
       }
-      Row({ space: CARD_GAP }) {
-        this.statCell('报修单', this.totalCount)
-        this.statCell('已完结', this.completedCount)
-        this.statCell('处理中', this.pendingCount)
-      }
-      .width('100%')
-      .padding(CARD_PADDING)
-      .backgroundColor($r('app.color.surface'))
-      .borderRadius(CARD_RADIUS)
-      .alignItems(VerticalAlign.Center)
-    }
+    }.width('100%').padding(14).backgroundColor(Color.White).borderRadius(20)
+      .onClick(() => { this.loadStats(); })
   }
 
   build() {
     Scroll() {
-      Column({ space: GAP_LG }) {
-        // 我的 tab 自带大标题（不再作为 NavDestination 子页）。
-        Text('我的')
-          .fontSize(FONT_TITLE)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
-
+      Column({ space: 14 }) {
+        Row({ space: 7 }) {
+          Text('我的').fontSize(28).fontWeight(FontWeight.Bold).layoutWeight(1)
+          ReferenceRoundAction({ icon: $r('app.media.ref_scan'), label: '扫码暂未接入',
+            onSelect: (): void => { this.getUIContext().getPromptAction().showToast({ message: '扫码暂未接入' }); } })
+          ReferenceRoundAction({ icon: $r('app.media.home_headset'), label: 'AI 故障问诊',
+            onSelect: (): void => { this.onOpen(ROUTE_KNOWLEDGE, null); } })
+          ReferenceRoundAction({ icon: $r('app.media.home_message'), label: '消息暂未接入',
+            onSelect: (): void => { this.getUIContext().getPromptAction().showToast({ message: '消息暂未接入' }); } })
+        }.width('100%').height(50)
         this.profileCard()
-
-        if (this.home !== HOME_STAFF) {
-        this.sectionTitle('最近报修统计')
-        this.statsSection()
-        Text(`统计口径：最近一页本人报修单（最多 ${PAGE_SIZE} 条），不是全部报修总数；已取消单不计入处理中。`)
-          .fontSize(FONT_NOTE)
-          .fontColor($r('app.color.text_secondary'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
-        Button('刷新统计')
-          .enabled(!this.requesting)
-          .onClick(() => { this.loadStats(); })
-        }
-
-        this.sectionTitle('我的信息')
-        Column({ space: GAP_LG }) {
-          Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+        if (this.home !== HOME_STAFF) { this.statsSection() }
+        Column({ space: 20 }) {
+          Text('我的信息').fontSize(20).fontWeight(FontWeight.Bold).width('100%')
+          Flex({ wrap: FlexWrap.Wrap }) {
             ForEach(this.home === HOME_STAFF ? this.staffEntries() : this.customerEntries(), (entry: ProfileEntry) => {
-              QuickEntry({
-                icon: entry.icon,
-                title: entry.title,
-                hue: entry.hue,
-                onSelect: (): void => {
-                  this.pusher.push(this.pathStack, entry.route, null);
-                }
-              });
-            }, (entry: ProfileEntry) => entry.title + entry.route)
-          }
-          .width('100%')
-          Text(this.home === HOME_STAFF
-            ? '工作人员入口：工作台处理待受理与推进，审核入口按服务器权限展示。'
-            : '服务记录与我的报修进入同一页：列表、进度与提交都在「我的报修」。')
-            .fontSize(FONT_NOTE)
-            .fontColor($r('app.color.text_secondary'))
-            .width('100%')
-            .textAlign(TextAlign.Start)
-        }
-        .width('100%')
-        .padding(CARD_PADDING)
-        .backgroundColor($r('app.color.surface'))
-        .borderRadius(CARD_RADIUS)
-      }
-      .width('100%')
-      .padding({
-        left: PAGE_PADDING,
-        right: PAGE_PADDING,
-        top: PAGE_PADDING,
-        bottom: TAB_PAGE_BOTTOM_INSET
-      })
-      .alignItems(HorizontalAlign.Start)
-    }
-    .scrollable(ScrollDirection.Vertical)
-    .scrollBar(BarState.Off)
-    .width('100%')
-    .height('100%')
-    .align(Alignment.Top)
-    .backgroundColor($r('app.color.start_window_background'))
+              ReferenceShortcut({
+                title: entry.title, icon: entry.icon, note: entry.note,
+                onSelect: (): void => { this.openEntry(entry); }
+              })
+            }, (entry: ProfileEntry) => entry.title)
+          }.width('100%')
+        }.width('100%').padding({ left: 12, right: 12, top: 24, bottom: 20 })
+          .backgroundColor(Color.White).borderRadius(20)
+        Column({ space: 18 }) {
+          Text('常用服务').fontSize(20).fontWeight(FontWeight.Bold).width('100%')
+          Row() {
+            Text('电脑有问题？先从故障问诊开始').fontSize(14).layoutWeight(1)
+            Button('去问诊').fontSize(12).height(29).fontColor('#1676E5').backgroundColor('#F3F6FA')
+              .onClick(() => { this.onOpen(ROUTE_KNOWLEDGE, null); })
+          }.width('100%')
+          Divider().color('#EAEDEF')
+          Row() {
+            Text('查阅电脑医院公开维修指南').fontSize(14).layoutWeight(1)
+            Button('去查看').fontSize(12).height(29).fontColor('#1676E5').backgroundColor('#F3F6FA')
+              .onClick(() => { this.onOpen(ROUTE_PUBLIC_GUIDES, null); })
+          }.width('100%')
+        }.width('100%').padding(16).backgroundColor(Color.White).borderRadius(20)
+      }.width('100%').padding({ left: 16, right: 16, bottom: 90 }).alignItems(HorizontalAlign.Start)
+    }.width('100%').height('100%').scrollBar(BarState.Off).align(Alignment.Top).backgroundColor(REFERENCE_BACKGROUND)
   }
 }

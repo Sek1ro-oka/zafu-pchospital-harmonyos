@@ -11,9 +11,10 @@ interface PublicGuideList { guides: PublicGuide[]; }
 interface PublicGuideSection { title: string; content: string; }
 interface PublicGuideDetail { title: string; revision: string | null; sections: PublicGuideSection[]; }
 
-/** 游客公开指南浏览；不是完整的分类知识首页，也不开放内部案例。 */
+/** 公开指南目录/详情子页；分类主页面由 KnowledgeLibraryPage 负责。 */
 @Component
 export struct PublicGuidesPage {
+  @Prop initialGuideId: string = '';
   onConsult: () => void = () => {};
   @State guides: PublicGuide[] = [];
   @State detail: PublicGuideDetail | null = null;
@@ -23,7 +24,7 @@ export struct PublicGuidesPage {
   private selectedId: string = '';
   private generation: number = 0;
 
-  aboutToAppear(): void { this.load(''); }
+  aboutToAppear(): void { this.load(this.initialGuideId); }
   aboutToDisappear(): void { this.generation += 1; }
 
   private async load(id: string): Promise<void> {
