@@ -50,6 +50,11 @@ const SUBMIT_OK_TEXT: string = '报修已提交，工作人员受理后可在此
  */
 @Component
 export struct RepairOrdersPage {
+  /**
+   * 深链参数（本轮 Tab 化新增）：从首页「进行中的报修」预览卡进入时带上订单 ID，
+   * 页面打开后直接展开该单的详情进度；普通入口传空串，行为与原来完全一致。
+   */
+  initialDetailId: string = '';
   /** 会话失效时通知上层回登录页；由 Navigation 调用方注入。 */
   onSessionExpired: () => void = () => {
   };
@@ -84,6 +89,20 @@ export struct RepairOrdersPage {
 
   aboutToAppear(): void {
     this.load();
+    if (this.initialDetailId !== '') {
+      this.openDetailById(this.initialDetailId);
+    }
+  }
+
+  /**
+   * 按订单 ID 直接打开详情面板（深链入口）：
+   * 与 askDetail 走同一套 detailTargetId / 请求序号机制，
+   * 加载、错误与重试行为完全一致，只是列表里还没有对应的订单对象。
+   */
+  private openDetailById(id: string): void {
+    this.detailOpen = true;
+    this.detailTargetId = id;
+    this.fetchDetail(id);
   }
 
   /**

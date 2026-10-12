@@ -2,7 +2,7 @@ import { common } from '@kit.AbilityKit';
 import { BusinessError } from '@kit.BasicServicesKit';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
-import { CARD_GAP, CARD_PADDING, CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS, FONT_BODY, FONT_CHIP, FONT_HEADING, FONT_NOTE, FONT_SUBTITLE, FONT_TEXT, GAP_SM, PAGE_PADDING } from '../../core/ui/Theme';
+import { CARD_GAP, CARD_PADDING, CARD_PADDING_SM, CARD_RADIUS, CONTROL_HEIGHT, CONTROL_RADIUS, FONT_BODY, FONT_CHIP, FONT_HEADING, FONT_NOTE, FONT_SUBTITLE, FONT_TEXT, GAP_SM, PAGE_PADDING } from '../../core/ui/Theme';
 import { formatOrderTime } from '../repair/RepairOrderContract';
 import {
   CaseEvidence,
@@ -124,10 +124,10 @@ export struct CitationDetailPage {
   caseQuote(quote: CaseEvidence) {
     Column({ space: 3 }) {
       Text(caseEvidenceFieldLabel(quote.field))
-        .fontSize(12)
+        .fontSize(FONT_CHIP)
         .fontColor($r('app.color.brand'))
       Text(`“${quote.quote}”`)
-        .fontSize(13)
+        .fontSize(FONT_NOTE)
         .fontColor($r('app.color.text_primary'))
         .width('100%')
         .textAlign(TextAlign.Start)
@@ -143,7 +143,7 @@ export struct CitationDetailPage {
   caseSource(source: KnowledgeCaseCitationSource) {
     Column({ space: 6 }) {
       Text(source.authorName === null ? `来源 ${source.index}` : `来源 ${source.index} · ${source.authorName}`)
-        .fontSize(14)
+        .fontSize(FONT_TEXT)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
         .width('100%')
@@ -151,7 +151,7 @@ export struct CitationDetailPage {
       Text(
         `${source.repairDate === null ? '日期未填' : source.repairDate} · ${source.deviceModel === null ? '机型未填' : source.deviceModel} · ${caseSourceResultLabel(source.result)}`
       )
-        .fontSize(12)
+        .fontSize(FONT_CHIP)
         .fontColor($r('app.color.text_secondary'))
         .width('100%')
       ForEach(source.quotes, (quote: CaseEvidence) => {
@@ -159,7 +159,7 @@ export struct CitationDetailPage {
       }, (quote: CaseEvidence) => `${source.index}:${quote.field}:${quote.quote}`)
     }
     .width('100%')
-    .padding(12)
+    .padding(CARD_PADDING_SM)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
     .alignItems(HorizontalAlign.Start)
@@ -169,20 +169,20 @@ export struct CitationDetailPage {
   caseMain(detail: KnowledgeCaseCitationDetail) {
     Column({ space: 10 }) {
       Text(detail.title)
-        .fontSize(20)
+        .fontSize(FONT_HEADING)
         .fontWeight(FontWeight.Bold)
         .fontColor($r('app.color.text_primary'))
         .width('100%')
         .textAlign(TextAlign.Start)
       Row({ space: 8 }) {
         Text('维修案例')
-          .fontSize(12)
+          .fontSize(FONT_CHIP)
           .fontColor(Color.White)
           .padding({ left: 8, right: 8, top: 3, bottom: 3 })
           .backgroundColor($r('app.color.brand'))
           .borderRadius(8)
         Text(caseStatusLabel(detail.status))
-          .fontSize(12)
+          .fontSize(FONT_CHIP)
           .fontColor($r('app.color.text_secondary'))
       }
       .width('100%')
@@ -192,19 +192,19 @@ export struct CitationDetailPage {
       }
       if (detail.visibility === 'STAFF') {
         Text('内部案例（仅工作人员可见）')
-          .fontSize(12)
+          .fontSize(FONT_CHIP)
           .fontColor($r('app.color.brand'))
       }
       Divider().color($r('app.color.field_bg'))
       Text(`维修结果：${caseResultLabel(detail.content.result)}`)
-        .fontSize(14)
+        .fontSize(FONT_TEXT)
         .fontWeight(FontWeight.Medium)
         .fontColor($r('app.color.text_primary'))
         .width('100%')
         .textAlign(TextAlign.Start)
     }
     .width('100%')
-    .padding(16)
+    .padding(CARD_PADDING)
     .alignItems(HorizontalAlign.Start)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
@@ -213,11 +213,11 @@ export struct CitationDetailPage {
       ForEach(contentRows(detail.content), (row: CaseContentRow) => {
         Column({ space: 3 }) {
           Text(row.label)
-            .fontSize(13)
+            .fontSize(FONT_NOTE)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')
           Text(row.value)
-            .fontSize(14)
+            .fontSize(FONT_TEXT)
             .fontColor($r('app.color.text_primary'))
             .width('100%')
             .textAlign(TextAlign.Start)
@@ -227,20 +227,20 @@ export struct CitationDetailPage {
       }, (row: CaseContentRow) => row.label)
       if (unknownsText(detail.content.unknowns) !== '') {
         Text(unknownsText(detail.content.unknowns))
-          .fontSize(12)
+          .fontSize(FONT_CHIP)
           .fontColor($r('app.color.text_secondary'))
           .width('100%')
       }
     }
     .width('100%')
     .margin({ top: 10 })
-    .padding(16)
+    .padding(CARD_PADDING)
     .alignItems(HorizontalAlign.Start)
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
 
     Text(`来源证据（${detail.sources.length}）`)
-      .fontSize(15)
+      .fontSize(FONT_BODY)
       .fontWeight(FontWeight.Medium)
       .fontColor($r('app.color.text_primary'))
       .width('100%')

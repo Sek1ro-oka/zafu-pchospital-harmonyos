@@ -8,6 +8,20 @@
     { "name": "text_primary", "value": "#17243A" },
     { "name": "text_secondary", "value": "#58677D" },
     { "name": "danger", "value": "#C7332B" },
-    { "name": "ok", "value": "#1F9D6B" }
+    { "name": "ok", "value": "#1F9D6B" },
+    { "name": "tile_orange_bg", "value": "#FDEFE3" },
+    { "name": "tile_orange_fg", "value": "#D97A32" },
+    { "name": "tile_green_bg", "value": "#E6F5EC" },
+    { "name": "tile_green_fg", "value": "#2E9E64" },
+    { "name": "tile_blue_bg", "value": "#EAF1FB" },
+    { "name": "tile_blue_fg", "value": "#245FBA" },
+    { "name": "tile_purple_bg", "value": "#F0EBFA" },
+    { "name": "tile_purple_fg", "value": "#7A5CC9" },
+    { "name": "tile_teal_bg", "value": "#E4F4F6" },
+    { "name": "tile_teal_fg", "value": "#2E8FA0" },
+    { "name": "tile_red_bg", "value": "#FBEAEA" },
+    { "name": "tile_red_fg", "value": "#D4564E" },
+    { "name": "tile_gold_bg", "value": "#FBF3E0" },
+    { "name": "tile_gold_fg", "value": "#C0922E" }
   ]
 }

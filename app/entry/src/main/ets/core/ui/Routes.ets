@@ -1,5 +1,13 @@
 export const ROUTE_SERVICE: string = 'service';
 /**
+ * 「我的报修」深链参数：从首页「进行中的报修」预览卡进入时带上订单 ID，
+ * 我的报修页打开后直接展开该单的详情进度；普通入口传 null 即可。
+ */
+export interface RepairOrderFocusParam {
+  orderId: string;
+}
+
+/**
  * 客户：我的报修单（Issue #37）。
  *
  * 与工作人员路由刻意分开：两者在数据上是不同对象
