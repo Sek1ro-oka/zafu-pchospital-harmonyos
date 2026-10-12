@@ -3,6 +3,7 @@ import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiCli
 import { NavPusher, RepairOrderFocusParam, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
 import { QuickEntry } from '../../core/ui/QuickEntry';
+import { HomeQuickCard, HomeReferenceHeader } from './HomeReferenceVisuals';
 import { IconTile } from '../../core/ui/IconTile';
 import {
   CARD_GAP,
@@ -10,13 +11,9 @@ import {
   CARD_PADDING_LG,
   CARD_RADIUS,
   CHIP_RADIUS,
-  FONT_HEADING,
   FONT_NOTE,
   FONT_SUBTITLE,
-  FONT_TITLE,
-  GAP_LG,
   GAP_SM,
-  PAGE_PADDING,
   TAB_PAGE_BOTTOM_INSET,
 } from '../../core/ui/Theme';
 import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
@@ -37,21 +34,6 @@ interface TabEntry {
   ready: boolean;
 }
 
-/** 按当前时段返回问候语（取本机时间，纯 UI 文案）。 */
-function greetingForNow(): string {
-  const hour: number = new Date().getHours();
-  if (hour >= 5 && hour < 11) {
-    return '上午好';
-  }
-  if (hour >= 11 && hour < 13) {
-    return '中午好';
-  }
-  if (hour >= 13 && hour < 18) {
-    return '下午好';
-  }
-  return '晚上好';
-}
-
 function isPendingStatus(status: string): boolean {
   return status === REPAIR_ORDER_SUBMITTED || status === REPAIR_ORDER_ACCEPTED || status === REPAIR_ORDER_REPAIRING;
 }
@@ -59,11 +41,8 @@ function isPendingStatus(status: string): boolean {
 /**
  * 首页 tab（对照 docs/reference/my-huawei/home-navigation.jpg 的信息层级）。
  *
- * 顶部大标题问候 + 身份 chip；「常用功能」四列白卡网格（图标在上、文字在下，
- * 对照参考图快捷服务区）；客户角色下方用真实报修单展示「进行中的报修」
- * 横向预览卡（RepairOrderService 本人列表数据，点击进我的报修），
- * 无数据如实空态；不放假搜索框、不放假 banner。
- * 工作人员登录时，快捷入口换成工作台入口，双角色保持。
+ * 金色主视觉、搜索入口、频道胶囊和四列快捷服务对照参考图。
+ * 客户进度来自本人报修接口；工作人员入口仍按服务端权限展示。
  */
 @Component
 export struct HomeTab {
@@ -122,13 +101,16 @@ export struct HomeTab {
     }
   }
 
-  private customerEntries(): TabEntry[] {
-    return [
-      { title: '我要报修', icon: '报', hue: 'orange', route: ROUTE_REPAIR_ORDERS, ready: true },
-      { title: '我的进度', icon: '进', hue: 'teal', route: ROUTE_REPAIR_ORDERS, ready: true },
-      { title: '知识问答', icon: '问', hue: 'blue', route: ROUTE_KNOWLEDGE, ready: true },
-      { title: '服务记录', icon: '录', hue: 'green', route: ROUTE_REPAIR_ORDERS, ready: true }
-    ];
+  private openKnowledge(): void {
+    this.pusher.push(this.pathStack, ROUTE_KNOWLEDGE, null);
+  }
+
+  private openRepairs(): void {
+    this.pusher.push(this.pathStack, this.home === HOME_STAFF ? ROUTE_STAFF_ORDERS : ROUTE_REPAIR_ORDERS, null);
+  }
+
+  private showActivities(): void {
+    this.getUIContext().getPromptAction().showToast({ message: '活动模块暂未接入' });
   }
 
   /** 审核入口按服务器权限展示，实际业务权限仍由服务端检查。 */
@@ -147,7 +129,7 @@ export struct HomeTab {
   @Builder
   sectionTitle(text: string) {
     Text(text)
-      .fontSize(FONT_HEADING)
+      .fontSize(18)
       .fontWeight(FontWeight.Bold)
       .fontColor($r('app.color.text_primary'))
       .width('100%')
@@ -226,82 +208,98 @@ export struct HomeTab {
     }
   }
 
+  @Builder
+  channel(title: string, selected: boolean, action: () => void) {
+    Button(title, { type: ButtonType.Capsule })
+      .layoutWeight(1)
+      .height(40)
+      .fontSize(14)
+      .fontWeight(FontWeight.Medium)
+      .fontColor(selected ? '#FFFFFF' : '#202626')
+      .backgroundColor(selected ? '#2D3433' : '#FFFFFF')
+      .onClick(action)
+  }
+
   build() {
     Scroll() {
-      Column({ space: GAP_LG }) {
-        // 顶部大标题问候 + 身份简要显示（不做假搜索框）。
-        Column({ space: GAP_SM }) {
-          Text(`${greetingForNow()}，${this.displayName === '' ? '用户' : this.displayName}`)
-            .fontSize(FONT_TITLE)
-            .fontWeight(FontWeight.Bold)
-            .fontColor($r('app.color.text_primary'))
-            .width('100%')
-            .textAlign(TextAlign.Start)
-          Row({ space: GAP_SM }) {
-            Text(this.roleText)
-              .fontSize(FONT_NOTE)
-              .fontColor($r('app.color.brand'))
-              .padding({ left: GAP_SM, right: GAP_SM, top: 2, bottom: 2 })
-              .backgroundColor($r('app.color.brand_soft'))
-              .borderRadius(CHIP_RADIUS)
-            Text('鸿蒙电脑医院')
-              .fontSize(FONT_NOTE)
-              .fontColor($r('app.color.text_secondary'))
+      Column() {
+        HomeReferenceHeader({
+          onConsult: (): void => { this.openKnowledge(); },
+          onRepair: (): void => { this.openRepairs(); },
+          onRecords: (): void => { this.openRepairs(); }
+        })
+
+        Column() {
+          Row({ space: 8 }) {
+            this.channel('★ 推荐', true, (): void => {})
+            this.channel('问诊', false, (): void => { this.openKnowledge(); })
+            this.channel('维修', false, (): void => { this.openRepairs(); })
+            this.channel('活动', false, (): void => { this.showActivities(); })
           }
           .width('100%')
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
+          .margin({ top: 16, bottom: 36 })
 
-        this.sectionTitle(this.home === HOME_STAFF ? '工作台入口' : '常用功能')
-        Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
-          ForEach(this.home === HOME_STAFF ? this.staffEntries() : this.customerEntries(), (entry: TabEntry) => {
-            QuickEntry({
-              icon: entry.icon,
-              title: entry.title,
-              hue: entry.hue,
-              ready: entry.ready,
-              onSelect: (): void => {
-                this.pusher.push(this.pathStack, entry.route, null);
-              }
-            });
-          }, (entry: TabEntry) => entry.title + entry.route)
-        }
-        .width('100%')
-
-        if (this.home !== HOME_STAFF) {
-          this.sectionTitle('进行中的报修')
-          Text('仅展示最近 20 条本人报修中的进行中记录。')
-            .fontSize(FONT_NOTE)
-            .fontColor($r('app.color.text_secondary'))
-          this.pendingSection()
-          Button('刷新报修进度')
-            .enabled(!this.requesting)
-            .onClick(() => { this.loadPending(); })
-        }
-
-        Text(this.home === HOME_STAFF
-          ? '已接入：真实登录与会话、报修处理与维修备案（受理 / 推进 / 建档 / 审核）、典型案例库（备案标记自动整理、知识回流）、知识问答（回答带可打开的引用）。'
-          : '已接入：真实登录与会话、我的报修（提交与进度查询）、知识问答（回答带可打开的引用）。未标注「已接入」的能力为骨架，不接入业务数据。')
-          .fontSize(FONT_NOTE)
-          .fontColor($r('app.color.text_secondary'))
+          this.sectionTitle('快捷服务')
+          Row() {
+            HomeQuickCard({ title: 'AI 问诊', icon: $r('app.media.home_consult'),
+              onSelect: (): void => { this.openKnowledge(); } })
+            HomeQuickCard({ title: '我要报修', icon: $r('app.media.home_repair'),
+              onSelect: (): void => { this.openRepairs(); } })
+            HomeQuickCard({ title: '进度查询', icon: $r('app.media.home_progress'),
+              onSelect: (): void => { this.openRepairs(); } })
+            HomeQuickCard({ title: '近期活动', icon: $r('app.media.home_activity'),
+              onSelect: (): void => { this.showActivities(); } })
+          }
           .width('100%')
-          .textAlign(TextAlign.Start)
+          .justifyContent(FlexAlign.SpaceBetween)
+          .margin({ top: 14, bottom: 36 })
+
+          if (this.home === HOME_STAFF) {
+            this.sectionTitle('工作台')
+            Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+              ForEach(this.staffEntries(), (entry: TabEntry) => {
+                QuickEntry({ icon: entry.icon, title: entry.title, hue: entry.hue, ready: entry.ready,
+                  onSelect: (): void => { this.pusher.push(this.pathStack, entry.route, null); } })
+              }, (entry: TabEntry) => entry.title + entry.route)
+            }
+            .width('100%')
+            .margin({ top: 14 })
+          } else {
+            Row() {
+              Text('进行中的报修')
+                .fontSize(18)
+                .fontWeight(FontWeight.Bold)
+                .fontColor($r('app.color.text_primary'))
+                .layoutWeight(1)
+              Button('更多 ›', { type: ButtonType.Normal })
+                .fontSize(14)
+                .fontColor('#697071')
+                .backgroundColor(Color.Transparent)
+                .onClick(() => { this.openRepairs(); })
+            }
+            .width('100%')
+            .margin({ bottom: 14 })
+            this.pendingSection()
+            Button('刷新报修进度', { type: ButtonType.Capsule })
+              .enabled(!this.requesting)
+              .fontSize(13)
+              .fontColor('#697071')
+              .backgroundColor(Color.Transparent)
+              .margin({ top: 12 })
+              .onClick(() => { this.loadPending(); })
+          }
+        }
+        .width('100%')
+        .padding({ left: 18, right: 18, bottom: TAB_PAGE_BOTTOM_INSET + 12 })
+        .alignItems(HorizontalAlign.Start)
       }
       .width('100%')
-      .padding({
-        left: PAGE_PADDING,
-        right: PAGE_PADDING,
-        top: PAGE_PADDING,
-        bottom: TAB_PAGE_BOTTOM_INSET
-      })
-      .alignItems(HorizontalAlign.Start)
     }
     .scrollable(ScrollDirection.Vertical)
     .scrollBar(BarState.Off)
     .width('100%')
     .height('100%')
     .align(Alignment.Top)
-    .backgroundColor($r('app.color.start_window_background'))
+    .backgroundColor('#F0F5F8')
   }
 }
