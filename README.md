@@ -43,6 +43,19 @@
 - [06 界面与交互完善 #41](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/41)
 - [07 完整联调与课程演示 #42](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/42)：本地环境与演示账号就绪，设备之外的完整链路与构建已实测（PR #53 待合入）；设备装机验收与模型链路待补。
 
+### Web 功能迁移与客户扩展（2026-10-12 已确认，待开发）
+
+| 顺序 | 可认领 Issue | 范围与任务书 |
+| --- | --- | --- |
+| 08 | [公共接口与账号 #60](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/60) | [客户自主注册、邀请码工作人员注册、原生写通道、改密/强制改密、保持登录](docs/tasks/web-migration/01-public-api-account.md) |
+| 09 | [个人中心与备案 #61](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/61) | [客户资料/指南与公开案例收藏/报修消息，成员资料/通知/收藏、独立备案、评论与备案案例库](docs/tasks/web-migration/02-personal-records.md) |
+| 10 | [活动闭环 #62](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/62) | [登录报名、账号关联与我的报名、旧匿名查询、工作人员签到接待、活动管理](docs/tasks/web-migration/03-activities.md) |
+| 11 | [统计与管理 #63](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/63) | [统计排行榜、成员/客户账号/邀请/招新/备案/字典/审计管理、导出、关于与手册、维护工具](docs/tasks/web-migration/04-analytics-admin.md) |
+
+先读 [四模块公共基线与开工说明](docs/tasks/web-migration/README.md)，再认领对应 Issue；每份任务书含代码起点、交付清单、依赖、权限、必要验收和写手提示词。未预分配负责人，一个模块可分几个 PR 交付。#60 先提供基础契约，其他模块按所需接口接入，不必等待整个模块关闭。
+
+客户自主注册产生客户身份；邀请码用于工作人员注册。客户收藏指南和有效公开 AI 案例，消息为站内报修通知。游客可看活动，App 报名先登录，新报名绑定账号；旧匿名报名仍用手机号查询，不自动认领。**原 Web 数据库数据不迁移**，只复用代码/规则和必要结构，保留现有课设数据。以上为新增目标，未接通入口继续如实标注。
+
 依赖和必要验收写在各模块内。接口就绪后可以并行推进，不必等前一个 Issue 全部关闭。测试与审查只覆盖本次改动及受影响链路。
 
 ## 克隆与目录
@@ -67,7 +80,7 @@ AGENTS.md                项目开发规则
 
 默认 API 地址为 **https://harmony-api.pczafu.cn**。组员只需用 DevEco 打开 `app/`、构建运行，不必安装 MySQL 或每次启动本地后端。修改后端接口/数据库结构时仍在本机独立库验证，再统一部署稳定版本；不要将清库测试指向共享库。
 
-App 未登录直接进入游客首页，服务介绍和公开维修指南可浏览；点击报修、进度、AI 问诊或「我的」再登录。登录成功继续原操作，工作人员按服务器角色进入工作台；取消登录返回原页面，退出回游客首页。活动尚未接入，仍如实提示。公开指南是目录/原文浏览，不代表故障分类知识首页已完成。
+App 未登录直接进入游客首页，服务介绍、活动列表和公开维修指南可浏览；点击报修、进度、AI 问诊或「我的」再登录。登录成功继续原操作，工作人员按服务器角色进入工作台；取消登录返回原页面，退出回游客首页。活动报名尚未接入，由 #62 完成。公开指南按标题粗分并提供原文浏览，完整阅读体验及新增个人功能按各模块实际交付记录。
 
 课设测试账号为客户 `100001/customer123`、工作人员 `100002/staff123`、管理员 `100003/admin123`；组员联调尽量使用各自账号，避免操作同一张单。服务器地址已内置，新安装无需填写；已有自定义地址保留，可在登录页的「连接设置」切换为共享地址或本机地址。数据库密码和模型 Key 只在后端配置。
 
@@ -154,6 +167,7 @@ App 已接入真实登录与会话：登录页、启动恢复会话、退出、�
 [最简 CI](.github/workflows/ci.yml) 在每个指向 `main` 的 PR 创建、更新或重新打开时运行，使用 Ubuntu / Node.js 24 和仓库锁定的 pnpm 依赖，依次执行后端 `pnpm lint`、`pnpm test:unit`。不按文件路径跳过，不需要数据库、服务器或额外凭证。CI 通过仅表示这两项检查通过；HAP/后端构建、数据库集成测试和真机验证仍按改动需要在本机执行。
 
 - [开发方案](docs/development-plan.md)
+- [Web 功能迁移四模块基线与开工说明](docs/tasks/web-migration/README.md)（#60–#63，每份任务书含开工提示词）
 - [Issue #38 工作人员处理与维修备案任务书](docs/tasks/issue-38-staff-repair-records.md) · [写手开工提示词](docs/tasks/issue-38-writer-prompt.md)
 - [Issue #38 验证记录：工作人员处理与维修备案](docs/verification/issue-38.md) · [原生工作人员处理与备案接口](backend/docs/native-repairs-api.md)
 - [Issue #39 知识问答任务书](docs/tasks/issue-39-knowledge-ai.md) · [写手开工提示词](docs/tasks/issue-39-writer-prompt.md)
