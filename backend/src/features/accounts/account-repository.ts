@@ -72,6 +72,65 @@ export async function resolveOrCreateUser(
   return userId;
 }
 
+/**
+ * 客户自主注册（Issue #60）：只建「账号 + QQ 身份 + 自设口令」，
+ * **不建成员档案、不授予任何角色** —— 注册只产生客户身份。
+ *
+ * 与 `resolveOrCreateUser` 的区别：那个是多身份（QQ + 手机）发放流程，命中既有身份时
+ * 会复用或抛「需管理员处理」的冲突；注册是**独占**语义 —— QQ 只要已被任何账号占用
+ * （包括软删除的身份行），就直接返回 `ACCOUNT_IDENTITY_TAKEN`，
+ * 绝不认领、合并或改写既有账号的姓名、档案与口令。
+ */
+export async function createCustomerAccount(
+  tx: Prisma.TransactionClient,
+  input: { qq: string; displayName: string; password: string },
+): Promise<string> {
+  const taken = await tx.userIdentity.findUnique({
+    where: { type_identifierNormalized: { type: "QQ", identifierNormalized: input.qq } },
+    select: { id: true },
+  });
+  if (taken) throw identityTaken();
+
+  const now = new Date();
+  const userId = randomUUID();
+  try {
+    await tx.user.create({
+      data: {
+        id: userId,
+        status: "ACTIVE",
+        displayName: input.displayName,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    await tx.userIdentity.create({
+      data: {
+        id: randomUUID(),
+        userId,
+        type: "QQ",
+        identifierNormalized: input.qq,
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+    await setRegistrationPassword(tx, userId, input.password);
+  } catch (error) {
+    // 并发注册同一个 QQ 会撞 `user_identities_type_identifier_uq`（P2002）；
+    // 统一翻译成同一种冲突错误码，客户端不必区分「预检命中」还是「唯一键命中」。
+    if (hasPrismaCode(error, "P2002")) throw identityTaken();
+    throw error;
+  }
+  return userId;
+}
+
+function identityTaken(): AppError {
+  return new AppError("ACCOUNT_IDENTITY_TAKEN", "该 QQ 号已注册，请直接登录");
+}
+
+function hasPrismaCode(error: unknown, code: string): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === code;
+}
+
 export async function ensureMemberProfile(
   tx: Prisma.TransactionClient,
   input: {

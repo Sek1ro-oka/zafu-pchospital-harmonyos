@@ -74,6 +74,32 @@ export class AuthService {
     }
 
     await getDb().loginThrottle.deleteMany({ where: { keyDigest } });
+    return this.openSession(identity.userId, principal, context, "auth.login.succeeded");
+  }
+
+  /**
+   * 注册即登录（Issue #60）：为**同一个请求刚创建的账号**直接发放会话，
+   * 不重走密码校验与登录节流。
+   *
+   * 为什么不用 `login()`：注册成功后账号必然存在、口令就是刚写入的那一个，再校验一次没有
+   * 安全收益，却会把「同一 QQ + IP 的历史登录失败计数」带进来 —— 注册已经成功、会话却拿到
+   * 429，客户端停在没有会话的中间态。身份 / 角色 / 入口仍然只由服务端读库决定。
+   */
+  async issueSessionForRegisteredAccount(
+    userId: string,
+    context: PublicRequestContext,
+  ): Promise<AuthSessionResult> {
+    const principal = await this.readPrincipal(userId);
+    return this.openSession(userId, principal, context, "auth.register.succeeded");
+  }
+
+  /** 会话落库 + 审计（登录与注册共用；令牌只在这里生成，摘要入库、明文只回客户端）。 */
+  private async openSession(
+    userId: string,
+    principal: SessionPrincipal,
+    context: PublicRequestContext,
+    auditAction: string,
+  ): Promise<AuthSessionResult> {
     const token = generateSessionToken();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS);
@@ -82,25 +108,25 @@ export class AuthService {
       await tx.authSession.create({
         data: {
           id: sessionId,
-          userId: identity.userId,
+          userId,
           tokenDigest: digestSessionToken(token),
           createdAt: now,
           lastSeenAt: now,
           expiresAt,
           ipDigest: context.ipAddress
-            ? digestLoginThrottleKey(identity.userId, context.ipAddress)
+            ? digestLoginThrottleKey(userId, context.ipAddress)
             : undefined,
           userAgentDigest: context.userAgent
-            ? digestLoginThrottleKey(identity.userId, context.userAgent)
+            ? digestLoginThrottleKey(userId, context.userAgent)
             : undefined,
         },
       });
       await appendAuditLog(tx, {
         actor: context,
         actorType: "SYSTEM",
-        action: "auth.login.succeeded",
+        action: auditAction,
         targetType: "User",
-        targetId: identity.userId,
+        targetId: userId,
         result: "SUCCESS",
       });
     });

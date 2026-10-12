@@ -234,6 +234,16 @@ export type ChangePasswordInput = {
   newPasswordConfirmation: string;
 };
 
+/**
+ * 客户自主注册入参（Issue #60）：只有 QQ + 密码 + 确认密码。
+ * 昵称与联系电话留给个人资料（09 模块）补充；这里**不接收**任何角色/权限字段。
+ */
+export type CustomerRegistrationInput = {
+  qq: string;
+  password: string;
+  passwordConfirmation: string;
+};
+
 export type PaginationInput = { page: number; pageSize: number };
 export type PaginationMeta = PaginationInput & {
   total: number;
