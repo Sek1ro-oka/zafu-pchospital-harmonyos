@@ -11,6 +11,7 @@ interface HomeShell {
   pathStack: { names: string[]; getAllPathName(): string[]; };
   openRoute(route: string, param: object | null): void;
   selectNavigation(index: number): void;
+  canChangeTab(index: number): boolean;
   cancelLogin(): void;
   completeLogin(identity: Identity): void;
   logoutToGuest(): Promise<void>;
@@ -22,7 +23,7 @@ interface HomeShell {
 function shell(): HomeShell {
   const source = readFileSync("../app/entry/src/main/ets/features/home/HomePage.ets", "utf8");
   const start = source.slice(0, source.indexOf("  @Builder"));
-  const select = source.slice(source.indexOf("  private selectNavigation"), source.indexOf("  build()"));
+  const select = source.slice(source.indexOf("  private canChangeTab"), source.indexOf("  build()"));
   const intent = readFileSync("../app/entry/src/main/ets/core/auth/LoginIntent.ets", "utf8");
   const state = (intent + "\n" + start + select + "\n}\nnew HomePage();")
     .replace(/import[\s\S]*?from\s+['"][^'"]+['"];\s*/g, "")
@@ -59,9 +60,9 @@ test("取消登录保留原页，下一次登录不执行取消的意图", () =>
   page.openRoute("repair-orders", null);
   page.cancelLogin();
   assert.equal(page.pathStack.names.join(","), "public-guides");
-  page.selectNavigation(2);
+  page.selectNavigation(4);
   page.completeLogin({ home: "CUSTOMER" });
-  assert.equal(page.currentTab, 2);
+  assert.equal(page.currentTab, 4);
   assert.equal(page.pathStack.names.join(","), "public-guides");
 });
 test("报修登录成功按服务器角色续接目标，不遗留登录页", () => {
@@ -74,17 +75,61 @@ test("报修登录成功按服务器角色续接目标，不遗留登录页", ()
 });
 test("游客我的触发登录；退出清导航并回游客首页", async () => {
   const page = shell();
-  page.selectNavigation(2);
+  page.selectNavigation(4);
   assert.equal(page.currentTab, 0);
   assert.equal(page.pathStack.names.join(","), "login");
   page.onLoggedIn = () => { page.authenticated = true; };
   page.completeLogin({ home: "CUSTOMER" });
-  assert.equal(page.currentTab, 2);
+  assert.equal(page.currentTab, 4);
   page.onLogout = async () => { page.authenticated = false; };
   await page.logoutToGuest();
   assert.equal(page.currentTab, 0);
   assert.equal(page.authenticated, false);
   assert.equal(page.pathStack.names.length, 0);
+});
+
+test("滑动进入我的也被登录守卫拦截；取消留在原知识页", () => {
+  const page = shell();
+  page.currentTab = 3;
+  assert.equal(page.canChangeTab(4), false);
+  assert.equal(page.canChangeTab(4), false);
+  assert.equal(page.pathStack.names.join(","), "login");
+  page.cancelLogin();
+  assert.equal(page.currentTab, 3);
+  assert.equal(page.canChangeTab(2), true);
+  assert.equal(page.canChangeTab(3), true);
+});
+
+test("服务器登录成功后可跨过 Prop 更新的一帧；退出作废临时通行", async () => {
+  const page = shell();
+  page.selectNavigation(4);
+  page.completeLogin({ home: "CUSTOMER" });
+  assert.equal(page.canChangeTab(4), true);
+  await page.logoutToGuest();
+  assert.equal(page.canChangeTab(4), false);
+  assert.equal(page.currentTab, 0);
+});
+
+test("退出请求进行中拦截切页，完成后回游客首页，避免落在空我的页面", async () => {
+  const page = shell();
+  page.authenticated = true;
+  page.currentTab = 4;
+  let finish: () => void = () => {};
+  page.onLogout = () => new Promise<void>((resolve) => {
+    finish = () => { page.authenticated = false; resolve(); };
+  });
+  const leaving = page.logoutToGuest();
+  assert.equal(page.canChangeTab(3), false);
+  assert.equal(page.canChangeTab(4), false);
+  page.selectNavigation(4);
+  page.openRoute("knowledge", null);
+  assert.equal(page.pathStack.names.length, 0);
+  finish();
+  await leaving;
+  assert.equal(page.currentTab, 0);
+  assert.equal(page.canChangeTab(3), true);
+  assert.equal(page.canChangeTab(4), false);
+  assert.equal(page.pathStack.names.join(","), "login");
 });
 
 test("新安装采用共享地址，已有开发地址保留", async () => {

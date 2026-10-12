@@ -33,7 +33,7 @@ App → HTTPS harmony-api.pczafu.cn → Nginx → 127.0.0.1:13080 → MySQL 127.
 
 ## 资源限制
 
-- 后端 `MemoryHigh=300M`、`MemoryMax=384M`、Node 堆上限 256 MiB，CPU 上限 1 核；见 [systemd 配置](../deploy/pchospital-shared.service)。
+- 后端 `MemoryHigh=360M`、`MemoryMax=384M`、Node 堆上限 256 MiB，CPU 上限 1 核；见 [systemd 配置](../deploy/pchospital-shared.service)。2026-10-12 四页联调中，原 300M 软限额触发持续内存回收（pressure avg10 62.36%，无 OOM），连本机 health 也超时；仅调高软限额后立即恢复 HTTP 200。实际可用内存约 466 MiB，未进行服务器构建或修改数据库。
 - MySQL 缓冲池 128 MiB、最大连接 24、关闭 performance schema；见 [配置](../deploy/mysql-low-memory.cnf)。服务额外限制为 `MemoryHigh=360M`、`MemoryMax=480M`、CPU 上限 1 核。
 - **服务器禁止依赖安装和项目构建**，也不重跑数据库清理套件；只执行迁移、seed、课设账号初始化及运行。
 - 部署前查看 `free -m`、`df -h /`，运行后查看 `systemctl show pchospital-shared mysql -p MemoryCurrent -p MemoryMax`。达到上限或剩余内存不足时先处理课设服务，不重启整个服务器。

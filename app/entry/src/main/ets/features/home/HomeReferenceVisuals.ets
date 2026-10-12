@@ -1,4 +1,4 @@
-/** 首页专用视觉组件；不改动服务、我的或其他业务页的主题。 */
+/** 首页视觉组件与五栏共用的液态玻璃底栏。 */
 @Component
 export struct HomeReferenceHeader {
   onConsult: () => void = () => {};
@@ -114,7 +114,7 @@ export struct HomeQuickCard {
   }
 }
 
-/** 依照页面映射保留五个位置；活动提示未接入，知识库复用已有知识入口。 */
+/** 五个真实页面的液态玻璃底栏。 */
 @Component
 export struct HomeReferenceTabBar {
   @Prop currentTab: number = 0;
@@ -129,7 +129,7 @@ export struct HomeReferenceTabBar {
           .width(24)
           .height(24)
           .objectFit(ImageFit.Contain)
-        Text(label)
+        Text(index === 2 ? (this.staff ? '工作台' : '服务') : label)
           .fontSize(11)
           .fontWeight(FontWeight.Medium)
           .fontColor(this.currentTab === index ? '#0674F8' : '#161B1C')
@@ -142,7 +142,7 @@ export struct HomeReferenceTabBar {
     .height('100%')
     .backgroundColor(Color.Transparent)
     .borderRadius(30)
-    .accessibilityText(label)
+    .accessibilityText(index === 2 ? (this.staff ? '工作台' : '服务') : label)
     .accessibilitySelected(this.currentTab === index)
     .onClick(() => this.onSelect(index))
   }
@@ -155,10 +155,10 @@ export struct HomeReferenceTabBar {
         .hitTestBehavior(HitTestMode.None)
       Row() {
         this.item(0, '首页', $r('app.media.home_nav_home'), $r('app.media.home_nav_home_active'))
-        this.item(-1, '活动', $r('app.media.home_nav_activity'), $r('app.media.home_nav_activity'))
-        this.item(1, this.staff ? '工作台' : '服务', $r('app.media.home_headset'), $r('app.media.home_headset_active'))
-        this.item(-2, '知识', $r('app.media.home_nav_knowledge'), $r('app.media.home_nav_knowledge'))
-        this.item(2, '我的', $r('app.media.home_nav_profile'), $r('app.media.home_nav_profile_active'))
+        this.item(1, '活动', $r('app.media.home_nav_activity'), $r('app.media.home_nav_activity_active'))
+        this.item(2, this.staff ? '工作台' : '服务', $r('app.media.home_headset'), $r('app.media.home_headset_active'))
+        this.item(3, '知识', $r('app.media.home_nav_knowledge'), $r('app.media.home_nav_knowledge_active'))
+        this.item(4, '我的', $r('app.media.home_nav_profile'), $r('app.media.home_nav_profile_active'))
       }
       .width('100%').height('100%')
       .padding({ left: 8, right: 8 })

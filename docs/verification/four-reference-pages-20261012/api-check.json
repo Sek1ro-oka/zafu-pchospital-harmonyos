@@ -1,0 +1,10 @@
+{
+  "repair-activities": {
+    "status": 200,
+    "count": 0
+  },
+  "public/knowledge/guides": {
+    "status": 200,
+    "count": 15
+  }
+}

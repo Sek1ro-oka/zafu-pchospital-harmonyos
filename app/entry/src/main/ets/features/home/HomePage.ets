@@ -1,9 +1,14 @@
+import { accessibility } from '@kit.AccessibilityKit';
+import { curves } from '@kit.ArkUI';
+import { ActivityPage } from '../activity/ActivityPage';
+import { KnowledgeLibraryPage } from '../knowledge/KnowledgeLibraryPage';
+import { TAB_SLIDE_DURATION } from '../../core/ui/ReferencePage';
 import { SessionIdentity } from '../../core/auth/AuthContract';
 import { LoginIntent, routeAfterLogin } from '../../core/auth/LoginIntent';
 import { LoginPage } from '../auth/LoginPage';
 import { PublicGuidesPage } from '../knowledge/PublicGuidesPage';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
-import { NavPusher, RepairOrderFocusParam, routeTitle, ROUTE_SERVICE, ROUTE_PUBLIC_GUIDES, ROUTE_CASE_DETAIL, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_KNOWLEDGE_SOURCE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_ORDER_DETAIL, ROUTE_STAFF_RECORD, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
+import { NavPusher, GuideFocusParam, RepairOrderFocusParam, routeTitle, ROUTE_SERVICE, ROUTE_PUBLIC_GUIDES, ROUTE_CASE_DETAIL, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_KNOWLEDGE_SOURCE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_ORDER_DETAIL, ROUTE_STAFF_RECORD, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import { HomeReferenceTabBar } from './HomeReferenceVisuals';
 import { CaseDetailPage } from '../knowledge/CaseDetailPage';
 import { CaseLibraryPage } from '../knowledge/CaseLibraryPage';
@@ -21,9 +26,7 @@ import { ServicePage } from '../service/ServicePage';
 import { HomeTab } from './HomeTab';
 import { ProfilePage } from '../profile/ProfilePage';
 
-/** 现有内容页保持：首页 / 服务（工作人员为工作台）/ 我的。
- * 五栏外观按参考图映射；知识复用导航目的页，活动如实提示未接入。
- */
+/** 五个真实根页面；AI 对话仍是离开即销毁的导航子页。 */
 const TAB_INDEX_HOME: number = 0;
 const ROUTE_LOGIN: string = 'login';
 
@@ -34,6 +37,24 @@ export struct HomePage {
   private loginIntent: LoginIntent = new LoginIntent();
   private loginBusy: boolean = false;
   private expiring: boolean = false;
+  @State sessionTransition: boolean = false;
+  private admittedTab: number = -1;
+  @State reduceMotion: boolean = false;
+  private motionChanged: (enabled: boolean) => void = (enabled: boolean): void => { this.reduceMotion = enabled; };
+
+  aboutToAppear(): void {
+    try {
+      this.reduceMotion = accessibility.isAnimationReduceEnabledSync();
+      accessibility.onAnimationReduceStateChange(this.motionChanged);
+    } catch (_) {
+      // 平台无障碍查询不可用时仍用原生导航，不阻止页面展示。
+    }
+  }
+
+  aboutToDisappear(): void {
+    try { accessibility.offAnimationReduceStateChange(this.motionChanged); } catch (_) {}
+  }
+
   @Prop displayName: string = '';
   @Prop roleText: string = '';
   @Prop home: string = '';
@@ -50,10 +71,12 @@ export struct HomePage {
 
   /** 会话失效的统一出口：清空导航栈再回登录页，避免栈底残留子页。 */
   private async expireSession(): Promise<void> {
-    if (this.expiring) return;
+    if (this.expiring || this.sessionTransition) return;
     this.expiring = true;
+    this.admittedTab = -1;
     this.pathStack.clear();
     this.currentTab = TAB_INDEX_HOME;
+    this.tabController.changeIndex(TAB_INDEX_HOME);
     await this.onSessionExpired();
     this.requestLogin(new LoginIntent());
     this.expiring = false;
@@ -76,6 +99,7 @@ export struct HomePage {
     this.onLoggedIn(identity);
     this.pathStack.pop();
     if (intent.tab >= 0) {
+      this.admittedTab = intent.tab;
       this.currentTab = intent.tab;
       this.tabController.changeIndex(intent.tab);
     } else if (intent.route !== '') {
@@ -84,6 +108,7 @@ export struct HomePage {
   }
 
   private openRoute(route: string, param: Object | null): void {
+    if (this.sessionTransition) return;
     if (!this.authenticated && route !== ROUTE_PUBLIC_GUIDES) {
       const intent = new LoginIntent();
       intent.route = route;
@@ -95,11 +120,20 @@ export struct HomePage {
   }
 
   private async logoutToGuest(): Promise<void> {
+    if (this.sessionTransition) return;
+    this.sessionTransition = true;
+    this.admittedTab = -1;
     this.loginIntent = new LoginIntent();
     this.pathStack.clear();
     this.currentTab = TAB_INDEX_HOME;
     this.tabController.changeIndex(TAB_INDEX_HOME);
-    await this.onLogout();
+    try {
+      await this.onLogout();
+    } finally {
+      this.currentTab = TAB_INDEX_HOME;
+      this.tabController.changeIndex(TAB_INDEX_HOME);
+      this.sessionTransition = false;
+    }
   }
 
   @Builder
@@ -113,10 +147,12 @@ export struct HomePage {
         });
       } else if (name === ROUTE_PUBLIC_GUIDES) {
         PublicGuidesPage({
+          initialGuideId: param !== null && param !== undefined ? (param as GuideFocusParam).guideId : '',
           onConsult: (): void => { this.openRoute(ROUTE_KNOWLEDGE, null); }
         });
       } else if (name === ROUTE_SERVICE) {
         ServicePage({
+          onActivities: (): void => { this.pathStack.clear(); this.selectNavigation(1); },
           home: this.home, permissions: this.permissions, pathStack: this.pathStack,
           authenticated: this.authenticated,
           onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
@@ -194,15 +230,29 @@ export struct HomePage {
     .backgroundColor($r('app.color.start_window_background'))
   }
 
-  private selectNavigation(index: number): void {
-    if (index === -1) {
-      this.getUIContext().getPromptAction().showToast({ message: '活动模块暂未接入' });
-    } else if (index === -2) {
-      // 仍用导航目的页，离开即销毁本次问答，避免常驻 Tab 留存会话。
-      this.openRoute(this.authenticated ? ROUTE_KNOWLEDGE : ROUTE_PUBLIC_GUIDES, null);
-    } else if (index === 2 && !this.authenticated) {
+  /** 同时拦截底栏、手势和控制器切换；拒绝切换后取消登录保持原 tab。 */
+  private canChangeTab(index: number): boolean {
+    if (this.sessionTransition && index !== TAB_INDEX_HOME) return false;
+    if (index === 4 && !this.authenticated) {
+      // 登录成功的单次通行，覆盖父组件 Prop 尚未刷新的一帧；不携带业务权限。
+      if (this.admittedTab === index) {
+        this.admittedTab = -1;
+        return true;
+      }
       const intent = new LoginIntent();
-      intent.tab = 2;
+      intent.tab = 4;
+      this.requestLogin(intent);
+      return false;
+    }
+    this.admittedTab = -1;
+    return true;
+  }
+
+  private selectNavigation(index: number): void {
+    if (this.sessionTransition) return;
+    if (index === 4 && !this.authenticated) {
+      const intent = new LoginIntent();
+      intent.tab = 4;
       this.requestLogin(intent);
     } else if (this.currentTab !== index) {
       this.tabController.changeIndex(index);
@@ -212,14 +262,13 @@ export struct HomePage {
   build() {
     Navigation(this.pathStack) {
       Stack({ alignContent: Alignment.Bottom }) {
-        if (this.currentTab === TAB_INDEX_HOME) {
-          // 只将首页底色延伸至系统状态栏，保留系统时钟和真实状态图标。
-          Rect().width('100%').height('100%').fill('#FFDE8F')
-            .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
-        }
+        // 延伸当前页面底色，系统时钟和状态图标仍由系统绘制。
+        Rect().width('100%').height('100%').fill(this.currentTab === TAB_INDEX_HOME ? '#FFDE8F' : '#F0F5F8')
+          .expandSafeArea([SafeAreaType.SYSTEM], [SafeAreaEdge.TOP])
         Tabs({ index: this.currentTab, controller: this.tabController }) {
           TabContent() {
             HomeTab({
+              onActivities: (): void => { this.selectNavigation(1); },
               displayName: this.displayName,
               roleText: this.roleText,
               home: this.home,
@@ -234,7 +283,12 @@ export struct HomePage {
           }
 
           TabContent() {
+            ActivityPage()
+          }
+
+          TabContent() {
             ServicePage({
+              onActivities: (): void => { this.selectNavigation(1); },
               home: this.home,
               permissions: this.permissions,
               authenticated: this.authenticated,
@@ -247,8 +301,17 @@ export struct HomePage {
           }
 
           TabContent() {
+            KnowledgeLibraryPage({
+              authenticated: this.authenticated, home: this.home, permissions: this.permissions,
+              onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+              onSessionExpired: (): void => { this.expireSession(); }
+            })
+          }
+
+          TabContent() {
             if (this.authenticated) {
               ProfilePage({
+                onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
                 displayName: this.displayName,
                 roleText: this.roleText,
                 home: this.home,
@@ -266,7 +329,10 @@ export struct HomePage {
         }
         .barPosition(BarPosition.End)
         .barHeight(0)
-        .scrollable(false)
+        .scrollable(!this.reduceMotion)
+        .animationDuration(this.reduceMotion ? 0 : TAB_SLIDE_DURATION)
+        .animationCurve(curves.cubicBezierCurve(0.23, 1, 0.32, 1))
+        .onContentWillChange((_current: number, coming: number): boolean => this.canChangeTab(coming))
         .onChange((index: number) => {
           this.currentTab = index;
         })

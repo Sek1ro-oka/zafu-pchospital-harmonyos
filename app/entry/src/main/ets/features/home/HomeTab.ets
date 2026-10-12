@@ -46,6 +46,7 @@ function isPendingStatus(status: string): boolean {
  */
 @Component
 export struct HomeTab {
+  onActivities: () => void = () => {};
   @Prop displayName: string = '';
   @Prop roleText: string = '';
   @Prop @Watch('authChanged') authenticated: boolean = false;
@@ -127,7 +128,7 @@ export struct HomeTab {
   }
 
   private showActivities(): void {
-    this.getUIContext().getPromptAction().showToast({ message: '活动模块暂未接入' });
+    this.onActivities();
   }
 
   /** 审核入口按服务器权限展示，实际业务权限仍由服务端检查。 */

@@ -1,0 +1,6 @@
+{
+  "limits": "NRestarts=0\nMemoryCurrent=330162176\nMemoryHigh=377487360\nMemoryMax=402653184\nActiveState=active\n",
+  "pressure": "some avg10=0.00 avg60=14.66 avg300=26.05 total=149710947\nfull avg10=0.00 avg60=14.66 avg300=26.05 total=149703140\n",
+  "events": "low 0\nhigh 81529\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "memory": "               total        used        free      shared  buff/cache   available\nMem:            1613        1154          99           3         553         458\nSwap:              0           0           0\n"
+}

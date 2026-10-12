@@ -1,4 +1,5 @@
 export const ROUTE_PUBLIC_GUIDES: string = 'public-guides';
+export interface GuideFocusParam { guideId: string; }
 export const ROUTE_SERVICE: string = 'service';
 /**
  * 「我的报修」深链参数：从首页「进行中的报修」预览卡进入时带上订单 ID，
