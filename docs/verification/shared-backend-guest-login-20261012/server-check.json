@@ -1,0 +1,5 @@
+{
+  "resources": "Mon Oct 12 03:45:16 AM UTC 2026\n 11:45:16 up 9 days, 17:52,  1 user,  load average: 0.04, 0.05, 0.04\n               total        used        free      shared  buff/cache   available\nMem:            1613        1149         103           3         554         463\nSwap:              0           0           0\nFilesystem      Size  Used Avail Use% Mounted on\n/dev/vda3        40G   13G   25G  35% /\nNRestarts=0\nMemoryCurrent=313999360\nMemoryPeak=315092992\nMemoryMax=402653184\n\nNRestarts=0\nMemoryCurrent=195301376\nMemoryPeak=195801088\nMemoryMax=503316480\nlow 0\nhigh 503\nmax 0\noom 0\noom_kill 0\noom_group_kill 0\n",
+  "services": "enabled\nenabled\nactive\nactive\nactive\nactive\ngame=200\nagent=401\n",
+  "health": "{\"success\":true,\"data\":{\"status\":\"ok\",\"database\":\"reachable\"},\"meta\":{\"requestId\":\"req_92f34fc8-235c-4065-bdf6-82937d4a8b74\"}}notBefore=Oct 12 02:14:41 2026 GMT\nnotAfter=Jan 10 02:14:40 2027 GMT\nactive\n-rwxr-xr-x 1 root root 45 Oct 12 11:30 /etc/letsencrypt/renewal-hooks/deploy/pchospital-shared-nginx.sh\n"
+}

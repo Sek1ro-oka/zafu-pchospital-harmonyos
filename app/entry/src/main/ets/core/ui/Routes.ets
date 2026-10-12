@@ -1,3 +1,4 @@
+export const ROUTE_PUBLIC_GUIDES: string = 'public-guides';
 export const ROUTE_SERVICE: string = 'service';
 /**
  * 「我的报修」深链参数：从首页「进行中的报修」预览卡进入时带上订单 ID，
@@ -31,6 +32,7 @@ export const ROUTE_CASE_DETAIL: string = 'knowledge-case-detail';
  * 标题从这里取，保证所有子页的系统标题栏与返回按钮样式一致（Issue #41）。
  */
 export function routeTitle(name: string): string {
+  if (name === ROUTE_PUBLIC_GUIDES) return '公开维修指南';
   if (name === ROUTE_SERVICE) {
     return '客户服务';
   }

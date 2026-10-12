@@ -26,6 +26,9 @@ import {
 export struct LoginPage {
   onLoggedIn: (identity: SessionIdentity) => void = () => {
   };
+  onCancel: () => void = () => {};
+  onBusyChange: (busy: boolean) => void = () => {};
+  @State showSettings: boolean = false;
   @State serverUrl: string = '';
   @State qq: string = '';
   @State password: string = '';
@@ -45,7 +48,7 @@ export struct LoginPage {
     const context = this.getUIContext().getHostContext() as common.Context;
     const saved = await ApiConfig.save(context, this.serverUrl);
     if (saved === '') {
-      this.errorText = '服务器地址无效，请填写如 http://192.168.1.20:13080';
+      this.errorText = '服务器地址无效，请填写完整的 HTTPS 或本地开发地址';
       return false;
     }
     if (this.serverUrl !== saved) {
@@ -95,6 +98,7 @@ export struct LoginPage {
     }
     this.errorText = '';
     this.busy = true;
+    this.onBusyChange(true);
     try {
       if (!(await this.applyServerUrl())) {
         return;
@@ -116,6 +120,7 @@ export struct LoginPage {
       }
     } finally {
       this.busy = false;
+      this.onBusyChange(false);
     }
   }
 
@@ -129,106 +134,121 @@ export struct LoginPage {
   }
 
   build() {
-    Column({ space: GAP_LG }) {
-      Column({ space: GAP_SM }) {
-        // 品牌图标砖：与全局彩色图标系统同一套令牌（纯视觉，不改布局与状态逻辑）。
-        IconTile({ icon: '医', hue: 'blue' })
-        Text('鸿蒙电脑医院')
-          .fontSize(FONT_DISPLAY)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-        Text('课程实验 · 登录')
-          .fontSize(FONT_BODY)
-          .fontColor($r('app.color.text_secondary'))
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
-
-      Column({ space: CARD_GAP }) {
-        this.fieldLabel('QQ 号')
-        TextInput({ text: $$this.qq, placeholder: '5–11 位数字' })
-          .type(InputType.Number)
-          .height(CONTROL_HEIGHT)
-          .backgroundColor($r('app.color.field_bg'))
-          .borderRadius(CONTROL_RADIUS)
-        this.fieldLabel('密码')
-        TextInput({ text: $$this.password, placeholder: '密码' })
-          .type(InputType.Password)
-          .height(CONTROL_HEIGHT)
-          .backgroundColor($r('app.color.field_bg'))
-          .borderRadius(CONTROL_RADIUS)
-        if (this.errorText !== '') {
-          Text(this.errorText)
-            .fontSize(FONT_TEXT)
-            .fontColor($r('app.color.danger'))
-            .width('100%')
-            .textAlign(TextAlign.Start)
+    Scroll() {
+      Column({ space: GAP_LG }) {
+        Column({ space: GAP_SM }) {
+          // 品牌图标砖：与全局彩色图标系统同一套令牌（纯视觉，不改布局与状态逻辑）。
+          IconTile({ icon: '医', hue: 'blue' })
+          Text('鸿蒙电脑医院')
+            .fontSize(FONT_DISPLAY)
+            .fontWeight(FontWeight.Bold)
+            .fontColor($r('app.color.text_primary'))
+          Text('课程实验 · 登录')
+            .fontSize(FONT_BODY)
+            .fontColor($r('app.color.text_secondary'))
         }
-        Button() {
-          Row({ space: GAP_SM }) {
-            if (this.busy) {
-              LoadingProgress()
-                .width(18)
-                .height(18)
-                .color(Color.White)
-            }
-            Text(this.busy ? '登录中…' : (this.errorText !== '' ? '重试登录' : '登录'))
-              .fontSize(FONT_SUBTITLE)
-              .fontColor(Color.White)
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+
+        Column({ space: CARD_GAP }) {
+          this.fieldLabel('QQ 号')
+          TextInput({ text: $$this.qq, placeholder: '5–11 位数字' })
+            .type(InputType.Number)
+            .height(CONTROL_HEIGHT)
+            .backgroundColor($r('app.color.field_bg'))
+            .borderRadius(CONTROL_RADIUS)
+          this.fieldLabel('密码')
+          TextInput({ text: $$this.password, placeholder: '密码' })
+            .type(InputType.Password)
+            .height(CONTROL_HEIGHT)
+            .backgroundColor($r('app.color.field_bg'))
+            .borderRadius(CONTROL_RADIUS)
+          if (this.errorText !== '') {
+            Text(this.errorText)
+              .fontSize(FONT_TEXT)
+              .fontColor($r('app.color.danger'))
+              .width('100%')
+              .textAlign(TextAlign.Start)
           }
-        }
-        .width('100%')
-        .height(CONTROL_HEIGHT)
-        .backgroundColor($r('app.color.brand'))
-        .enabled(!this.busy)
-        .onClick(() => {
-          this.doLogin();
-        })
-      }
-      .width('100%')
-      .padding(CARD_PADDING)
-      .backgroundColor($r('app.color.surface'))
-      .borderRadius(CARD_RADIUS)
-
-      Column({ space: GAP_SM }) {
-        this.fieldLabel('服务器地址（手机填电脑局域网 IP:端口）')
-        TextInput({ text: $$this.serverUrl, placeholder: 'http://192.168.1.20:13080' })
+          Button() {
+            Row({ space: GAP_SM }) {
+              if (this.busy) {
+                LoadingProgress()
+                  .width(18)
+                  .height(18)
+                  .color(Color.White)
+              }
+              Text(this.busy ? '登录中…' : (this.errorText !== '' ? '重试登录' : '登录'))
+                .fontSize(FONT_SUBTITLE)
+                .fontColor(Color.White)
+            }
+          }
+          .width('100%')
           .height(CONTROL_HEIGHT)
-          .backgroundColor($r('app.color.field_bg'))
-          .borderRadius(CONTROL_RADIUS)
-          .onSubmit(() => {
-            this.onServerUrlSubmitted();
+          .backgroundColor($r('app.color.brand'))
+          .enabled(!this.busy)
+          .onClick(() => {
+            this.doLogin();
           })
-        Row({ space: GAP_SM }) {
-          Text('●')
-            .fontSize(10)
-            .fontColor(this.healthOk && !this.checking ? $r('app.color.ok') : $r('app.color.text_secondary'))
-          Text(this.checking || this.healthText === '' ? '正在检测后端连接…' : this.healthText)
-            .fontSize(FONT_NOTE)
-            .fontColor(this.healthOk && !this.checking ? $r('app.color.ok') : $r('app.color.text_secondary'))
-            .layoutWeight(1)
         }
         .width('100%')
-        Button(this.checking ? '检测中…' : '保存地址并检测')
-          .fontSize(FONT_TEXT)
-          .height(CONTROL_HEIGHT_MD)
-          .backgroundColor($r('app.color.brand_soft'))
+        .padding(CARD_PADDING)
+        .backgroundColor($r('app.color.surface'))
+        .borderRadius(CARD_RADIUS)
+
+        Button('暂不登录，继续浏览', { type: ButtonType.Normal })
+          .width('100%').backgroundColor(Color.Transparent)
           .fontColor($r('app.color.brand'))
+          .enabled(!this.busy)
+          .onClick(this.onCancel)
+        Button(this.showSettings ? '收起连接设置' : '连接设置', { type: ButtonType.Normal })
+          .backgroundColor(Color.Transparent).fontSize(FONT_NOTE)
+          .fontColor($r('app.color.text_secondary'))
           .enabled(!this.busy && !this.checking)
-          .onClick(() => {
-            this.onServerUrlSubmitted();
-          })
+          .onClick(() => { this.showSettings = !this.showSettings; })
+        if (this.showSettings) {
+          Column({ space: GAP_SM }) {
+            this.fieldLabel('开发连接地址（默认共享实验服务器）')
+            TextInput({ text: $$this.serverUrl, placeholder: 'https://harmony-api.pczafu.cn' })
+              .height(CONTROL_HEIGHT)
+              .backgroundColor($r('app.color.field_bg'))
+              .borderRadius(CONTROL_RADIUS)
+              .onSubmit(() => {
+                this.onServerUrlSubmitted();
+              })
+            Row({ space: GAP_SM }) {
+              Text('●')
+                .fontSize(10)
+                .fontColor(this.healthOk && !this.checking ? $r('app.color.ok') : $r('app.color.text_secondary'))
+              Text(this.checking || this.healthText === '' ? '正在检测后端连接…' : this.healthText)
+                .fontSize(FONT_NOTE)
+                .fontColor(this.healthOk && !this.checking ? $r('app.color.ok') : $r('app.color.text_secondary'))
+                .layoutWeight(1)
+            }
+            .width('100%')
+            Button(this.checking ? '检测中…' : '保存地址并检测')
+              .fontSize(FONT_TEXT)
+              .height(CONTROL_HEIGHT_MD)
+              .backgroundColor($r('app.color.brand_soft'))
+              .fontColor($r('app.color.brand'))
+              .enabled(!this.busy && !this.checking)
+              .onClick(() => {
+                this.onServerUrlSubmitted();
+              })
+          }
+          .width('100%')
+          .padding(CARD_PADDING)
+          .backgroundColor($r('app.color.surface'))
+          .borderRadius(CARD_RADIUS)
+          .alignItems(HorizontalAlign.Start)
+        }
       }
       .width('100%')
-      .padding(CARD_PADDING)
-      .backgroundColor($r('app.color.surface'))
-      .borderRadius(CARD_RADIUS)
+      .padding(PAGE_PADDING)
       .alignItems(HorizontalAlign.Start)
+      .backgroundColor($r('app.color.start_window_background'))
     }
-    .width('100%')
-    .height('100%')
-    .padding(PAGE_PADDING)
-    .alignItems(HorizontalAlign.Start)
+    .width('100%').height('100%').align(Alignment.Top)
     .backgroundColor($r('app.color.start_window_background'))
   }
 }

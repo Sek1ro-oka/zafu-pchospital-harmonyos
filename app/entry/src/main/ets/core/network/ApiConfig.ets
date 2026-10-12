@@ -3,6 +3,7 @@ import { common } from '@kit.AbilityKit';
 
 const STORE_NAME: string = 'pc_hospital_app';
 const KEY_BASE_URL: string = 'api_base_url';
+export const DEFAULT_API_BASE_URL: string = 'https://harmony-api.pczafu.cn';
 
 /**
  * API 地址规范化：去空白、缺协议补 `http://`、去尾部斜杠。
@@ -28,13 +29,13 @@ export function normalizeBaseUrl(raw: string): string {
 
 /** API 地址是可配置项（手机联调填电脑局域网 IP:端口），保存在应用私有 preferences。 */
 export class ApiConfig {
-  private static baseUrl: string = '';
+  private static baseUrl: string = DEFAULT_API_BASE_URL;
 
   static getBaseUrl(): string {
     return ApiConfig.baseUrl;
   }
 
-  /** 启动时读取上次保存的地址；无保存值时保持空串，由登录页要求填写。 */
+  /** 新安装默认共享实验后端；已有开发地址保留，仍可在连接设置切换。 */
   static async loadSaved(context: common.Context): Promise<string> {
     try {
       const store = await preferences.getPreferences(context, { name: STORE_NAME });
