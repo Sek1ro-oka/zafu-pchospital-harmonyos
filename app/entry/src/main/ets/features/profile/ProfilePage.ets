@@ -1,11 +1,10 @@
-import { HOME_STAFF } from '../../core/auth/AuthContract';
+import { roleLabelFor, HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ROUTE_CASE_LIBRARY, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
 import { ReferenceRoundAction, ReferenceShortcut, REFERENCE_BACKGROUND } from '../../core/ui/ReferencePage';
 import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
-import { RepairOrderView, REPAIR_ORDER_COMPLETED, REPAIR_ORDER_ACCEPTED, REPAIR_ORDER_REPAIRING, REPAIR_ORDER_SUBMITTED } from '../repair/RepairOrderContract';
-import { RepairOrderService } from '../repair/RepairOrderService';
+import { ProfileService } from './ProfileService';
 
 /** 统计区块的加载状态（与 StatePanel 配套）。 */
 const STATS_LOADING: number = 0;
@@ -19,7 +18,7 @@ interface ProfileEntry {
   route: string;
 }
 
-/** 我的主页面对照②：真实会话卡、最近一页统计、信息宫格与常用服务。
+/** 我的主页面对照②：真实会话卡、本人报修统计、信息宫格与常用服务。
  * 未接入功能直接标注；维修记录不复用报修列表冒充 RepairRecord。
  */
 @Component
@@ -39,6 +38,8 @@ export struct ProfilePage {
   @State completedCount: number = 0;
   @State statsErrorText: string = '';
   @State logoutBusy: boolean = false;
+  @State identityBusy: boolean = false;
+  private identityGeneration: number = 0;
   private requesting: boolean = false;
   private generation: number = 0;
   onOpen: (route: string, param: Object | null) => void = () => {};
@@ -49,7 +50,7 @@ export struct ProfilePage {
     }
   }
 
-  aboutToDisappear(): void { this.generation += 1; this.requesting = false; }
+  aboutToDisappear(): void { this.generation += 1; this.identityGeneration += 1; this.requesting = false; this.identityBusy = false; }
 
   private handleError(error: Object): void {
     if (error instanceof ApiRequestError) {
@@ -74,12 +75,11 @@ export struct ProfilePage {
     this.statsState = STATS_LOADING;
     this.statsErrorText = '';
     try {
-      const items = await RepairOrderService.listMine('', 1);
+      const stats = await ProfileService.stats();
       if (generation !== this.generation) return;
-      this.totalCount = items.length;
-      this.completedCount = items.filter((order: RepairOrderView) => order.status === REPAIR_ORDER_COMPLETED).length;
-      this.pendingCount = items.filter((order: RepairOrderView) =>
-        order.status === REPAIR_ORDER_SUBMITTED || order.status === REPAIR_ORDER_ACCEPTED || order.status === REPAIR_ORDER_REPAIRING).length;
+      this.totalCount = stats.total;
+      this.completedCount = stats.completed;
+      this.pendingCount = stats.pending;
       this.statsState = STATS_READY;
     } catch (error) {
       if (generation !== this.generation) return;
@@ -97,7 +97,7 @@ export struct ProfilePage {
       { title: '活动报名', icon: $r('app.media.ref_flag'), note: '暂未接入', route: '' },
       { title: '收藏', icon: $r('app.media.ref_star'), note: '暂未接入', route: '' },
       { title: '消息', icon: $r('app.media.ref_message'), note: '暂未接入', route: '' },
-      { title: '个人资料', icon: $r('app.media.ref_profile'), note: '编辑未接入', route: '' }
+      { title: '个人资料', icon: $r('app.media.ref_profile'), note: '查看资料', route: 'profile-info' }
     ];
   }
 
@@ -111,15 +111,43 @@ export struct ProfilePage {
       entries.push({ title: '备案审核', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_STAFF_REVIEW });
     }
     entries.push({ title: '消息', icon: $r('app.media.ref_message'), note: '暂未接入', route: '' });
-    entries.push({ title: '个人资料', icon: $r('app.media.ref_profile'), note: '编辑未接入', route: '' });
+    entries.push({ title: '个人资料', icon: $r('app.media.ref_profile'), note: '查看资料', route: 'profile-info' });
     return entries;
   }
 
   private openEntry(entry: ProfileEntry): void {
-    if (entry.route === '') {
+    if (entry.route === 'profile-info') {
+      this.showIdentity();
+    } else if (entry.route === '') {
       this.getUIContext().getPromptAction().showToast({ message: `${entry.title}暂未接入` });
     } else {
       this.onOpen(entry.route, null);
+    }
+  }
+
+  /** 资料重新查询真实会话，离开页面后忽略迟到响应。 */
+  private async showIdentity(): Promise<void> {
+    if (this.identityBusy) return;
+    this.identityBusy = true;
+    const generation = ++this.identityGeneration;
+    try {
+      const identity = await ProfileService.identity();
+      if (generation !== this.identityGeneration) return;
+      this.getUIContext().showAlertDialog({
+        title: '个人资料',
+        message: '姓名：' + (identity.displayName || '未命名用户') + '\n角色：' + roleLabelFor(identity.roles) +
+          '\n账号状态：已登录' + (identity.mustChangePassword ? '\n请在 Web 端修改初始密码' : '') + '\n资料编辑暂未接入',
+        confirm: { value: '知道了', action: (): void => {} }
+      });
+    } catch (error) {
+      if (generation !== this.identityGeneration) return;
+      if (error instanceof ApiRequestError && isSessionExpiredCode(error.code)) {
+        this.onSessionExpired();
+      } else {
+        this.getUIContext().getPromptAction().showToast({ message: error instanceof ApiRequestError ? error.message : '资料加载失败，请重试' });
+      }
+    } finally {
+      if (generation === this.identityGeneration) this.identityBusy = false;
     }
   }
 
@@ -149,11 +177,9 @@ export struct ProfilePage {
 
   @Builder
   profileCard() {
-    Column({ space: 16 }) {
+    Column({ space: 20 }) {
       Row({ space: 12 }) {
-        Text(this.displayName === '' ? '客' : this.displayName.substring(0, 1))
-          .fontSize(26).fontWeight(FontWeight.Medium).fontColor(Color.White)
-          .width(50).height(50).textAlign(TextAlign.Center).backgroundColor('#B8AFC8').borderRadius(25)
+        Image($r('app.media.profile_avatar')).width(50).height(50).objectFit(ImageFit.Contain)
         Column({ space: 6 }) {
           Text(this.displayName === '' ? '未命名用户' : this.displayName).fontSize(20).fontWeight(FontWeight.Bold)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -181,7 +207,7 @@ export struct ProfilePage {
   @Builder
   statCell(label: string, value: number, icon: Resource) {
     Column({ space: 6 }) {
-      Image(icon).width(28).height(28)
+      Image(icon).width(30).height(30)
       Text(label).fontSize(12).fontColor('#252B2F')
       Text(`${value}`).fontSize(12).fontColor('#7B8287')
     }.layoutWeight(1).alignItems(HorizontalAlign.Center)
@@ -200,10 +226,13 @@ export struct ProfilePage {
           this.statCell('处理中', this.pendingCount, $r('app.media.ref_activity'))
           this.statCell('已完结', this.completedCount, $r('app.media.ref_shield'))
         }.width('100%')
-        Text('最近一页本人报修单（最多 20 条）').fontSize(10).fontColor('#8E969C')
+        Row() {
+          Text('全部本人报修单 · 不含已删除记录').fontSize(10).fontColor('#8E969C').layoutWeight(1)
+          Button('刷新').fontSize(11).height(26).backgroundColor(Color.Transparent).fontColor('#1676E5')
+            .onClick(() => { this.loadStats(); })
+        }.width('100%')
       }
     }.width('100%').padding(14).backgroundColor(Color.White).borderRadius(20)
-      .onClick(() => { this.loadStats(); })
   }
 
   build() {
@@ -225,7 +254,7 @@ export struct ProfilePage {
           Flex({ wrap: FlexWrap.Wrap }) {
             ForEach(this.home === HOME_STAFF ? this.staffEntries() : this.customerEntries(), (entry: ProfileEntry) => {
               ReferenceShortcut({
-                title: entry.title, icon: entry.icon, note: entry.note,
+                title: entry.title, icon: entry.icon, note: entry.route === 'profile-info' && this.identityBusy ? '加载中…' : entry.note, itemWidth: '33.33%',
                 onSelect: (): void => { this.openEntry(entry); }
               })
             }, (entry: ProfileEntry) => entry.title)

@@ -1,7 +1,7 @@
 import { http } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { ApiErrorBody, ApiMeta } from './ApiContract';
+import { ApiErrorBody, ApiMeta, ApiSuccess } from './ApiContract';
 
 /**
  * 统一请求错误（ArkTS 只允许抛出 Error 及其子类）。
@@ -96,6 +96,11 @@ export class ApiClient {
 
   static async get<T>(baseUrl: string, path: string, token: string, options?: ApiRequestOptions): Promise<T> {
     return ApiClient.request<T>(baseUrl, http.RequestMethod.GET, path, '', token, options);
+  }
+
+  /** 保留分页元数据，既有 get() 仍只返回 data。 */
+  static async getWithMeta<T>(baseUrl: string, path: string, token: string): Promise<ApiSuccess<T>> {
+    return ApiClient.request<ApiSuccess<T>>(baseUrl, http.RequestMethod.GET, path, '', token, undefined, undefined, true);
   }
 
   static async post<T>(baseUrl: string, path: string, body: string, token: string, options?: ApiRequestOptions): Promise<T> {
@@ -240,7 +245,8 @@ export class ApiClient {
     body: string,
     token: string,
     options?: ApiRequestOptions,
-    extraHeaders?: Record<string, string>
+    extraHeaders?: Record<string, string>,
+    includeMeta: boolean = false
   ): Promise<T> {
     const headers: Record<string, string> = {};
     const baseKeys: string[] = Object.keys(ApiClient.BASE_HEADERS);
@@ -275,10 +281,10 @@ export class ApiClient {
     } finally {
       httpRequest.destroy();
     }
-    return ApiClient.parse<T>(response);
+    return ApiClient.parse<T>(response, includeMeta);
   }
 
-  private static parse<T>(response: http.HttpResponse): T {
+  private static parse<T>(response: http.HttpResponse, includeMeta: boolean = false): T {
     const status: number = response.responseCode;
     const text: string = response.result as string;
     if (text === undefined || text === '') {
@@ -291,7 +297,7 @@ export class ApiClient {
       throw new ApiRequestError('UNEXPECTED_RESPONSE', `服务器返回无法识别的数据（HTTP ${status}）`, status, '');
     }
     if (envelope.success === true) {
-      return envelope.data as T;
+      return includeMeta ? envelope as T : envelope.data as T;
     }
     const requestId: string = envelope.meta !== undefined ? envelope.meta.requestId : '';
     const apiError: ApiErrorBody | undefined = envelope.error;

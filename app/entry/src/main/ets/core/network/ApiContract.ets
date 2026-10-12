@@ -1,6 +1,14 @@
 // 后端 API 信封（已核实的 `success` / `data` 或 `error` / `meta` 结构）。
 export interface ApiMeta {
   requestId: string;
+  pagination?: ApiPagination;
+}
+
+export interface ApiPagination {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
 }
 
 export interface ApiErrorBody {
