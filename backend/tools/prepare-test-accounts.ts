@@ -14,9 +14,12 @@ import { assertExperimentDatabase } from "./db-target.mjs";
  *
  * - 只允许课设实验库（`assertExperimentDatabase`，与 seed 同一道闸门）；
  * - 固定 QQ 与口令，可反复执行：每次把口令重置为已知值，其余状态收敛到目标值；
- * - 只动本脚本自己的两个账号（固定 UUID）。QQ 被其他账号占用时停止，绝不改别人的数据；
+ * - 只动本脚本自己的三个账号（固定 UUID）。QQ 被其他账号占用时停止，绝不改别人的数据；
  * - 账号设计：客户 = 无任何角色、无成员档案（服务端登录要求：有成员档案就必须有有效
- *   MEMBER 角色）；工作人员 = MEMBER（维修队成员）+ 有效成员档案。工作人员不是 ADMIN。
+ *   MEMBER 角色）；工作人员 = MEMBER（维修队成员）+ 有效成员档案，不是 ADMIN；
+ *   管理员 = ADMIN（`repair:review` / `repair:flag` 等管理权限）+ **刻意不建成员档案**，
+ *   因此它只能审核 / 标记，不能受理报修单（受理要求有效成员档案，会得到 `MEMBER_REQUIRED`），
+ *   正好用于课程演示「权限失败」场景。三个账号与 `docs/native-client-api.md` 的表一致。
  */
 
 if (existsSync(".env")) loadEnvFile(".env");
@@ -49,7 +52,15 @@ type TestAccount = {
   qq: string;
   password: string;
   displayName: string;
-  roleCode: "MEMBER" | null;
+  roleCode: "MEMBER" | "ADMIN" | null;
+  /**
+   * 是否创建（并收敛）有效成员档案。
+   *
+   * 只有 MEMBER 需要档案：受理报修单要求「有效成员档案」，服务端不允许凭空指定受理人。
+   * 客户与纯管理员刻意不带档案 —— 纯管理员带了档案就变成「管理员 + 维修队成员」，
+   * 演示不出「有审核权限但没有成员身份，不能受理报修单」这一权限失败场景。
+   */
+  hasMemberProfile: boolean;
 };
 
 const ACCOUNTS: readonly TestAccount[] = [
@@ -61,15 +72,27 @@ const ACCOUNTS: readonly TestAccount[] = [
     password: "customer123",
     displayName: "测试客户",
     roleCode: null,
+    hasMemberProfile: false,
   },
   {
     label: "工作人员",
-    note: "MEMBER（维修队成员）→ 工作人员入口；不是管理员",
+    note: "MEMBER（维修队成员）+ 有效成员档案 → 工作人员入口；不是管理员",
     userId: "30000000-0000-4000-8000-000000000002",
     qq: "100002",
     password: "staff123",
     displayName: "测试工作人员",
     roleCode: "MEMBER",
+    hasMemberProfile: true,
+  },
+  {
+    label: "管理员",
+    note: "ADMIN（repair:review / repair:flag）→ 管理端审核、标记典型案例；无成员档案，不能受理报修单",
+    userId: "30000000-0000-4000-8000-000000000003",
+    qq: "100003",
+    password: "admin123",
+    displayName: "测试管理员",
+    roleCode: "ADMIN",
+    hasMemberProfile: false,
   },
 ];
 
@@ -124,7 +147,15 @@ async function prepareAccount(account: TestAccount): Promise<void> {
     update: { passwordHash, mustChangePassword: false, passwordChangedAt: now },
   });
 
-  if (account.roleCode === "MEMBER") {
+  // 角色收敛到目标值：这三个固定账号可能残留历史角色（例如管理员账号曾被按工作人员
+  // 发过 MEMBER）。与目标不符的有效角色一律回收，角色集合才是可重复的确定值。
+  // 只改本账号自己的 user_roles 行，不动任何机构/他人数据。
+  if (account.roleCode === null) {
+    await prisma.userRole.updateMany({
+      where: { userId: account.userId, revokedAt: null },
+      data: { revokedAt: now },
+    });
+  } else {
     const role = await prisma.role.findUnique({ where: { code: account.roleCode } });
     if (!role) throw new Error(`角色 ${account.roleCode} 不存在：先运行 corepack pnpm db:seed`);
     const activeKey = `${account.userId}:${role.id}`;
@@ -140,6 +171,13 @@ async function prepareAccount(account: TestAccount): Promise<void> {
       },
       update: { revokedAt: null },
     });
+    await prisma.userRole.updateMany({
+      where: { userId: account.userId, revokedAt: null, roleId: { not: role.id } },
+      data: { revokedAt: now },
+    });
+  }
+
+  if (account.hasMemberProfile) {
     await prisma.memberProfile.upsert({
       where: { userId: account.userId },
       create: {
@@ -156,14 +194,12 @@ async function prepareAccount(account: TestAccount): Promise<void> {
     return;
   }
 
-  // 客户账号：有成员档案就必须有有效 MEMBER 角色，否则服务端会拒绝登录；
-  // 因此这里要求没有档案（发现残留即停止，不动机构数据），并回收可能存在的角色。
+  // 无成员档案的账号（客户 / 纯管理员）：服务端要求「有成员档案就必须有有效 MEMBER 角色」，
+  // 纯管理员刻意不带档案；客户本来就该没有档案。发现残留即停止（不动机构数据）——
+  // 残留档案即使已软删除，也会让纯管理员登录时抛 MEMBER_PROFILE_INACTIVE。
   const profile = await prisma.memberProfile.findUnique({ where: { userId: account.userId } });
-  if (profile) throw new Error(`账号 ${qq} 意外存在成员档案，与客户角色不符：请手动检查`);
-  await prisma.userRole.updateMany({
-    where: { userId: account.userId, revokedAt: null },
-    data: { revokedAt: now },
-  });
+  if (profile)
+    throw new Error(`账号 ${qq} 意外存在成员档案，与「${account.label}」不符：请手动检查`);
 }
 
 async function main(): Promise<void> {
