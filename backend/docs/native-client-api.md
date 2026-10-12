@@ -92,6 +92,10 @@
 
 成功状态码 `201`；失败响应不含 `data`、不含 Cookie、不产生会话。
 
+**注册是原子的：「建账号 + 发会话」在同一个数据库事务里完成。** 注册失败（含发会话失败）会整体回滚，
+不会留下「注册失败但账号已存在」的状态 —— 因此失败后用同一个 QQ 重试是安全的，会正常成功，
+不会拿到 `409 ACCOUNT_IDENTITY_TAKEN`；邀请码名额也不会因为失败的请求被扣掉。
+
 ### POST /api/v1/auth/register/customer
 
 请求体：`{ "qq": "100004", "password": "customer-123", "passwordConfirmation": "customer-123" }`
@@ -109,6 +113,7 @@
 | 409 | `ACCOUNT_IDENTITY_TAKEN` | QQ 已被**任何**账号占用（含软删除身份）：不认领、不合并、不改写既有账号与口令 |
 | 403 | `FORBIDDEN` | 来源校验不通过（无 `Origin` 且无 `X-Client-Type: native`，或 `Origin` 不在白名单） |
 | 429 | `RATE_LIMITED` | 同一 IP 15 分钟超过 10 次 |
+| 500 | `INTERNAL_ERROR` | 账号或会话写库失败。整体回滚，**不会留下账号**，可原样重试（重试会成功而不是 409） |
 
 ### POST /api/v1/auth/register/staff
 
@@ -134,11 +139,21 @@
 规则沿用 `InviteCodeService.redeem`：使用次数、生效/失效时间、QQ/手机绑定、并发与幂等都在同一个
 串行化事务内判定与扣减，不会超卖，失败不扣名额。**命中既有账号身份**（例如该 QQ 已有客户账号）时
 整体回滚并返回 `409 ACCOUNT_IDENTITY_CONFLICT`：不覆盖既有账号、不发会话、不扣名额。
+建账号与发会话在同一个事务里完成，注册失败（含发会话失败）整体回滚，不会留下账号，可安全重试。
+
+**幂等重放会校验密码。** 用同一个 `idempotencyKey` 重放时，除了原来的邀请码 / QQ / 手机号必须
+完全一致，本次请求的 `password` 还必须与账号**当前**口令一致；不一致按认证失败处理
+（`401 AUTH_INVALID_CREDENTIALS`），不发放任何会话。也就是说：重放不是免密凭证，
+账号改密之后旧请求的重放同样会被拒。口令正确时重放仍然成功（幂等行为不回退），
+但不会重复扣名额。
 
 失败：`400 INVITE_CODE_INVALID`、`409 INVITE_CODE_NOT_ACTIVE`、`409 INVITE_CODE_EXPIRED`、
 `409 INVITE_CODE_REVOKED`、`409 INVITE_CODE_EXHAUSTED`、`409 INVITE_CODE_BINDING_MISMATCH`、
 `400 VALIDATION_FAILED`（姓名 2–64、QQ、手机号、密码长度）、`400 PASSWORD_CONFIRMATION_MISMATCH`、
-`409 IDEMPOTENCY_CONFLICT`（幂等键已用于另一项注册请求）、`403 FORBIDDEN`、`429 RATE_LIMITED`。
+`409 IDEMPOTENCY_CONFLICT`（幂等键已用于另一项注册请求）、
+`401 AUTH_INVALID_CREDENTIALS`（幂等重放时密码与账号当前口令不一致）、
+`500 INTERNAL_ERROR`（账号或会话写库失败，整体回滚、可安全重试）、
+`403 FORBIDDEN`、`429 RATE_LIMITED`。
 
 > Web 现有注册页（`/login?mode=register`）仍调用旧入口 `POST /api/v1/member-registrations/invite`
 > （等价实现，仅 Web/Cookie，无需改动）；原生客户端用上表的 `/api/v1/auth/register/staff`。

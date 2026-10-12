@@ -2,16 +2,20 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 
+import { authService } from "../../src/features/auth/auth-service";
 import { POST as registerCustomer } from "../../src/app/api/v1/auth/register/customer/route";
 import { POST as registerStaff } from "../../src/app/api/v1/auth/register/staff/route";
 import { GET as nativeSession } from "../../src/app/api/v1/auth/native/session/route";
 import { POST as nativeLogout } from "../../src/app/api/v1/auth/native/logout/route";
+import { AppError } from "../../src/lib/api/errors";
 import { resetRateLimitsForTests } from "../../src/lib/api/rate-limit";
 import { SESSION_COOKIE_NAME } from "../../src/lib/auth/request";
 import { disconnectDb, getDb } from "../../src/lib/db/client";
 import {
-  generateInviteCode,
   digestInviteCode,
+  digestSessionToken,
+  generateInviteCode,
+  hashPassword,
   verifyPassword,
 } from "../../src/lib/security/secrets";
 import { integrationTestsEnabled } from "./db-guard";
@@ -508,6 +512,227 @@ dbTest("注册失败的响应一律没有令牌 / Cookie / 会话数据", async 
   assert.equal(staffMismatch.status, 400);
   assert.equal(errorCodeOf(staffMismatch.json), "PASSWORD_CONFIRMATION_MISMATCH");
   assert.equal(staffMismatch.headers.get("set-cookie"), null);
+});
+
+dbTest("邀请码注册：幂等重放必须校验本次密码，错密码被拒且不发令牌", async () => {
+  /*
+   * PR #65 审查 P1（安全，必修）的针对性回归。
+   *
+   * 原实现的重放分支只比 `code / qq / phone` 三项：这三项都能从原始成功请求里原样抄过来，
+   * 只把 `password` 换成任意值，就能拿到一个有效的工作人员令牌 —— 「知道邀请码 + 知道幂等键」
+   * 于是变成了免密凭证；账号改密之后重放旧请求同样能登录。这里固定三处断言：
+   *   1) 错密码重放 → 401 AUTH_INVALID_CREDENTIALS，响应里没有任何令牌 / Cookie / 会话数据；
+   *   2) 错密码重放不会新开会话（复用重放分支不该产生第二条会话）；
+   *   3) 正确密码重放 → 仍然成功，幂等行为不回退。
+   */
+  const code = await createInviteCode({ maxUses: 3 });
+  const qq = nextQq();
+  const phone = nextPhone();
+  const idempotencyKey = randomUUID();
+  const first = await rawCall(registerStaff, STAFF_URL, {
+    headers: headers(NATIVE),
+    body: staffBody(code.plainCode, qq, { phone, idempotencyKey }),
+  });
+  assert.equal(first.status, 201, JSON.stringify(first.json));
+  const firstData = dataOf(first.json);
+  assert.equal(typeof firstData.token, "string");
+  const userId = (await userIdForQq(qq))!;
+  const sessionsBefore = await getDb().authSession.count({ where: { userId } });
+  const credentialBefore = await getDb().passwordCredential.findUniqueOrThrow({
+    where: { userId },
+  });
+
+  // 1) 同一幂等键 + 同 code / qq / phone，只把密码改错。
+  const wrongPassword = await rawCall(registerStaff, STAFF_URL, {
+    headers: headers(NATIVE),
+    body: staffBody(code.plainCode, qq, {
+      phone,
+      idempotencyKey,
+      password: "wrong-password-1",
+      passwordConfirmation: "wrong-password-1",
+    }),
+  });
+  assert.equal(wrongPassword.status, 401);
+  assert.equal(errorCodeOf(wrongPassword.json), "AUTH_INVALID_CREDENTIALS");
+  assert.equal(wrongPassword.json.data, undefined, "认证失败不得带会话数据");
+  assert.equal(wrongPassword.headers.get("set-cookie"), null, "认证失败不得下发 Cookie");
+
+  // 2) 错密码重放不得新开会话，也不得改写既有凭证。
+  assert.equal(
+    await getDb().authSession.count({ where: { userId } }),
+    sessionsBefore,
+    "被拒的重放不得产生会话",
+  );
+  const credentialAfter = await getDb().passwordCredential.findUniqueOrThrow({ where: { userId } });
+  assert.equal(credentialAfter.passwordHash, credentialBefore.passwordHash, "不得改写既有口令");
+  assert.equal(
+    await getDb().inviteCodeRedemption.count({ where: { idempotencyKey } }),
+    1,
+    "被拒的重放不得新增兑换记录",
+  );
+
+  // 3) 正确密码重放仍然成功（幂等行为不回退）。
+  const replayed = await rawCall(registerStaff, STAFF_URL, {
+    headers: headers(NATIVE),
+    body: staffBody(code.plainCode, qq, { phone, idempotencyKey }),
+  });
+  assert.equal(replayed.status, 201, JSON.stringify(replayed.json));
+  const replayData = dataOf(replayed.json);
+  assert.equal(typeof replayData.token, "string");
+  assert.equal(replayData.userId, userId, "幂等重放必须回到同一个账号");
+  assert.deepEqual(replayData.roles, ["MEMBER"]);
+  // 每次重放都会发一个新会话（发会话本身不幂等），但不得多于「首次 + 本次重放」。
+  assert.equal(await getDb().authSession.count({ where: { userId } }), sessionsBefore + 1);
+  // 重放不得再扣一次名额。
+  assert.equal(
+    (await getDb().inviteCode.findUniqueOrThrow({ where: { id: code.id } })).usedCount,
+    1,
+    "幂等重放不得重复扣名额",
+  );
+});
+
+dbTest("邀请码注册：账号改密后重放旧请求同样被拒", async () => {
+  /* P1 的另一半场景：原始请求的密码在账号改密之后已经失效，重放必须跟着失效。 */
+  const code = await createInviteCode({ maxUses: 3 });
+  const qq = nextQq();
+  const phone = nextPhone();
+  const idempotencyKey = randomUUID();
+  const first = await rawCall(registerStaff, STAFF_URL, {
+    headers: headers(NATIVE),
+    body: staffBody(code.plainCode, qq, { phone, idempotencyKey }),
+  });
+  assert.equal(first.status, 201);
+  const userId = (await userIdForQq(qq))!;
+  const originalToken = String(dataOf(first.json).token);
+
+  // 改密（会轮换会话并吊销旧令牌），之后原密码已经不对了。
+  await getDb().passwordCredential.update({
+    where: { userId },
+    data: {
+      passwordHash: await hashPassword("changed-password-9"),
+      passwordChangedAt: new Date(),
+    },
+  });
+  await getDb().authSession.updateMany({
+    where: { userId, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+
+  const replayed = await rawCall(registerStaff, STAFF_URL, {
+    headers: headers(NATIVE),
+    body: staffBody(code.plainCode, qq, { phone, idempotencyKey }),
+  });
+  assert.equal(replayed.status, 401);
+  assert.equal(errorCodeOf(replayed.json), "AUTH_INVALID_CREDENTIALS");
+  assert.equal(replayed.json.data, undefined);
+  assert.equal(replayed.headers.get("set-cookie"), null);
+  // 旧令牌已失效，新令牌一个都没发出来。
+  assert.equal(await getDb().authSession.count({ where: { userId, revokedAt: null } }), 0);
+  assert.equal(
+    await getDb().authSession.count({ where: { tokenDigest: digestSessionToken(originalToken) } }),
+    1,
+    "首次注册的会话记录仍在（已被吊销），重放没有新增",
+  );
+});
+
+dbTest("注册失败不留下账号：会话写库失败时整体回滚，重试可以成功", async () => {
+  /*
+   * PR #65 审查 P2（健壮性，必修）的针对性回归。
+   *
+   * 原实现先提交账号、再在事务外发会话：会话写库一失败就返回 500，而账号已经落库，
+   * 用户重试只能拿到 `409 ACCOUNT_IDENTITY_TAKEN`，被自己的失败请求锁在门外。
+   * 现在把「建账号 + 发会话」放进同一个串行化事务：会话一发失败，账号创建也跟着回滚，
+   * 同一个 QQ 重试注册应当成功而不是 409。
+   *
+   * 注入方式：把 `authService.openSessionWith` 换成必定抛错的实现（只对接下来一次调用生效），
+   * 模拟「会话写库失败」，然后原样重试同一个 QQ。
+   */
+  const qq = nextQq();
+  assert.equal(await userIdForQq(qq), null, "前置：该 QQ 尚未注册");
+
+  const original = authService.openSessionWith;
+  authService.openSessionWith = async () => {
+    throw new AppError("INTERNAL_ERROR", "模拟会话写库失败（测试注入）", { status: 500 });
+  };
+  let failed: Awaited<ReturnType<typeof rawCall>>;
+  try {
+    failed = await rawCall(registerCustomer, CUSTOMER_URL, {
+      headers: headers(NATIVE),
+      body: customerBody(qq),
+    });
+  } finally {
+    authService.openSessionWith = original;
+  }
+
+  assert.equal(failed.status, 500);
+  assert.equal(errorCodeOf(failed.json), "INTERNAL_ERROR");
+  assert.equal(failed.json.data, undefined);
+  assert.equal(failed.headers.get("set-cookie"), null);
+  assert.equal(await userIdForQq(qq), null, "注册失败不得留下账号（P2 原子性）");
+  assert.equal(
+    await getDb().user.count({ where: { displayName: `客户${qq}` } }),
+    0,
+    "回滚不得留下半成品用户行",
+  );
+
+  // 恢复后重试同一个 QQ：应当成功，而不是 409 ACCOUNT_IDENTITY_TAKEN。
+  const retried = await rawCall(registerCustomer, CUSTOMER_URL, {
+    headers: headers(NATIVE),
+    body: customerBody(qq),
+  });
+  assert.equal(retried.status, 201, JSON.stringify(retried.json));
+  const retryData = dataOf(retried.json);
+  assert.equal(typeof retryData.token, "string");
+  assert.equal(retryData.home, "CUSTOMER");
+  const userId = (await userIdForQq(qq))!;
+  assert.equal(retryData.userId, userId);
+  const session = await callRoute(nativeSession, "http://localhost/api/v1/auth/native/session", {
+    headers: { ...NATIVE, authorization: `Bearer ${String(retryData.token)}` },
+  });
+  assert.equal(session.status, 200);
+  assert.equal(dataOf(session.json).userId, userId);
+});
+
+dbTest("邀请码注册：会话写库失败时账号与名额一起回滚，重试可以成功", async () => {
+  /* P2 的邀请码侧：同一事务里还要多回滚「邀请码扣减」与「兑换记录」。 */
+  const code = await createInviteCode({ maxUses: 1 });
+  const qq = nextQq();
+  const phone = nextPhone();
+
+  const original = authService.openSessionWith;
+  authService.openSessionWith = async () => {
+    throw new AppError("INTERNAL_ERROR", "模拟会话写库失败（测试注入）", { status: 500 });
+  };
+  let failed: Awaited<ReturnType<typeof rawCall>>;
+  try {
+    failed = await rawCall(registerStaff, STAFF_URL, {
+      headers: headers(NATIVE),
+      body: staffBody(code.plainCode, qq, { phone }),
+    });
+  } finally {
+    authService.openSessionWith = original;
+  }
+
+  assert.equal(failed.status, 500);
+  assert.equal(errorCodeOf(failed.json), "INTERNAL_ERROR");
+  assert.equal(await userIdForQq(qq), null, "邀请码注册失败同样不得留下账号");
+  assert.equal(
+    (await getDb().inviteCode.findUniqueOrThrow({ where: { id: code.id } })).usedCount,
+    0,
+    "失败不得扣减名额",
+  );
+  assert.equal(
+    await getDb().inviteCodeRedemption.count({ where: { inviteCodeId: code.id } }),
+    0,
+    "失败不得留下兑换记录（provision 与它在同一事务里，一并回滚）",
+  );
+
+  const retried = await rawCall(registerStaff, STAFF_URL, {
+    headers: headers(NATIVE),
+    body: staffBody(code.plainCode, qq, { phone }),
+  });
+  assert.equal(retried.status, 201, JSON.stringify(retried.json));
+  assert.deepEqual(dataOf(retried.json).roles, ["MEMBER"]);
 });
 
 dbTest("注册即登录：会话在服务端可查，退出后令牌立即失效", async () => {

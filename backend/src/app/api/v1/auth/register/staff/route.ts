@@ -1,4 +1,3 @@
-import { authService } from "@/features/auth/auth-service";
 import { registrationChannel, registrationSuccess } from "@/features/auth/registration-http";
 import { inviteCodeService } from "@/features/invitations/invite-code-service";
 import { AppError } from "@/lib/api/errors";
@@ -17,6 +16,8 @@ export const runtime = "nodejs";
  * 使用次数 / 生效时间 / 绑定关系 / 并发与幂等规则全部沿用 `InviteCodeService.redeem`：
  * 校验与扣减在同一串行化事务内（`usedCount` 行锁 + 条件更新），不会超卖，
  * 也不会覆盖既有账号身份（命中既有身份即 `409 ACCOUNT_IDENTITY_CONFLICT` 并回滚）。
+ * 建账号与发会话在**同一个事务**里完成（`redeemWithSession`）：任何一步失败都整体回滚，
+ * 不会留下「注册失败但账号已存在」的状态，重试是安全的。
  * 成功后立即返回会话（Web 下发 Cookie，原生返回令牌）。
  */
 export async function POST(request: Request) {
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     if (password !== String(body.passwordConfirmation ?? "")) {
       throw new AppError("PASSWORD_CONFIRMATION_MISMATCH", "两次输入的密码不一致");
     }
-    const registration = await inviteCodeService.redeem(
+    const session = await inviteCodeService.redeemWithSession(
       {
         code: String(body.code ?? ""),
         idempotencyKey: String(body.idempotencyKey ?? ""),
@@ -41,10 +42,6 @@ export async function POST(request: Request) {
         className: optional(body.className),
         password,
       },
-      context,
-    );
-    const session = await authService.issueSessionForRegisteredAccount(
-      registration.userId,
       context,
     );
     return registrationSuccess(session, channel, requestId);

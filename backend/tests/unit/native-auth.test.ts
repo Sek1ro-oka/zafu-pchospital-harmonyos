@@ -1,4 +1,6 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 import { AppError } from "../../src/lib/api/errors";
@@ -137,4 +139,87 @@ test("客户注册入参：QQ 格式非法返回带字段提示的 VALIDATION_FA
       error.code === "VALIDATION_FAILED" &&
       Boolean(error.fieldErrors?.qq),
   );
+});
+
+// ---------------------------------------------------------------------------
+// PR #65 审查 P1 / P2：注册链路的两处安全与原子性回归
+//
+// 这两条是**源码守卫**：P1 的口令校验和 P2 的同事务发会话都在 `redeem` / `registerCustomer`
+// 的事务主体里，行为回归由 `tests/integration/auth-registration.test.ts` 的真实测试库覆盖；
+// 这里守住的是「那条校验确实在重放分支里、且用的是 verifyPassword」这类结构性事实，
+// 避免以后有人重构时把它挪出分支或换成「两次密码一致性」。
+// ---------------------------------------------------------------------------
+
+const readSource = (relativePath: string) =>
+  readFileSync(join(process.cwd(), "src", relativePath), "utf8");
+
+/** 取 `redeemWithin` 里「幂等重放分支」这一段（从 `if (replay)` 到正式兑换逻辑之前）。 */
+function replayBranchOf(source: string): string {
+  const start = source.indexOf("if (replay) {");
+  assert.ok(start >= 0, "找不到 redeem 的重放分支");
+  const tail = source.slice(start);
+  const end = tail.indexOf("await tx.$queryRaw`SELECT id FROM invite_codes");
+  assert.ok(end > 0, "找不到重放分支的结束位置");
+  return tail.slice(0, end);
+}
+
+test("P1：邀请码重放分支校验本次请求的密码，失败按认证失败处理", () => {
+  const replay = replayBranchOf(readSource(join("features", "invitations", "invite-code-service.ts")));
+
+  assert.match(replay, /verifyPassword\(input\.password, passwordHash\)/);
+  assert.match(replay, /AUTH_INVALID_CREDENTIALS/);
+  // 只比 code / qq / phone 的重放分支是这次的漏洞本身：三项之外必须有口令校验。
+  assert.ok(
+    replay.indexOf("verifyPassword") < replay.indexOf("return {"),
+    "口令校验必须发生在返回重放结果之前",
+  );
+});
+
+test("P1：口令比对读的是账号当前凭证，不是请求体自带的确认密码", () => {
+  const replay = replayBranchOf(readSource(join("features", "invitations", "invite-code-service.ts")));
+
+  // 读的是 `password_credentials.passwordHash`（账号当前凭证）。
+  assert.match(replay, /passwordCredential/);
+  assert.match(replay, /passwordHash/);
+  assert.doesNotMatch(
+    replay,
+    /input\.passwordConfirmation/,
+    "重放分支不得用「两次密码一致性」替代口令校验",
+  );
+});
+
+test("P2：注册与会话创建在同一个事务边界内（不再事务外补发会话）", () => {
+  const registration = readSource(join("features", "auth", "registration-service.ts"));
+  const registerCustomer = registration.slice(
+    registration.indexOf("async registerCustomer("),
+    registration.indexOf("export const registrationService"),
+  );
+
+  assert.match(
+    registerCustomer,
+    /return inSerializableTransaction\(async \(tx\) => \{[\s\S]*createCustomerAccount\(tx[\s\S]*openSessionWith\(tx/,
+    "客户注册必须在同一个串行化事务里建账号并发会话",
+  );
+  assert.doesNotMatch(
+    registerCustomer,
+    /issueSessionForRegisteredAccount/,
+    "不得再从事务外补发会话（那正是「注册失败但账号已存在」的成因）",
+  );
+
+  const invite = readSource(join("features", "invitations", "invite-code-service.ts"));
+  assert.match(
+    invite,
+    /this\.redeemWithin\(tx, input, context, normalized\)\);[\s\S]*?authService\.openSessionWith\(/,
+    "邀请码注册的发会话必须与账号创建共用同一个事务客户端",
+  );
+});
+
+test("P2：AuthService 提供事务内发会话能力，登录路径保持自建事务", () => {
+  const source = readSource(join("features", "auth", "auth-service.ts"));
+  assert.match(source, /async openSessionWith\(/);
+  assert.match(source, /readPrincipal\(userId, tx\)/, "事务内读身份必须走同一个 tx");
+  // `login()` 逐字未改：仍然走自己的 `openSession`（自建串行化事务），不依赖调用方传入 tx。
+  const login = source.slice(source.indexOf("async login("), source.indexOf("async openSessionWith("));
+  assert.match(login, /return this\.openSession\(/);
+  assert.doesNotMatch(login, /openSessionWith/, "登录路径不得改成事务内发会话");
 });

@@ -42,12 +42,17 @@ export class RegistrationService {
    *   绝不认领 / 改写既有账号；
    * - 成功后**立即返回会话**（注册即登录）：Web 下发 Cookie、原生返回令牌，
    *   不存在「账号已建但未登录」的中间态；失败的注册请求不会留下任何会话。
+   *
+   * 原子性（PR #65 审查 P2）：「建账号 + 发会话 + 审计」在**同一个**串行化事务里完成。
+   * 旧实现是先提交账号、再在事务外发会话：会话写库一失败就只能返回 500，而账号已经落库，
+   * 用户重试只能得到 `409 ACCOUNT_IDENTITY_TAKEN` —— 被自己的失败请求锁在门外。
+   * 现在任何一步失败都整体回滚，注册失败不会留下账号，重试是安全的。
    */
   async registerCustomer(
     input: CustomerRegistrationInput,
     context: PublicRequestContext,
   ): Promise<AuthSessionResult> {
-    const userId = await inSerializableTransaction(async (tx) => {
+    return inSerializableTransaction(async (tx) => {
       const created = await createCustomerAccount(tx, {
         qq: input.qq,
         displayName: `客户${input.qq}`,
@@ -63,9 +68,8 @@ export class RegistrationService {
         // `qq` 会被审计脱敏（`redactAuditSummary` 的 QQ_KEY）；口令类字段一律不入库。
         after: { qq: input.qq, identityType: "QQ", role: "CUSTOMER" },
       });
-      return created;
+      return authService.openSessionWith(tx, created, context, "auth.register.succeeded");
     });
-    return authService.issueSessionForRegisteredAccount(userId, context);
   }
 }
 
