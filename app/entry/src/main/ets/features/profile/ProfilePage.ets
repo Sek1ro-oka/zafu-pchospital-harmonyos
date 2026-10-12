@@ -2,7 +2,7 @@ import { roleLabelFor, HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ROUTE_CASE_LIBRARY, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
-import { ReferenceRoundAction, ReferenceShortcut, REFERENCE_BACKGROUND } from '../../core/ui/ReferencePage';
+import { ReferenceRoundAction, REFERENCE_BACKGROUND } from '../../core/ui/ReferencePage';
 import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
 import { ProfileService } from './ProfileService';
 
@@ -168,49 +168,62 @@ export struct ProfilePage {
   profileShortcut(title: string, icon: Resource, route: string) {
     Button({ type: ButtonType.Normal }) {
       Row({ space: 6 }) {
-        Image(icon).width(18).height(18)
-        Text(title).fontSize(12).fontWeight(FontWeight.Medium).fontColor('#3A4145')
+        Image(icon).width(17).height(17).objectFit(ImageFit.Contain)
+        Text(title).fontSize(12).fontWeight(FontWeight.Medium).fontColor('#565B5E').maxLines(1)
       }.justifyContent(FlexAlign.Center).width('100%')
-    }.width('33.33%').height(42).backgroundColor(Color.Transparent).borderRadius(8)
-      .onClick(() => { this.onOpen(route, null); })
+    }.width('33.33%').height(42).padding(0).backgroundColor('#F6F7F8').borderRadius(0)
+      .accessibilityText(title).onClick(() => { this.onOpen(route, null); })
   }
 
   @Builder
   profileCard() {
-    Column({ space: 20 }) {
-      Row({ space: 12 }) {
-        Image($r('app.media.profile_avatar')).width(50).height(50).objectFit(ImageFit.Contain)
-        Column({ space: 6 }) {
-          Text(this.displayName === '' ? '未命名用户' : this.displayName).fontSize(20).fontWeight(FontWeight.Bold)
-            .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
-          Text(this.roleText).fontSize(11).fontWeight(FontWeight.Medium).fontColor('#6F5B35')
-            .padding({ left: 8, right: 8, top: 2, bottom: 2 }).backgroundColor('#F3E8D0').borderRadius(12)
+    Column({ space: 18 }) {
+      Row({ space: 11 }) {
+        Button({ type: ButtonType.Circle }) {
+          Image($r('app.media.profile_avatar')).width(48).height(48).objectFit(ImageFit.Contain)
+        }.width(48).height(48).padding(0).backgroundColor(Color.Transparent)
+          .accessibilityText('查看个人资料').enabled(!this.identityBusy).onClick(() => { this.showIdentity(); })
+        Column({ space: 4 }) {
+          Text(this.displayName === '' ? '未命名用户' : this.displayName).fontSize(19).fontWeight(FontWeight.Bold)
+            .fontColor('#191D20').maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+          Row({ space: 3 }) {
+            Image($r('app.media.profile_role')).width(12).height(12)
+            Text(this.roleText).fontSize(10).fontWeight(FontWeight.Medium).fontColor('#635333')
+          }.padding({ left: 5, right: 7, top: 2, bottom: 2 }).backgroundColor('#F4EBD6').borderRadius(10)
         }.layoutWeight(1).alignItems(HorizontalAlign.Start)
-        Button(this.logoutBusy ? '退出中…' : '退出 ›').fontSize(13).height(32)
-          .fontColor('#737A80').backgroundColor(Color.Transparent).enabled(!this.logoutBusy)
+        Button(this.logoutBusy ? '退出中…' : '退出 ›').fontSize(12).height(30).padding({ left: 5, right: 0 })
+          .fontColor('#7E8285').backgroundColor(Color.Transparent).enabled(!this.logoutBusy)
           .onClick(() => { this.handleLogout(); })
       }.width('100%')
       Row() {
-        Text('我的电脑医院').fontSize(15).fontWeight(FontWeight.Medium).fontColor('#62686D').layoutWeight(1)
-        Button(this.home === HOME_STAFF ? '进入工作台' : '我的报修').fontSize(13).height(31)
-          .fontColor('#6D5733').backgroundColor('#E6CF9E')
+        Button({ type: ButtonType.Normal }) {
+          Row({ space: 6 }) {
+            Text('我的电脑医院').fontSize(14).fontWeight(FontWeight.Medium).fontColor('#62686D')
+            Text('›').fontSize(24).fontColor('#999EA2')
+          }
+        }.padding(0).height(30).backgroundColor(Color.Transparent).layoutWeight(1)
+          .accessibilityText('查看个人资料').enabled(!this.identityBusy).onClick(() => { this.showIdentity(); })
+        Button(this.home === HOME_STAFF ? '进入工作台' : '我的报修').fontSize(12).fontWeight(FontWeight.Medium)
+          .height(30).padding({ left: 16, right: 16 }).fontColor('#665331')
+          .linearGradient({ angle: 90, colors: [['#EDD7A7', 0], ['#D8BB82', 1]] }).borderRadius(18)
           .onClick(() => { this.onOpen(this.home === HOME_STAFF ? ROUTE_STAFF_ORDERS : ROUTE_REPAIR_ORDERS, null); })
       }.width('100%')
       Row() {
         this.profileShortcut('维修指南', $r('app.media.ref_document'), ROUTE_PUBLIC_GUIDES)
         this.profileShortcut('故障问诊', $r('app.media.home_headset'), ROUTE_KNOWLEDGE)
         this.profileShortcut('服务进度', $r('app.media.ref_flag'), this.home === HOME_STAFF ? ROUTE_STAFF_ORDERS : ROUTE_REPAIR_ORDERS)
-      }.width('100%').backgroundColor('#F7F8F9').borderRadius(12)
-    }.width('100%').padding(14).backgroundColor(Color.White).borderRadius(20)
+      }.width('100%').borderRadius(10).clip(true)
+    }.width('100%').padding({ left: 12, right: 12, top: 12, bottom: 12 }).backgroundColor(Color.White).borderRadius(20)
   }
 
   @Builder
   statCell(label: string, value: number, icon: Resource) {
-    Column({ space: 6 }) {
-      Image(icon).width(30).height(30)
-      Text(label).fontSize(12).fontColor('#252B2F')
-      Text(`${value}`).fontSize(12).fontColor('#7B8287')
+    Column({ space: 3 }) {
+      Image(icon).width(34).height(34).objectFit(ImageFit.Contain).margin({ bottom: 5 })
+      Text(label).fontSize(12).fontWeight(FontWeight.Medium).fontColor('#252B2F')
+      Text(String(value)).fontSize(12).fontColor('#72777B')
     }.layoutWeight(1).alignItems(HorizontalAlign.Center)
+      .accessibilityText(label + '，' + value + '条')
   }
 
   @Builder
@@ -222,60 +235,78 @@ export struct ProfilePage {
         ErrorPanel({ message: this.statsErrorText, onRetry: (): void => { this.loadStats(); } })
       } else {
         Row() {
-          this.statCell('报修单', this.totalCount, $r('app.media.ref_disk'))
-          this.statCell('处理中', this.pendingCount, $r('app.media.ref_activity'))
-          this.statCell('已完结', this.completedCount, $r('app.media.ref_shield'))
+          this.statCell('报修单', this.totalCount, $r('app.media.profile_orders'))
+          this.statCell('处理中', this.pendingCount, $r('app.media.profile_pending'))
+          this.statCell('已完结', this.completedCount, $r('app.media.profile_completed'))
         }.width('100%')
         Row() {
-          Text('全部本人报修单 · 不含已删除记录').fontSize(10).fontColor('#8E969C').layoutWeight(1)
-          Button('刷新').fontSize(11).height(26).backgroundColor(Color.Transparent).fontColor('#1676E5')
+          Text('全部本人报修单').fontSize(9).fontColor('#92989D').layoutWeight(1)
+          Button('刷新').fontSize(10).height(20).padding({ left: 8, right: 0 })
+            .backgroundColor(Color.Transparent).fontColor('#78838C').accessibilityText('刷新本人报修统计')
             .onClick(() => { this.loadStats(); })
         }.width('100%')
       }
-    }.width('100%').padding(14).backgroundColor(Color.White).borderRadius(20)
+    }.width('100%').padding({ left: 16, right: 16, top: 18, bottom: 8 }).backgroundColor(Color.White).borderRadius(20)
+  }
+
+  @Builder
+  informationEntry(entry: ProfileEntry) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 6 }) {
+        Image(entry.icon).width(30).height(30).objectFit(ImageFit.Contain)
+        Text(entry.title).fontSize(12).fontWeight(FontWeight.Medium).fontColor('#242A2E').maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(entry.route === 'profile-info' && this.identityBusy ? '加载中…' : entry.note)
+          .fontSize(9).fontColor('#969CA1').height(12).maxLines(1)
+      }.width('100%').padding({ top: 10, bottom: 10 })
+    }.width('33.33%').padding(0).backgroundColor(Color.Transparent).borderRadius(12)
+      .accessibilityText(entry.title + (entry.note === '' ? '' : '，' + entry.note))
+      .enabled(entry.route !== 'profile-info' || !this.identityBusy)
+      .onClick(() => { this.openEntry(entry); })
+  }
+
+  @Builder
+  serviceRow(title: string, description: string, action: string, route: string) {
+    Row({ space: 12 }) {
+      Column({ space: 4 }) {
+        Text(title).fontSize(14).fontWeight(FontWeight.Medium).fontColor('#252B2F')
+        Text(description).fontSize(11).fontColor('#91979C')
+      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+      Button(action).fontSize(12).fontWeight(FontWeight.Medium).height(30)
+        .padding({ left: 14, right: 14 }).fontColor('#096DE0').backgroundColor('#F6F7F8').borderRadius(18)
+        .onClick(() => { this.onOpen(route, null); })
+    }.width('100%').padding({ top: 12, bottom: 12 })
   }
 
   build() {
     Scroll() {
-      Column({ space: 14 }) {
+      Column({ space: 12 }) {
         Row({ space: 7 }) {
-          Text('我的').fontSize(28).fontWeight(FontWeight.Bold).layoutWeight(1)
+          Text('我的').fontSize(28).fontWeight(FontWeight.Bold).fontColor('#101416').layoutWeight(1)
           ReferenceRoundAction({ icon: $r('app.media.ref_scan'), label: '扫码暂未接入',
             onSelect: (): void => { this.getUIContext().getPromptAction().showToast({ message: '扫码暂未接入' }); } })
           ReferenceRoundAction({ icon: $r('app.media.home_headset'), label: 'AI 故障问诊',
             onSelect: (): void => { this.onOpen(ROUTE_KNOWLEDGE, null); } })
           ReferenceRoundAction({ icon: $r('app.media.home_message'), label: '消息暂未接入',
             onSelect: (): void => { this.getUIContext().getPromptAction().showToast({ message: '消息暂未接入' }); } })
-        }.width('100%').height(50)
+        }.width('100%').height(64).padding({ top: 3, bottom: 3 })
         this.profileCard()
         if (this.home !== HOME_STAFF) { this.statsSection() }
-        Column({ space: 20 }) {
-          Text('我的信息').fontSize(20).fontWeight(FontWeight.Bold).width('100%')
+        Column({ space: 14 }) {
+          Text('我的信息').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#191D20').width('100%')
           Flex({ wrap: FlexWrap.Wrap }) {
             ForEach(this.home === HOME_STAFF ? this.staffEntries() : this.customerEntries(), (entry: ProfileEntry) => {
-              ReferenceShortcut({
-                title: entry.title, icon: entry.icon, note: entry.route === 'profile-info' && this.identityBusy ? '加载中…' : entry.note, itemWidth: '33.33%',
-                onSelect: (): void => { this.openEntry(entry); }
-              })
+              this.informationEntry(entry)
             }, (entry: ProfileEntry) => entry.title)
           }.width('100%')
-        }.width('100%').padding({ left: 12, right: 12, top: 24, bottom: 20 })
-          .backgroundColor(Color.White).borderRadius(20)
-        Column({ space: 18 }) {
-          Text('常用服务').fontSize(20).fontWeight(FontWeight.Bold).width('100%')
-          Row() {
-            Text('电脑有问题？先从故障问诊开始').fontSize(14).layoutWeight(1)
-            Button('去问诊').fontSize(12).height(29).fontColor('#1676E5').backgroundColor('#F3F6FA')
-              .onClick(() => { this.onOpen(ROUTE_KNOWLEDGE, null); })
-          }.width('100%')
-          Divider().color('#EAEDEF')
-          Row() {
-            Text('查阅电脑医院公开维修指南').fontSize(14).layoutWeight(1)
-            Button('去查看').fontSize(12).height(29).fontColor('#1676E5').backgroundColor('#F3F6FA')
-              .onClick(() => { this.onOpen(ROUTE_PUBLIC_GUIDES, null); })
-          }.width('100%')
-        }.width('100%').padding(16).backgroundColor(Color.White).borderRadius(20)
-      }.width('100%').padding({ left: 16, right: 16, bottom: 90 }).alignItems(HorizontalAlign.Start)
+        }.width('100%').padding({ left: 12, right: 12, top: 22, bottom: 12 }).backgroundColor(Color.White).borderRadius(20)
+        Column() {
+          Text('常用服务').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#191D20').width('100%').margin({ bottom: 4 })
+          this.serviceRow('电脑有问题？先问诊', '结合维修资料，获取有来源的建议', '去问诊', ROUTE_KNOWLEDGE)
+          Divider().color('#EEF0F2').strokeWidth(0.5)
+          this.serviceRow('电脑医院维修指南', '查阅公开排查方法与维修知识', '去查看', ROUTE_PUBLIC_GUIDES)
+        }.width('100%').padding({ left: 12, right: 12, top: 22, bottom: 8 }).backgroundColor(Color.White).borderRadius(20)
+      }.width('100%').padding({ left: 16, right: 16, bottom: 110 }).alignItems(HorizontalAlign.Start)
     }.width('100%').height('100%').scrollBar(BarState.Off).align(Alignment.Top).backgroundColor(REFERENCE_BACKGROUND)
   }
 }
