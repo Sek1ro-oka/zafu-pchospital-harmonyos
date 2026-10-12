@@ -22,7 +22,7 @@ $env:Path='D:/DevEco Studio/tools/node;'+$env:Path
 & 'D:/DevEco Studio/tools/hvigor/bin/hvigorw.bat' --mode module -p product=default assembleHap
 ```
 
-最终构建 `BUILD SUCCESSFUL`，未签名 HAP 1,397,664 字节。编译有 5 处异常处理警告（知识引用、知识问答、服务与首页的提示调用），无编译错误；未配置签名，不能据此保证实体手机安装。
+最终构建 `BUILD SUCCESSFUL`，未签名 HAP 1,401,078 字节。编译有 5 处异常处理警告（知识引用、知识问答、服务与首页的提示调用），无编译错误；未配置签名，不能据此保证实体手机安装。
 
 ```powershell
 hdc install -r app/entry/build/default/outputs/default/entry-default-unsigned.hap
@@ -61,3 +61,7 @@ hdc shell uitest dumpLayout -p /data/local/tmp/home-layout.json
 ## 未验证范围
 
 未做实体手机、深色模式、大字体或其他屏幕尺寸适配验证；未重复测试完整报修、照片、AI 调用或案例回流链路。本次没有后端改动，未重跑数据库套件与全仓测试。首页搜索暂为问答入口，不代表已实现搜索建议或独立搜索结果页。
+
+## 导航玻璃材质补充
+
+维护者要求导航具备参考图的液态玻璃质感，进一步将原先较均匀的磨砂蓝替换为低遮罩的原生背景模糊，加上透明 SVG 分层渐变、蓝白反光、内外沿高光与悬浮阴影；装饰层禁用命中测试，保留真实按钮交互。未使用参考截图裁片冒充导航。已再次构建、安装并检查客户与工作人员导航，截图更新为此版本。该实现按静态参考图拟合材质，并非对原应用系统渲染器的逐像素复刻。

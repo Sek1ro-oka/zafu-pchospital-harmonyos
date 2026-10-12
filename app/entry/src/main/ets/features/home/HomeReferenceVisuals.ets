@@ -147,21 +147,27 @@ export struct HomeReferenceTabBar {
   }
 
   build() {
-    Row() {
-      this.item(0, '首页', $r('app.media.home_nav_home'), $r('app.media.home_nav_home_active'))
-      this.item(-1, '活动', $r('app.media.home_nav_activity'), $r('app.media.home_nav_activity'))
-      this.item(1, this.staff ? '工作台' : '服务', $r('app.media.home_headset'), $r('app.media.home_headset_active'))
-      this.item(-2, '知识', $r('app.media.home_nav_knowledge'), $r('app.media.home_nav_knowledge'))
-      this.item(2, '我的', $r('app.media.home_nav_profile'), $r('app.media.home_nav_profile_active'))
+    Stack() {
+      // 真正模糊下层页面，再叠加透明反光；不使用不透明蓝色填充。
+      Image($r('app.media.home_nav_glass'))
+        .width('100%').height('100%').objectFit(ImageFit.Fill)
+        .hitTestBehavior(HitTestMode.None)
+      Row() {
+        this.item(0, '首页', $r('app.media.home_nav_home'), $r('app.media.home_nav_home_active'))
+        this.item(-1, '活动', $r('app.media.home_nav_activity'), $r('app.media.home_nav_activity'))
+        this.item(1, this.staff ? '工作台' : '服务', $r('app.media.home_headset'), $r('app.media.home_headset_active'))
+        this.item(-2, '知识', $r('app.media.home_nav_knowledge'), $r('app.media.home_nav_knowledge'))
+        this.item(2, '我的', $r('app.media.home_nav_profile'), $r('app.media.home_nav_profile_active'))
+      }
+      .width('100%').height('100%')
+      .padding({ left: 8, right: 8 })
     }
     .width('84%')
     .height(54)
-    .padding({ left: 8, right: 8 })
-    .backgroundEffect({ radius: 24, saturation: 1.2, brightness: 1.05, color: '#A6CFDDF4' })
+    .backgroundEffect({ radius: 11, saturation: 1.5, brightness: 1.03, color: '#18B6CDF6' })
     .borderRadius(34)
-    .border({ width: 1, color: '#E6FFFFFF' })
     .clip(true)
-    .shadow({ radius: 18, color: '#204B6078', offsetY: 7 })
+    .shadow({ radius: 16, color: '#303C526F', offsetY: 7 })
     .margin({ bottom: 12 })
   }
 }
