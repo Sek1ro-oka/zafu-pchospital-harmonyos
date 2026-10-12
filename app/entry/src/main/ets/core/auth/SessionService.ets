@@ -12,7 +12,7 @@ const SESSION_PATH: string = '/api/v1/auth/native/session';
 const LOGOUT_PATH: string = '/api/v1/auth/native/logout';
 const HEALTH_PATH: string = '/api/v1/health';
 
-/** restore() 结果：identity 为空且 unavailableReason 为空 = 未登录，去登录页。 */
+/** restore() 结果：identity 为空且 unavailableReason 为空 = 未登录，进入游客首页。 */
 export class RestoreResult {
   identity: SessionIdentity | null = null;
   /** 非空：无法与服务器确认会话（网络类问题），本地令牌保留，界面应提供重试。 */
@@ -52,11 +52,12 @@ export class SessionService {
   }
 
   /**
-   * 重启恢复：本地有令牌就向服务器验证；失效即清除并回登录页；
+   * 重启恢复：本地有令牌就向服务器验证；失效即清除并进入游客首页；
    * 网络不可达时保留令牌并返回提示，允许重试。
    */
   static async restore(): Promise<RestoreResult> {
     const result = new RestoreResult();
+    SessionService.identity = null;
     const baseUrl = ApiConfig.getBaseUrl();
     const token = await SessionStore.readToken();
     if (token === '') {

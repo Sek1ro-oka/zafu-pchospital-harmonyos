@@ -1,6 +1,6 @@
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { NavPusher, RepairOrderFocusParam, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
+import { RepairOrderFocusParam, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import { EntryCard } from '../../core/ui/EntryCard';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
 import { IconTile } from '../../core/ui/IconTile';
@@ -68,23 +68,37 @@ function serviceEntries(): ServiceEntry[] {
  */
 @Component
 export struct ServicePage {
+  @Prop @Watch('authChanged') authenticated: boolean = false;
+  onOpen: (route: string, param: Object | null) => void = () => {};
   @Prop home: string = '';
   @Prop permissions: string[] = [];
   /** 由 HomePage 注入的导航栈：真实入口统一从这里压栈。 */
   pathStack: NavPathStack = new NavPathStack();
   onSessionExpired: () => void = () => {
   };
-  private pusher: NavPusher = new NavPusher();
   @State deviceState: number = DEVICE_LOADING;
   @State devices: DeviceItem[] = [];
   @State deviceErrorText: string = '';
   /** 列表请求进行中标记：防止重试按钮连点触发并发请求。 */
   private requesting: boolean = false;
+  private deviceGeneration: number = 0;
 
   aboutToAppear(): void {
-    if (this.home !== HOME_STAFF) {
+    if (this.authenticated && this.home !== HOME_STAFF) {
       this.loadDevices();
     }
+  }
+
+  aboutToDisappear(): void {
+    this.requesting = false;
+    this.deviceGeneration += 1;
+  }
+
+  private authChanged(): void {
+    this.deviceGeneration += 1;
+    this.requesting = false;
+    this.devices = [];
+    if (this.authenticated && this.home !== HOME_STAFF) this.loadDevices();
   }
 
   private entries(): ServiceEntry[] {
@@ -121,11 +135,13 @@ export struct ServicePage {
     if (this.requesting) {
       return;
     }
+    const generation = ++this.deviceGeneration;
     this.requesting = true;
     this.deviceState = DEVICE_LOADING;
     this.deviceErrorText = '';
     try {
       const items = await RepairOrderService.listMine('', 1);
+      if (generation !== this.deviceGeneration) return;
       const derived: DeviceItem[] = [];
       for (const order of items) {
         if (order.deviceModel === '') {
@@ -145,10 +161,11 @@ export struct ServicePage {
       this.devices = derived;
       this.deviceState = derived.length === 0 ? DEVICE_EMPTY : DEVICE_READY;
     } catch (error) {
+      if (generation !== this.deviceGeneration) return;
       this.deviceState = DEVICE_ERROR;
       this.handleLoadError(error);
     } finally {
-      this.requesting = false;
+      if (generation === this.deviceGeneration) this.requesting = false;
     }
   }
 
@@ -157,12 +174,12 @@ export struct ServicePage {
       this.getUIContext().getPromptAction().showToast({ message: `${entry.title}未接入，接口确定后开放` });
       return;
     }
-    this.pusher.push(this.pathStack, entry.route, null);
+    this.onOpen(entry.route, null);
   }
 
   private openOrder(orderId: string): void {
     const focus: RepairOrderFocusParam = { orderId: orderId };
-    this.pusher.push(this.pathStack, ROUTE_REPAIR_ORDERS, focus);
+    this.onOpen(ROUTE_REPAIR_ORDERS, focus);
   }
 
   @Builder
@@ -211,7 +228,14 @@ export struct ServicePage {
 
   @Builder
   deviceSection() {
-    if (this.deviceState === DEVICE_LOADING) {
+    if (!this.authenticated) {
+      Column({ space: GAP_SM }) {
+        Text('登录后查看自己的电脑和报修进度').fontSize(FONT_SUBTITLE)
+        Button('登录查看').onClick(() => { this.onOpen(ROUTE_REPAIR_ORDERS, null); })
+      }
+      .width('100%').padding(CARD_PADDING_LG)
+      .backgroundColor($r('app.color.surface')).borderRadius(CARD_RADIUS)
+    } else if (this.deviceState === DEVICE_LOADING) {
       LoadingPanel({ text: '正在加载设备记录…' })
     } else if (this.deviceState === DEVICE_ERROR) {
       Column() {
@@ -240,7 +264,7 @@ export struct ServicePage {
           .backgroundColor($r('app.color.brand'))
           .fontColor(Color.White)
           .onClick(() => {
-            this.pusher.push(this.pathStack, ROUTE_REPAIR_ORDERS, null);
+            this.onOpen(ROUTE_REPAIR_ORDERS, null);
           })
       }
       .width('100%')
@@ -280,7 +304,7 @@ export struct ServicePage {
     .backgroundColor($r('app.color.surface'))
     .borderRadius(CARD_RADIUS)
     .onClick(() => {
-      this.pusher.push(this.pathStack, ROUTE_REPAIR_ORDERS, null);
+      this.onOpen(ROUTE_REPAIR_ORDERS, null);
     })
   }
 
@@ -298,12 +322,14 @@ export struct ServicePage {
         if (this.home !== HOME_STAFF) {
           this.sectionTitle('报修中的设备')
           this.deviceSection()
-          Text('按最近 20 条本人报修单的机型合并展示，不代表全部设备或独立设备绑定。')
-            .fontSize(FONT_NOTE)
-            .fontColor($r('app.color.text_secondary'))
-          Button('刷新设备记录')
-            .enabled(!this.requesting)
-            .onClick(() => { this.loadDevices(); })
+          if (this.authenticated) {
+            Text('按最近 20 条本人报修单的机型合并展示，不代表全部设备或独立设备绑定。')
+              .fontSize(FONT_NOTE)
+              .fontColor($r('app.color.text_secondary'))
+            Button('刷新设备记录')
+              .enabled(!this.requesting)
+              .onClick(() => { this.loadDevices(); })
+          }
         }
 
         this.sectionTitle('常用服务')

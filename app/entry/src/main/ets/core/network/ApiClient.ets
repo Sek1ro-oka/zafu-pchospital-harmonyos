@@ -55,7 +55,7 @@ function describeNetworkError(error: BusinessError): string {
     return '无法解析服务器地址，请检查 API 地址';
   }
   if (error.code === 2300007) {
-    return '无法连接服务器，请确认后端已启动、手机与电脑在同一局域网';
+    return '无法连接服务器，请检查网络与服务器地址';
   }
   if (error.code === 2300028) {
     return '连接超时，请检查网络与服务器地址';

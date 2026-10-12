@@ -2,6 +2,7 @@
 @Component
 export struct HomeReferenceHeader {
   onConsult: () => void = () => {};
+  onSearch: () => void = () => {};
   onRepair: () => void = () => {};
   onRecords: () => void = () => {};
 
@@ -51,8 +52,8 @@ export struct HomeReferenceHeader {
       .borderRadius(25)
       .clip(true)
       .shadow({ radius: 18, color: '#12B48328', offsetY: 8 })
-      .accessibilityText('打开知识问答，搜索维修知识')
-      .onClick(this.onConsult)
+      .accessibilityText('浏览公开维修指南')
+      .onClick(this.onSearch)
 
       Column({ space: 6 }) {
         Text('电脑出问题？')

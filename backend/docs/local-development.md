@@ -1,6 +1,6 @@
 # 本地开发
 
-新人从 [README 快速开始](../README.md)执行 `install → setup:local → dev`。开发方案见[同仓文档](../../docs/development-plan.md)。初始化不安装 MySQL，也不会重设已有管理员密码。
+仅开发 App 时默认使用 [共享后端](shared-deployment.md)，无需本地安装数据库。本地修改后端时从 [README 快速开始](../README.md)执行 `install → setup:local → dev`。开发方案见[同仓文档](../../docs/development-plan.md)。初始化不安装 MySQL，也不会重设已有管理员密码。
 
 ## 初始化与日常命令
 

@@ -1,0 +1,11 @@
+[mysqld]
+bind-address=127.0.0.1
+mysqlx-bind-address=127.0.0.1
+innodb-buffer-pool-size=128M
+innodb-log-buffer-size=8M
+max-connections=24
+table-open-cache=400
+table-definition-cache=400
+performance-schema=OFF
+temptable-max-ram=32M
+key-buffer-size=8M

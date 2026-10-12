@@ -1,6 +1,6 @@
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { NavPusher, RepairOrderFocusParam, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
+import { RepairOrderFocusParam, ROUTE_CASE_LIBRARY, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
 import { QuickEntry } from '../../core/ui/QuickEntry';
 import { HomeQuickCard, HomeReferenceHeader } from './HomeReferenceVisuals';
@@ -48,24 +48,38 @@ function isPendingStatus(status: string): boolean {
 export struct HomeTab {
   @Prop displayName: string = '';
   @Prop roleText: string = '';
+  @Prop @Watch('authChanged') authenticated: boolean = false;
+  onOpen: (route: string, param: Object | null) => void = () => {};
   @Prop home: string = '';
   @Prop permissions: string[] = [];
   /** 由 HomePage 注入的导航栈：统一走 NavPusher 压栈。 */
   pathStack: NavPathStack = new NavPathStack();
   onSessionExpired: () => void = () => {
   };
-  private pusher: NavPusher = new NavPusher();
   @State progressState: number = PROGRESS_LOADING;
   @State pendingOrders: RepairOrderView[] = [];
   @State progressErrorText: string = '';
   /** 列表请求进行中标记：防止重试按钮连点触发并发请求。 */
   private requesting: boolean = false;
+  private progressGeneration: number = 0;
 
   aboutToAppear(): void {
     // 工作人员首页不放客户报修数据区，避免把两种对象混在一页。
-    if (this.home !== HOME_STAFF) {
+    if (this.authenticated && this.home !== HOME_STAFF) {
       this.loadPending();
     }
+  }
+
+  aboutToDisappear(): void {
+    this.requesting = false;
+    this.progressGeneration += 1;
+  }
+
+  private authChanged(): void {
+    this.progressGeneration += 1;
+    this.requesting = false;
+    this.pendingOrders = [];
+    if (this.authenticated && this.home !== HOME_STAFF) this.loadPending();
   }
 
   private handleError(error: Object): void {
@@ -86,27 +100,30 @@ export struct HomeTab {
     if (this.requesting) {
       return;
     }
+    const generation = ++this.progressGeneration;
     this.requesting = true;
     this.progressState = PROGRESS_LOADING;
     this.progressErrorText = '';
     try {
       const items = await RepairOrderService.listMine('', 1);
+      if (generation !== this.progressGeneration) return;
       this.pendingOrders = items.filter((order: RepairOrderView) => isPendingStatus(order.status));
       this.progressState = this.pendingOrders.length === 0 ? PROGRESS_EMPTY : PROGRESS_READY;
     } catch (error) {
+      if (generation !== this.progressGeneration) return;
       this.progressState = PROGRESS_ERROR;
       this.handleError(error);
     } finally {
-      this.requesting = false;
+      if (generation === this.progressGeneration) this.requesting = false;
     }
   }
 
   private openKnowledge(): void {
-    this.pusher.push(this.pathStack, ROUTE_KNOWLEDGE, null);
+    this.onOpen(ROUTE_KNOWLEDGE, null);
   }
 
   private openRepairs(): void {
-    this.pusher.push(this.pathStack, this.home === HOME_STAFF ? ROUTE_STAFF_ORDERS : ROUTE_REPAIR_ORDERS, null);
+    this.onOpen(this.home === HOME_STAFF ? ROUTE_STAFF_ORDERS : ROUTE_REPAIR_ORDERS, null);
   }
 
   private showActivities(): void {
@@ -167,7 +184,7 @@ export struct HomeTab {
     .onClick(() => {
       // 带订单 ID 压栈：我的报修页打开后直接展开该单的详情进度。
       const focus: RepairOrderFocusParam = { orderId: order.id };
-      this.pusher.push(this.pathStack, ROUTE_REPAIR_ORDERS, focus);
+      this.onOpen(ROUTE_REPAIR_ORDERS, focus);
     })
   }
 
@@ -225,6 +242,7 @@ export struct HomeTab {
       Column() {
         HomeReferenceHeader({
           onConsult: (): void => { this.openKnowledge(); },
+          onSearch: (): void => { this.onOpen(ROUTE_PUBLIC_GUIDES, null); },
           onRepair: (): void => { this.openRepairs(); },
           onRecords: (): void => { this.openRepairs(); }
         })
@@ -259,11 +277,16 @@ export struct HomeTab {
             Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
               ForEach(this.staffEntries(), (entry: TabEntry) => {
                 QuickEntry({ icon: entry.icon, title: entry.title, hue: entry.hue, ready: entry.ready,
-                  onSelect: (): void => { this.pusher.push(this.pathStack, entry.route, null); } })
+                  onSelect: (): void => { this.onOpen(entry.route, null); } })
               }, (entry: TabEntry) => entry.title + entry.route)
             }
             .width('100%')
             .margin({ top: 14 })
+          } else if (!this.authenticated) {
+            Text('登录后查看自己的报修进度')
+              .fontSize(14).fontColor('#697071')
+            Button('登录查看', { type: ButtonType.Capsule })
+              .margin({ top: 12 }).onClick(() => { this.openRepairs(); })
           } else {
             Row() {
               Text('进行中的报修')

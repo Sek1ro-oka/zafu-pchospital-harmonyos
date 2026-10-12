@@ -1,0 +1,116 @@
+{
+  "requestCount": 22,
+  "publicGuideCount": 15,
+  "requests": [
+    {
+      "path": "/api/v1/health",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/public/knowledge/guides",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/public/knowledge/guides?id=kch_dbdbcf292799b2dc51f0",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/public/knowledge/guides?id=../../.env",
+      "http": 404,
+      "code": "KNOWLEDGE_SOURCE_NOT_FOUND"
+    },
+    {
+      "path": "/api/v1/public/knowledge/guides?id=kch_6e87965d789ac2a379f4",
+      "http": 404,
+      "code": "KNOWLEDGE_SOURCE_NOT_FOUND"
+    },
+    {
+      "path": "/api/v1/repair-orders",
+      "http": 401,
+      "code": "UNAUTHENTICATED"
+    },
+    {
+      "path": "/api/v1/knowledge/chat",
+      "http": 401,
+      "code": "UNAUTHENTICATED"
+    },
+    {
+      "path": "/api/v1/auth/native/login",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/auth/native/session",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/repair-orders",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/auth/native/logout",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/auth/native/session",
+      "http": 401,
+      "code": "AUTH_SESSION_INVALID"
+    },
+    {
+      "path": "/api/v1/auth/native/login",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/auth/native/session",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/knowledge/chat",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/knowledge/sources/kch_34e940908cf9a5a597f9",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/auth/native/logout",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/auth/native/session",
+      "http": 401,
+      "code": "AUTH_SESSION_INVALID"
+    },
+    {
+      "path": "/api/v1/auth/native/login",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/auth/native/session",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/auth/native/logout",
+      "http": 200,
+      "code": null
+    },
+    {
+      "path": "/api/v1/auth/native/session",
+      "http": 401,
+      "code": "AUTH_SESSION_INVALID"
+    }
+  ]
+}

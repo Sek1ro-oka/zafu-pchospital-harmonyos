@@ -1,0 +1,26 @@
+[Unit]
+Description=PC Hospital shared experiment API
+After=network.target mysql.service
+Requires=mysql.service
+
+[Service]
+Type=simple
+User=pchospital-shared
+Group=pchospital-shared
+WorkingDirectory=/opt/pchospital-shared/current
+EnvironmentFile=/opt/pchospital-shared/shared/backend.env
+Environment=NODE_ENV=production
+Environment=NEXT_TELEMETRY_DISABLED=1
+Environment=NODE_OPTIONS=--max-old-space-size=256
+ExecStart=/opt/pchospital-shared/runtime/node-v24.16.0-linux-x64/bin/node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 13080
+Restart=on-failure
+RestartSec=10
+MemoryHigh=300M
+MemoryMax=384M
+CPUQuota=100%
+OOMScoreAdjust=400
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
