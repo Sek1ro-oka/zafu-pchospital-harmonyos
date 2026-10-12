@@ -385,7 +385,8 @@ export struct KnowledgePage {
           ListItem() {
             this.messageBubble(message);
           }
-        }, (message: ChatMessage) => message.id.toString())
+        // 消息按不可变对象替换。状态变化时重建气泡，否则 ForEach 复用旧的 pending 构建结果。
+        }, (message: ChatMessage) => message.id.toString() + ':' + message.status)
       }
       .layoutWeight(1)
       .width('100%')
