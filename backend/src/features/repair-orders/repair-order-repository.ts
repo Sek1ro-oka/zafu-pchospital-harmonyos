@@ -35,10 +35,7 @@ export const repairOrderRepository = {
    * 本人报修列表分页。
    * 只按 `submittedByUserId` 过滤 —— 归属在此处就收口，不依赖上层传参正确。
    */
-  async listBySubmitter(
-    userId: string,
-    options: { skip: number; take: number; status?: string },
-  ) {
+  async listBySubmitter(userId: string, options: { skip: number; take: number; status?: string }) {
     const where: Prisma.RepairOrderWhereInput = {
       submittedByUserId: userId,
       deletedAt: null,
@@ -156,7 +153,8 @@ export const repairOrderRepository = {
     const conditions: Prisma.RepairOrderWhereInput[] = [{ deletedAt: null }];
     if (options.scope === "unassigned")
       conditions.push({ status: "SUBMITTED", assigneeMemberProfileId: null });
-    if (options.scope === "mine") conditions.push({ assigneeMemberProfileId: options.memberProfileId });
+    if (options.scope === "mine")
+      conditions.push({ assigneeMemberProfileId: options.memberProfileId });
     if (options.status) conditions.push({ status: options.status });
     const where: Prisma.RepairOrderWhereInput = { AND: conditions };
     const db = getDb();
@@ -212,6 +210,26 @@ export const repairOrderRepository = {
         where: { id: input.orderId },
         include: repairOrderStaffInclude,
       });
+      const labels: Record<string, string> = {
+        ACCEPTED: "报修已受理",
+        REPAIRING: "报修处理中",
+        COMPLETED: "报修已完成",
+        CANCELLED: "报修已取消",
+      };
+      const title = labels[input.event.toStatus];
+      if (title) {
+        await tx.customerNotification.create({
+          data: {
+            id: input.event.id,
+            eventId: input.event.id,
+            repairOrderId: order.id,
+            userId: order.submittedByUserId,
+            title,
+            body: `${order.deviceModel}：${input.event.note ?? title}`,
+            createdAt: input.now,
+          },
+        });
+      }
       return { updated: true, order };
     });
   },

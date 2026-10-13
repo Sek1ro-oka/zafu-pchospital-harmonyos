@@ -1,6 +1,10 @@
 export const ROUTE_PUBLIC_GUIDES: string = 'public-guides';
 export const ROUTE_PERSONAL_PROFILE: string = 'personal-profile';
 export const ROUTE_MEMBER_DIRECTORY: string = 'member-directory';
+export const ROUTE_FAVORITES: string = 'favorites';
+export const ROUTE_MESSAGES: string = 'messages';
+export const ROUTE_PUBLIC_CASES: string = 'public-cases';
+export const ROUTE_PUBLIC_CASE_DETAIL: string = 'public-case-detail';
 export interface GuideFocusParam { guideId: string; }
 export const ROUTE_SERVICE: string = 'service';
 /**
@@ -35,6 +39,10 @@ export const ROUTE_CASE_DETAIL: string = 'knowledge-case-detail';
  * 标题从这里取，保证所有子页的系统标题栏与返回按钮样式一致（Issue #41）。
  */
 export function routeTitle(name: string): string {
+  if (name === ROUTE_FAVORITES) return '我的收藏';
+  if (name === ROUTE_MESSAGES) return '站内消息';
+  if (name === ROUTE_PUBLIC_CASES) return '公开 AI 案例';
+  if (name === ROUTE_PUBLIC_CASE_DETAIL) return '公开案例详情';
   if (name === ROUTE_PERSONAL_PROFILE) return '个人资料';
   if (name === ROUTE_MEMBER_DIRECTORY) return '成员资料';
   if (name === ROUTE_PUBLIC_GUIDES) return '公开维修指南';

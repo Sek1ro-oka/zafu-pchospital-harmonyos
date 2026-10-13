@@ -8,6 +8,7 @@ import { RepairOrderView, REPAIR_ORDER_COMPLETED, REPAIR_ORDER_ACCEPTED, REPAIR_
 import { RepairOrderService } from '../repair/RepairOrderService';
 import { ROUTE_PERSONAL_PROFILE } from '../../core/ui/Routes';
 import { PersonalProfileService } from './PersonalProfileService';
+import { ROUTE_FAVORITES, ROUTE_MESSAGES } from '../../core/ui/Routes';
 
 /** 统计区块的加载状态（与 StatePanel 配套）。 */
 const STATS_LOADING: number = 0;
@@ -116,14 +117,15 @@ export struct ProfilePage {
       { title: '我的报修', icon: $r('app.media.ref_document'), note: '', route: ROUTE_REPAIR_ORDERS },
       { title: '维修记录', icon: $r('app.media.ref_grid'), note: '暂未接入', route: '' },
       { title: '活动报名', icon: $r('app.media.ref_flag'), note: '暂未接入', route: '' },
-      { title: '收藏', icon: $r('app.media.ref_star'), note: '暂未接入', route: '' },
-      { title: '消息', icon: $r('app.media.ref_message'), note: '暂未接入', route: '' },
+      { title: '收藏', icon: $r('app.media.ref_star'), note: '', route: ROUTE_FAVORITES },
+      { title: '消息', icon: $r('app.media.ref_message'), note: '', route: ROUTE_MESSAGES },
       { title: '个人资料', icon: $r('app.media.ref_profile'), note: '', route: ROUTE_PERSONAL_PROFILE }
     ];
   }
 
   private staffEntries(): ProfileEntry[] {
     const entries: ProfileEntry[] = [
+      { title: '收藏', icon: $r('app.media.ref_star'), note: '', route: ROUTE_FAVORITES },
       { title: '个人资料', icon: $r('app.media.ref_profile'), note: '', route: ROUTE_PERSONAL_PROFILE },
       { title: '进入工作台', icon: $r('app.media.ref_document'), note: '', route: ROUTE_STAFF_ORDERS },
       { title: '典型案例库', icon: $r('app.media.ref_grid'), note: '', route: ROUTE_CASE_LIBRARY },
@@ -132,7 +134,7 @@ export struct ProfilePage {
     if (this.permissions.includes('repair:review')) {
       entries.push({ title: '备案审核', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_STAFF_REVIEW });
     }
-    entries.push({ title: '消息', icon: $r('app.media.ref_message'), note: '暂未接入', route: '' });
+    entries.push({ title: '消息', icon: $r('app.media.ref_message'), note: '', route: ROUTE_MESSAGES });
     return entries;
   }
 
@@ -234,8 +236,8 @@ export struct ProfilePage {
             onSelect: (): void => { this.getUIContext().getPromptAction().showToast({ message: '扫码暂未接入' }); } })
           ReferenceRoundAction({ icon: $r('app.media.home_headset'), label: 'AI 故障问诊',
             onSelect: (): void => { this.onOpen(ROUTE_KNOWLEDGE, null); } })
-          ReferenceRoundAction({ icon: $r('app.media.home_message'), label: '消息暂未接入',
-            onSelect: (): void => { this.getUIContext().getPromptAction().showToast({ message: '消息暂未接入' }); } })
+          ReferenceRoundAction({ icon: $r('app.media.home_message'), label: '站内消息',
+            onSelect: (): void => { this.onOpen(ROUTE_MESSAGES, null); } })
         }.width('100%').height(50)
         this.profileCard()
         if (this.home !== HOME_STAFF) { this.statsSection() }

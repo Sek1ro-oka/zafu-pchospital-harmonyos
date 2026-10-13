@@ -126,6 +126,7 @@ export async function cleanupStaffRepairFixtures(): Promise<void> {
     })
   ).map((row) => row.id);
   if (orderIds.length > 0) {
+    await db.customerNotification.deleteMany({ where: { repairOrderId: { in: orderIds } } });
     await db.repairOrderEvent.deleteMany({ where: { repairOrderId: { in: orderIds } } });
     await db.repairOrder.deleteMany({ where: { id: { in: orderIds } } });
   }

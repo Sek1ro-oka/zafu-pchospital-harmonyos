@@ -21,6 +21,7 @@ import {
 } from './StaffRepairContract';
 import { RepairRecordService } from './RepairRecordService';
 import { formatOrderTime } from './RepairOrderContract';
+import { CommunityService } from '../profile/CommunityService';
 
 /** 字段级错误：键与后端 fieldErrors 同名，服务端错误直接落到对应区域。 */
 type FieldErrorMap = Record<string, string>;
@@ -72,6 +73,7 @@ export struct StaffRepairRecordPage {
   @State fieldErrors: FieldErrorMap = {};
   @State actionError: string = '';
   @State noticeText: string = '';
+  @State favoriting: boolean = false;
   @State saving: boolean = false;
   @State submitting: boolean = false;
   @State uploading: boolean = false;
@@ -509,6 +511,18 @@ export struct StaffRepairRecordPage {
       .borderRadius(16)
       .margin({ right: 8, bottom: 8 })
       .onClick(action)
+  }
+
+  private async favoriteRecord(): Promise<void> {
+    if (this.favoriting || this.record === null) return;
+    this.favoriting = true;
+    this.actionError = ''; this.noticeText = '';
+    const generation = this.generation;
+    try { await CommunityService.memberFavorite(this.record.id); if (generation === this.generation) this.noticeText = '备案已收藏'; }
+    catch (error) { if (generation !== this.generation) return;
+      if (error instanceof ApiRequestError && isSessionExpiredCode(error.code)) { this.onSessionExpired(); return; }
+      this.actionError = error instanceof ApiRequestError ? error.message : '收藏失败';
+    } finally { if (generation === this.generation) this.favoriting = false; }
   }
 
   @Builder
@@ -956,6 +970,7 @@ export struct StaffRepairRecordPage {
               .borderRadius(CARD_RADIUS)
               .alignItems(HorizontalAlign.Center)
             } else if (this.record !== null) {
+              Button(this.favoriting ? '收藏中…' : '收藏备案').enabled(!this.favoriting).onClick(() => { this.favoriteRecord(); })
               if (this.actionError !== '') {
                 Text(this.actionError)
                   .fontSize(13)

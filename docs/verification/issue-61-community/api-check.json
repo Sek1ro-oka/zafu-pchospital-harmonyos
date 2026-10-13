@@ -1,0 +1,112 @@
+{
+  "backend": "http://127.0.0.1:13087",
+  "database": "pchospital_exp_issue61_1013",
+  "caseFixture": "Synthetic controlled fixture; no paid model call",
+  "date": "2026-10-13T02:58:52.662Z",
+  "results": [
+    {
+      "name": "登录 100001",
+      "result": "PASS"
+    },
+    {
+      "name": "登录 100061",
+      "result": "PASS"
+    },
+    {
+      "name": "登录 100002",
+      "result": "PASS"
+    },
+    {
+      "name": "登录 100003",
+      "result": "PASS"
+    },
+    {
+      "name": "真实公开指南目录",
+      "result": "PASS"
+    },
+    {
+      "name": "收藏指南",
+      "result": "PASS"
+    },
+    {
+      "name": "重复收藏同一行",
+      "result": "PASS"
+    },
+    {
+      "name": "B不能取消A收藏",
+      "result": "PASS"
+    },
+    {
+      "name": "恢复收藏复用原行",
+      "result": "PASS"
+    },
+    {
+      "name": "公开案例浏览",
+      "result": "PASS"
+    },
+    {
+      "name": "收藏公开案例",
+      "result": "PASS"
+    },
+    {
+      "name": "真实创建报修",
+      "result": "PASS"
+    },
+    {
+      "name": "受理 0",
+      "result": "PASS"
+    },
+    {
+      "name": "受理 1",
+      "result": "PASS"
+    },
+    {
+      "name": "错误状态拒绝",
+      "result": "PASS"
+    },
+    {
+      "name": "REPAIRING 0",
+      "result": "PASS"
+    },
+    {
+      "name": "REPAIRING 1",
+      "result": "PASS"
+    },
+    {
+      "name": "COMPLETED 0",
+      "result": "PASS"
+    },
+    {
+      "name": "COMPLETED 1",
+      "result": "PASS"
+    },
+    {
+      "name": "本次三状态仅三条消息",
+      "result": "PASS"
+    },
+    {
+      "name": "B不能读A消息",
+      "result": "PASS"
+    },
+    {
+      "name": "B不能已读A消息",
+      "result": "PASS"
+    },
+    {
+      "name": "本人已读",
+      "result": "PASS"
+    },
+    {
+      "name": "转内部管理操作",
+      "result": "PASS"
+    },
+    {
+      "name": "转内部后客户404",
+      "result": "PASS"
+    },
+    {
+      "name": "收藏失效隐藏旧标题",
+      "result": "PASS"
+    }
+  ]
+}
