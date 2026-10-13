@@ -25,6 +25,10 @@ import { StaffRepairRecordPage } from '../repair/StaffRepairRecordPage';
 import { ServicePage } from '../service/ServicePage';
 import { HomeTab } from './HomeTab';
 import { ProfilePage } from '../profile/ProfilePage';
+import { PersonalProfilePage } from '../profile/PersonalProfilePage';
+import { MemberDirectoryPage } from '../profile/MemberDirectoryPage';
+import { PersonalProfileParam } from '../profile/PersonalProfileContract';
+import { ROUTE_PERSONAL_PROFILE, ROUTE_MEMBER_DIRECTORY } from '../../core/ui/Routes';
 
 /** 五个真实根页面；AI 对话仍是离开即销毁的导航子页。 */
 const TAB_INDEX_HOME: number = 0;
@@ -34,6 +38,7 @@ const ROUTE_LOGIN: string = 'login';
 export struct HomePage {
   @Prop authenticated: boolean = false;
   onLoggedIn: (identity: SessionIdentity) => void = () => {};
+  onProfileSaved: (name: string) => void = () => {};
   private loginIntent: LoginIntent = new LoginIntent();
   private loginBusy: boolean = false;
   private expiring: boolean = false;
@@ -144,6 +149,18 @@ export struct HomePage {
           onLoggedIn: (identity: SessionIdentity): void => { this.completeLogin(identity); },
           onCancel: (): void => { this.cancelLogin(); },
           onBusyChange: (busy: boolean): void => { this.loginBusy = busy; }
+        });
+      } else if (name === ROUTE_PERSONAL_PROFILE) {
+        PersonalProfilePage({
+          home: this.home, permissions: this.permissions, param: param as PersonalProfileParam | null,
+          onSaved: (name: string): void => { this.onProfileSaved(name); },
+          onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_MEMBER_DIRECTORY) {
+        MemberDirectoryPage({
+          onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+          onSessionExpired: (): void => { this.expireSession(); }
         });
       } else if (name === ROUTE_PUBLIC_GUIDES) {
         PublicGuidesPage({

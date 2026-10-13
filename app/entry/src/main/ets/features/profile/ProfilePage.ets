@@ -6,6 +6,8 @@ import { ReferenceRoundAction, ReferenceShortcut, REFERENCE_BACKGROUND } from '.
 import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
 import { RepairOrderView, REPAIR_ORDER_COMPLETED, REPAIR_ORDER_ACCEPTED, REPAIR_ORDER_REPAIRING, REPAIR_ORDER_SUBMITTED } from '../repair/RepairOrderContract';
 import { RepairOrderService } from '../repair/RepairOrderService';
+import { ROUTE_PERSONAL_PROFILE } from '../../core/ui/Routes';
+import { PersonalProfileService } from './PersonalProfileService';
 
 /** 统计区块的加载状态（与 StatePanel 配套）。 */
 const STATS_LOADING: number = 0;
@@ -24,7 +26,7 @@ interface ProfileEntry {
  */
 @Component
 export struct ProfilePage {
-  @Prop displayName: string = '';
+  @Prop @Watch('loadCardProfile') displayName: string = '';
   @Prop roleText: string = '';
   @Prop home: string = '';
   @Prop permissions: string[] = [];
@@ -39,17 +41,36 @@ export struct ProfilePage {
   @State completedCount: number = 0;
   @State statsErrorText: string = '';
   @State logoutBusy: boolean = false;
+  @State cardName: string = '';
+  private cardGeneration: number = 0;
   private requesting: boolean = false;
   private generation: number = 0;
   onOpen: (route: string, param: Object | null) => void = () => {};
 
   aboutToAppear(): void {
+    this.loadCardProfile();
     if (this.home !== HOME_STAFF) {
       this.loadStats();
     }
   }
 
-  aboutToDisappear(): void { this.generation += 1; this.requesting = false; }
+  aboutToDisappear(): void { this.generation += 1; this.cardGeneration += 1; this.requesting = false; }
+
+  /** 会话展示名可能早于成员昵称修改；从本人资料读取卡片名称，不改写成员账号字段。 */
+  private async loadCardProfile(): Promise<void> {
+    const generation = ++this.cardGeneration;
+    this.cardName = '';
+    if (this.home === HOME_STAFF && !this.permissions.includes('member.profile.read_self')) return;
+    try {
+      const name = this.home === HOME_STAFF
+        ? (await PersonalProfileService.member()).profile.displayName
+        : (await PersonalProfileService.customer()).displayName;
+      if (generation === this.cardGeneration) this.cardName = name;
+    } catch (error) {
+      if (generation === this.cardGeneration && error instanceof ApiRequestError && isSessionExpiredCode(error.code)) this.onSessionExpired();
+      // 网络失败时仍显示当前会话身份；编辑页提供完整错误与重试，不使用假资料。
+    }
+  }
 
   private handleError(error: Object): void {
     if (error instanceof ApiRequestError) {
@@ -97,12 +118,13 @@ export struct ProfilePage {
       { title: '活动报名', icon: $r('app.media.ref_flag'), note: '暂未接入', route: '' },
       { title: '收藏', icon: $r('app.media.ref_star'), note: '暂未接入', route: '' },
       { title: '消息', icon: $r('app.media.ref_message'), note: '暂未接入', route: '' },
-      { title: '个人资料', icon: $r('app.media.ref_profile'), note: '编辑未接入', route: '' }
+      { title: '个人资料', icon: $r('app.media.ref_profile'), note: '', route: ROUTE_PERSONAL_PROFILE }
     ];
   }
 
   private staffEntries(): ProfileEntry[] {
     const entries: ProfileEntry[] = [
+      { title: '个人资料', icon: $r('app.media.ref_profile'), note: '', route: ROUTE_PERSONAL_PROFILE },
       { title: '进入工作台', icon: $r('app.media.ref_document'), note: '', route: ROUTE_STAFF_ORDERS },
       { title: '典型案例库', icon: $r('app.media.ref_grid'), note: '', route: ROUTE_CASE_LIBRARY },
       { title: '知识问答', icon: $r('app.media.ref_star'), note: '', route: ROUTE_KNOWLEDGE }
@@ -111,7 +133,6 @@ export struct ProfilePage {
       entries.push({ title: '备案审核', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_STAFF_REVIEW });
     }
     entries.push({ title: '消息', icon: $r('app.media.ref_message'), note: '暂未接入', route: '' });
-    entries.push({ title: '个人资料', icon: $r('app.media.ref_profile'), note: '编辑未接入', route: '' });
     return entries;
   }
 
@@ -151,11 +172,9 @@ export struct ProfilePage {
   profileCard() {
     Column({ space: 16 }) {
       Row({ space: 12 }) {
-        Text(this.displayName === '' ? '客' : this.displayName.substring(0, 1))
-          .fontSize(26).fontWeight(FontWeight.Medium).fontColor(Color.White)
-          .width(50).height(50).textAlign(TextAlign.Center).backgroundColor('#B8AFC8').borderRadius(25)
+        Image($r('app.media.profile_avatar')).width(50).height(50).borderRadius(25)
         Column({ space: 6 }) {
-          Text(this.displayName === '' ? '未命名用户' : this.displayName).fontSize(20).fontWeight(FontWeight.Bold)
+          Text(this.cardName || this.displayName || '未命名用户').fontSize(20).fontWeight(FontWeight.Bold)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           Text(this.roleText).fontSize(11).fontWeight(FontWeight.Medium).fontColor('#6F5B35')
             .padding({ left: 8, right: 8, top: 2, bottom: 2 }).backgroundColor('#F3E8D0').borderRadius(12)
