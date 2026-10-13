@@ -41,6 +41,7 @@ export async function POST(request: Request) {
         studentId: optional(body.studentId),
         className: optional(body.className),
         password,
+        rememberMe: typeof body.rememberMe === "boolean" ? body.rememberMe : undefined,
       },
       context,
     );

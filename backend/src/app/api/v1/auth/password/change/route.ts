@@ -20,6 +20,9 @@ export async function POST(request: Request) {
         currentPassword: String(body.currentPassword ?? ""),
         newPassword: String(body.newPassword ?? ""),
         newPasswordConfirmation: String(body.newPasswordConfirmation ?? ""),
+        // 省略时沿用当前会话的档位（`changePassword` 自己从库里读），
+        // 显式传 true/false 则按用户本次的选择轮换。
+        rememberMe: typeof body.rememberMe === "boolean" ? body.rememberMe : undefined,
       },
       requestContext(request, requestId),
     );

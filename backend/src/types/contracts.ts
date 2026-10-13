@@ -213,7 +213,7 @@ export type AuthorizedActor = RequestContext & {
   mustChangePassword?: boolean;
 };
 
-export type LoginInput = { qq: string; password: string };
+export type LoginInput = { qq: string; password: string; rememberMe?: boolean };
 export type SessionPrincipal = {
   userId: string;
   displayName: string | null;
@@ -232,6 +232,12 @@ export type ChangePasswordInput = {
   currentPassword: string;
   newPassword: string;
   newPasswordConfirmation: string;
+  /**
+   * 改密轮换后新会话的有效期档位。**省略时保持当前会话的选择**
+   * （`AuthService.changePassword` 从库里读原会话的 `rememberMe` 续期）：
+   * 绝不允许「没提交这个字段就把 24 小时账号偷偷续成 30 天」。
+   */
+  rememberMe?: boolean;
 };
 
 /**
@@ -242,6 +248,8 @@ export type CustomerRegistrationInput = {
   qq: string;
   password: string;
   passwordConfirmation: string;
+  /** 保持登录（30 天）；省略时按普通档位（24 小时）。见 `auth-service.ts` 的 `sessionLifetimeFor`。 */
+  rememberMe?: boolean;
 };
 
 export type PaginationInput = { page: number; pageSize: number };
@@ -355,6 +363,8 @@ export type RedeemInviteCodeInput = {
   studentId?: string;
   className?: string;
   password: string;
+  /** 保持登录（30 天）；省略时按普通档位（24 小时）。 */
+  rememberMe?: boolean;
 };
 
 export type ProvisionView = {

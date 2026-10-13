@@ -14,9 +14,13 @@ import type {
 /**
  * 客户自主注册入参解析（唯一入口）。
  *
- * 只读 `qq` / `password` / `passwordConfirmation`，其余字段一律丢弃 —— 尤其是客户端可能
- * 塞进来的 `roles` / `permissions` / `memberProfile*`：客户身份由服务端决定，请求体无权赋权。
- * 顺序与既有邀请码注册一致：先比对两次密码，再校验长度，最后规范化 QQ（错误码带字段提示）。
+ * 只读 `qq` / `password` / `passwordConfirmation` / `rememberMe`，其余字段一律丢弃 ——
+ * 尤其是客户端可能塞进来的 `roles` / `permissions` / `memberProfile*`：客户身份由服务端决定，
+ * 请求体无权赋权。顺序与既有邀请码注册一致：先比对两次密码，再校验长度，最后规范化 QQ
+ * （错误码带字段提示）。
+ *
+ * `rememberMe` 只认布尔值：非布尔（字符串 `"true"`、数字 1）一律按缺省处理
+ * （普通档位 24 小时），**不猜**客户端意图 —— 宁可短一点也不要把选择猜错。
  */
 export function parseCustomerRegistrationInput(
   body: Record<string, unknown>,
@@ -29,7 +33,12 @@ export function parseCustomerRegistrationInput(
   if (!isPasswordLengthValid(password)) {
     throw new AppError("VALIDATION_FAILED", passwordLengthMessage());
   }
-  return { qq: normalizeQq(String(body.qq ?? "")), password, passwordConfirmation };
+  return {
+    qq: normalizeQq(String(body.qq ?? "")),
+    password,
+    passwordConfirmation,
+    rememberMe: typeof body.rememberMe === "boolean" ? body.rememberMe : undefined,
+  };
 }
 
 export class RegistrationService {
@@ -68,7 +77,7 @@ export class RegistrationService {
         // `qq` 会被审计脱敏（`redactAuditSummary` 的 QQ_KEY）；口令类字段一律不入库。
         after: { qq: input.qq, identityType: "QQ", role: "CUSTOMER" },
       });
-      return authService.openSessionWith(tx, created, context, "auth.register.succeeded");
+      return authService.openSessionWith(tx, created, context, "auth.register.succeeded", input.rememberMe);
     });
   }
 }

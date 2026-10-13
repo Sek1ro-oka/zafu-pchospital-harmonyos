@@ -232,6 +232,7 @@ export class InviteCodeService implements InviteCodeServiceContract {
         registration.userId,
         context,
         "auth.register.succeeded",
+        input.rememberMe,
       );
     });
   }
