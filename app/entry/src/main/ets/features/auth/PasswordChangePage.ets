@@ -1,0 +1,273 @@
+import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
+import { SessionService } from '../../core/auth/SessionService';
+import { passwordChangeErrorText, passwordLifetimeHint } from '../../core/auth/AuthMessages';
+import {
+  PASSWORD_LIFETIME_KEEP,
+  PASSWORD_LIFETIME_SHORT,
+  PASSWORD_LIFETIME_LONG,
+  PasswordChangeData,
+  PasswordChangeRequest,
+} from '../../core/auth/AuthContract';
+import {
+  CARD_GAP,
+  CARD_PADDING,
+  CARD_RADIUS,
+  CONTROL_HEIGHT,
+  FONT_NOTE,
+  FONT_SUBTITLE,
+  FONT_TEXT,
+  GAP_LG,
+  GAP_SM,
+  PAGE_PADDING,
+} from '../../core/ui/Theme';
+import { LabeledInput, SubmitButton } from '../../core/ui/FormControls';
+
+/**
+ * 原生修改密码页（Issue #60 第三批）：`POST /api/v1/auth/native/password/change`。
+ *
+ * 契约要点：
+ * - 普通改密与**首次/强制改密共用这一个入口**；强制改密账号（`mustChangePassword = true`）
+ *   进主页时会被引导到这里，因为其它业务接口对它一律 `403 PASSWORD_CHANGE_REQUIRED`；
+ * - 成功即**轮换令牌**：旧令牌失效，本页通过 `SessionService.changePassword`
+ *   把新令牌覆盖写回本地存储（保存失败走 `LOCAL_STORAGE_ERROR`，不展示成功）；
+ * - 失败不含令牌、不产生新会话、不改动当前口令，用户可以原样重试；
+ * - **没有**「新密码不得与当前密码相同」这条规则（Web 端也没有），
+ *   因此这里不做该限制，也不为它发明错误码 —— 客户端不比服务端更严。
+ *
+ * 档位开关三态：`keep` = 省略 `rememberMe`，沿用当前会话档位（不升不降）；
+ * `short` / `long` = 显式提交 24 小时 / 30 天。缺省 `keep`，
+ * 这样 30 天账号不会因为一次改密被偷偷降成 24 小时。
+ */
+@Component
+export struct PasswordChangePage {
+  /** 改密成功（新令牌已保存）：上层据此刷新页面状态并离开本页。 */
+  onChanged: (data: PasswordChangeData) => void = () => {};
+  /** 取消：非强制改密账号可以返回；强制改密账号由上层禁用返回。 */
+  onCancel: () => void = () => {};
+  /** 会话失效（401 类）时通知上层走统一登出路径。 */
+  onSessionExpired: () => void = () => {};
+  /** 强制改密账号：true 时不允许跳过（契约：必须先改密才能用业务接口）。 */
+  @Prop forced: boolean = false;
+  @State currentPassword: string = '';
+  @State newPassword: string = '';
+  @State newPasswordConfirmation: string = '';
+  /** 档位开关：缺省沿用当前会话档位。 */
+  @State lifetime: string = PASSWORD_LIFETIME_KEEP;
+  @State busy: boolean = false;
+  @State errorText: string = '';
+  @State failed: boolean = false;
+  @State fieldErrors: Record<string, string> = {};
+  private generation: number = 0;
+
+  aboutToDisappear(): void {
+    this.generation += 1;
+  }
+
+  private fieldError(name: string): string {
+    const value: string | undefined = this.fieldErrors[name];
+    return value === undefined ? '' : value;
+  }
+
+  private readServerFieldErrors(error: ApiRequestError): Record<string, string> {
+    const result: Record<string, string> = {};
+    const raw: Record<string, string[]> | undefined = error.fieldErrors;
+    if (raw === undefined) {
+      return result;
+    }
+    const keys: string[] = Object.keys(raw);
+    for (const key of keys) {
+      const messages: string[] = raw[key];
+      if (messages.length > 0) {
+        result[key] = messages[0];
+      }
+    }
+    return result;
+  }
+
+  private async submit(): Promise<void> {
+    if (this.busy) {
+      return;
+    }
+    const current: string = this.currentPassword;
+    const next: string = this.newPassword;
+    const confirmation: string = this.newPasswordConfirmation;
+    this.fieldErrors = {};
+    this.errorText = '';
+    if (current === '' || next === '' || confirmation === '') {
+      this.errorText = '请填写当前密码、新密码与确认新密码';
+      return;
+    }
+    if (next !== confirmation) {
+      // ArkTS 不允许未加标注的对象字面量：字段级错误用显式声明的 map 承载。
+      const errors: Record<string, string> = {};
+      errors.newPasswordConfirmation = '两次输入的新密码不一致';
+      this.fieldErrors = errors;
+      return;
+    }
+    if (next.length < 6) {
+      const errors: Record<string, string> = {};
+      errors.newPassword = '新密码至少 6 位';
+      this.fieldErrors = errors;
+      return;
+    }
+    this.busy = true;
+    const generation: number = this.generation;
+    try {
+      // 显式声明类型：ArkTS 不允许未加标注的对象字面量（arkts-no-untyped-obj-literals）。
+      const request: PasswordChangeRequest = {
+        currentPassword: current,
+        newPassword: next,
+        newPasswordConfirmation: confirmation
+      };
+      // 三态档位：keep 时**不带这个键**，服务端沿用当前会话的选择。
+      if (this.lifetime === PASSWORD_LIFETIME_SHORT) {
+        request.rememberMe = false;
+      } else if (this.lifetime === PASSWORD_LIFETIME_LONG) {
+        request.rememberMe = true;
+      }
+      const data = await SessionService.changePassword(request);
+      if (generation !== this.generation) return;
+      // 新令牌已由 SessionService 覆盖写回本地；清空输入框，避免旧口令残留在界面上。
+      this.currentPassword = '';
+      this.newPassword = '';
+      this.newPasswordConfirmation = '';
+      this.onChanged(data);
+    } catch (error) {
+      if (generation !== this.generation) return;
+      if (error instanceof ApiRequestError) {
+        if (isSessionExpiredCode(error.code)) {
+          this.onSessionExpired();
+          return;
+        }
+        if (error.code === 'VALIDATION_FAILED') {
+          this.fieldErrors = this.readServerFieldErrors(error);
+        }
+        this.errorText = passwordChangeErrorText(error);
+      } else {
+        this.errorText = '修改失败，请重试';
+      }
+      this.failed = true;
+    } finally {
+      if (generation === this.generation) {
+        this.busy = false;
+      }
+    }
+  }
+
+  @Builder
+  lifetimeRow(value: string, label: string) {
+    Row({ space: GAP_SM }) {
+      Radio({ value: value, group: 'password-lifetime' })
+        .checked(this.lifetime === value)
+        .enabled(!this.busy)
+        .onChange((): void => { this.lifetime = value; })
+      Text(label)
+        .fontSize(FONT_NOTE)
+        .fontColor($r('app.color.text_primary'))
+        .layoutWeight(1)
+    }
+    .width('100%')
+    .alignItems(VerticalAlign.Center)
+  }
+
+  build() {
+    Scroll() {
+      Column({ space: GAP_LG }) {
+        Column({ space: GAP_SM }) {
+          Text(this.forced ? '请先修改初始密码' : '修改密码')
+            .fontSize(FONT_SUBTITLE)
+            .fontWeight(FontWeight.Medium)
+            .fontColor($r('app.color.text_primary'))
+          Text(this.forced
+            ? '当前账号使用初始密码，必须先修改才能使用报修、知识问答等业务功能。'
+            : '修改成功后当前所有设备的登录都会失效，需要用新密码重新登录。')
+            .fontSize(FONT_NOTE)
+            .fontColor($r('app.color.text_secondary'))
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Start)
+
+        Column({ space: CARD_GAP }) {
+          LabeledInput({
+            label: '当前密码',
+            placeholder: '当前登录密码',
+            text: $$this.currentPassword,
+            inputType: InputType.Password,
+            disabled: this.busy,
+            onChange: (value: string): void => { this.currentPassword = value; }
+          })
+          LabeledInput({
+            label: '新密码',
+            placeholder: '至少 6 位',
+            text: $$this.newPassword,
+            inputType: InputType.Password,
+            disabled: this.busy,
+            errorText: this.fieldError('newPassword'),
+            onChange: (value: string): void => { this.newPassword = value; }
+          })
+          LabeledInput({
+            label: '确认新密码',
+            placeholder: '再输入一次新密码',
+            text: $$this.newPasswordConfirmation,
+            inputType: InputType.Password,
+            disabled: this.busy,
+            errorText: this.fieldError('newPasswordConfirmation'),
+            onChange: (value: string): void => { this.newPasswordConfirmation = value; }
+          })
+
+          Column({ space: GAP_SM }) {
+            Text('会话有效期')
+              .fontSize(FONT_NOTE)
+              .fontColor($r('app.color.text_secondary'))
+              .width('100%')
+              .textAlign(TextAlign.Start)
+            this.lifetimeRow(PASSWORD_LIFETIME_KEEP, '沿用当前会话有效期')
+            this.lifetimeRow(PASSWORD_LIFETIME_SHORT, '普通档位（24 小时）')
+            this.lifetimeRow(PASSWORD_LIFETIME_LONG, '保持登录（30 天）')
+            Text(passwordLifetimeHint(this.lifetime))
+              .fontSize(FONT_NOTE)
+              .fontColor($r('app.color.text_secondary'))
+              .width('100%')
+              .textAlign(TextAlign.Start)
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+
+          if (this.errorText !== '') {
+            Text(this.errorText)
+              .fontSize(FONT_TEXT)
+              .fontColor($r('app.color.danger'))
+              .width('100%')
+              .textAlign(TextAlign.Start)
+          }
+          SubmitButton({
+            text: '确认修改',
+            busyText: '修改中…',
+            busy: this.busy,
+            failed: this.failed,
+            onSubmit: (): void => { this.submit(); }
+          })
+          if (!this.forced) {
+            Button('暂不修改', { type: ButtonType.Normal })
+              .width('100%')
+              .height(CONTROL_HEIGHT)
+              .backgroundColor(Color.Transparent)
+              .fontColor($r('app.color.text_secondary'))
+              .enabled(!this.busy)
+              .onClick((): void => { this.onCancel(); })
+          }
+        }
+        .width('100%')
+        .padding(CARD_PADDING)
+        .backgroundColor($r('app.color.surface'))
+        .borderRadius(CARD_RADIUS)
+      }
+      .width('100%')
+      .padding(PAGE_PADDING)
+      .alignItems(HorizontalAlign.Start)
+      .backgroundColor($r('app.color.start_window_background'))
+    }
+    .width('100%').height('100%').align(Alignment.Top)
+    .backgroundColor($r('app.color.start_window_background'))
+  }
+}

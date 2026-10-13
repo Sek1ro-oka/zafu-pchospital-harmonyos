@@ -21,6 +21,8 @@ struct Index {
   @State roleText: string = '';
   @State home: string = '';
   @State permissions: string[] = [];
+  /** 强制改密账号（初始密码未改）：进入主页后由 HomePage 引导到改密页。 */
+  @State mustChangePassword: boolean = false;
   @State bootText: string = '正在启动…';
 
   aboutToAppear(): void {
@@ -56,6 +58,7 @@ struct Index {
     this.roleText = '';
     this.home = '';
     this.permissions = [];
+    this.mustChangePassword = false;
     this.phase = PHASE_HOME;
   }
 
@@ -65,6 +68,7 @@ struct Index {
     this.roleText = roleLabelFor(identity.roles);
     this.home = identity.home;
     this.permissions = identity.permissions;
+    this.mustChangePassword = identity.mustChangePassword;
     this.authenticated = true;
     this.phase = PHASE_HOME;
   }
@@ -114,6 +118,7 @@ struct Index {
         roleText: this.roleText,
         home: this.home,
         permissions: this.permissions,
+        mustChangePassword: this.mustChangePassword,
         onLogout: () => this.handleLogout(),
         onSessionExpired: () => this.handleSessionExpired()
       })

@@ -3,6 +3,8 @@
 /oh_modules/
 /entry/oh_modules/
 /**/build/
+/.test/
+/entry/.test/
 /local.properties
 *.hap
 *.hsp

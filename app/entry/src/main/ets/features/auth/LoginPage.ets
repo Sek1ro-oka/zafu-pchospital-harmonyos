@@ -4,6 +4,8 @@ import { SessionService } from '../../core/auth/SessionService';
 import { ApiRequestError } from '../../core/network/ApiClient';
 import { ApiConfig } from '../../core/network/ApiConfig';
 import { IconTile } from '../../core/ui/IconTile';
+import { rememberMeHint } from '../../core/auth/AuthMessages';
+import { RememberMeSwitch } from '../../core/ui/FormControls';
 import {
   CARD_GAP,
   CARD_PADDING,
@@ -21,17 +23,22 @@ import {
   PAGE_PADDING,
 } from '../../core/ui/Theme';
 
-/** 登录页：服务器地址 + QQ + 密码；登录成功把服务端身份交给上层。 */
+/** 登录页：服务器地址 + QQ + 密码 + 保持登录；登录成功把服务端身份交给上层。 */
 @Component
 export struct LoginPage {
   onLoggedIn: (identity: SessionIdentity) => void = () => {
   };
   onCancel: () => void = () => {};
   onBusyChange: (busy: boolean) => void = () => {};
+  /** 注册入口：客户自主注册与邀请码注册工作人员分开，由上层压入对应路由。 */
+  onRegisterCustomer: () => void = () => {};
+  onRegisterStaff: () => void = () => {};
   @State showSettings: boolean = false;
   @State serverUrl: string = '';
   @State qq: string = '';
   @State password: string = '';
+  /** 保持登录（30 天）；缺省 false = 普通档位（24 小时），与注册/改密同一套语义。 */
+  @State rememberMe: boolean = false;
   @State busy: boolean = false;
   /** 地址检测进行中：覆盖「保存地址 + 连接检测」全程，期间按钮禁用防连点。 */
   @State checking: boolean = false;
@@ -103,7 +110,7 @@ export struct LoginPage {
       if (!(await this.applyServerUrl())) {
         return;
       }
-      const identity = await SessionService.login(qq, this.password);
+      const identity = await SessionService.login(qq, this.password, this.rememberMe);
       this.onLoggedIn(identity);
     } catch (error) {
       if (error instanceof ApiRequestError) {
@@ -163,6 +170,12 @@ export struct LoginPage {
             .height(CONTROL_HEIGHT)
             .backgroundColor($r('app.color.field_bg'))
             .borderRadius(CONTROL_RADIUS)
+          RememberMeSwitch({
+            isOn: this.rememberMe,
+            disabled: this.busy,
+            hint: rememberMeHint(this.rememberMe),
+            onChange: (value: boolean): void => { this.rememberMe = value; }
+          })
           if (this.errorText !== '') {
             Text(this.errorText)
               .fontSize(FONT_TEXT)
@@ -201,6 +214,31 @@ export struct LoginPage {
           .fontColor($r('app.color.brand'))
           .enabled(!this.busy)
           .onClick(this.onCancel)
+        Column({ space: CARD_GAP }) {
+          Text('还没有账号？')
+            .fontSize(FONT_NOTE)
+            .fontColor($r('app.color.text_secondary'))
+            .width('100%')
+            .textAlign(TextAlign.Center)
+          // 两个注册入口命名与语义都区分清楚：客户自助注册不读邀请码，
+          // 邀请码注册才产生工作人员身份（契约表格逐条列过，不要混用）。
+          Button('注册账号', { type: ButtonType.Normal })
+            .width('100%')
+            .height(CONTROL_HEIGHT)
+            .backgroundColor($r('app.color.brand_soft'))
+            .fontColor($r('app.color.brand'))
+            .enabled(!this.busy)
+            .onClick((): void => { this.onRegisterCustomer(); })
+          Button('工作人员注册（需邀请码）', { type: ButtonType.Normal })
+            .width('100%')
+            .height(CONTROL_HEIGHT)
+            .backgroundColor(Color.Transparent)
+            .fontColor($r('app.color.text_secondary'))
+            .enabled(!this.busy)
+            .onClick((): void => { this.onRegisterStaff(); })
+        }
+        .width('100%')
+        .alignItems(HorizontalAlign.Center)
         Button(this.showSettings ? '收起连接设置' : '连接设置', { type: ButtonType.Normal })
           .backgroundColor(Color.Transparent).fontSize(FONT_NOTE)
           .fontColor($r('app.color.text_secondary'))
