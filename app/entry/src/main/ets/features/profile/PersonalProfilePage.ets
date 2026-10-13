@@ -32,7 +32,11 @@ export struct PersonalProfilePage {
   private generation: number = 0;
 
   aboutToAppear(): void { this.load(); }
-  aboutToDisappear(): void { this.generation += 1; }
+  aboutToDisappear(): void {
+    this.generation += 1;
+    // 旧请求不再拥有页面的忙状态；其迟到响应仍由 generation 拦截。
+    this.loading = false; this.saving = false; this.ready = false;
+  }
   private internal(): boolean { return this.param !== null && this.param.memberProfileId !== ''; }
   private editable(): boolean { return !this.internal() && (this.home !== HOME_STAFF || this.permissions.includes('member.profile.update_self')); }
   private handleError(error: Object): void {
@@ -44,12 +48,14 @@ export struct PersonalProfilePage {
   private async load(): Promise<void> {
     if (this.loading || this.saving) return;
     this.loading = true;
+    this.ready = false;
     this.errorText = '';
     this.notice = '';
     const generation = ++this.generation;
     try {
       if (this.home === HOME_STAFF || this.internal()) {
         const result = await PersonalProfileService.member(this.param?.memberProfileId ?? '');
+        if (generation !== this.generation) return;
         const choices = this.internal() ? [] : await PersonalProfileService.skills();
         if (generation !== this.generation) return;
         const profile = result.profile;
