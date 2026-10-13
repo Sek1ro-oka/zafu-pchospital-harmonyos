@@ -57,7 +57,7 @@ $env:Path='D:/DevEco Studio/tools/node;'+$env:Path
 & 'D:/DevEco Studio/tools/hvigor/bin/hvigorw.bat' --mode module -p product=default assembleHap
 ```
 
-最终 `BUILD SUCCESSFUL`，未签名产物 `app/entry/build/default/outputs/default/entry-default-unsigned.hap`，SHA256 `9A7CB9799F739CE32E5EE3AA1F33E5FD86C94E0B7462A0915C28B600807116A8`。4 条既有 PromptAction 异常处理告警，签名按配置跳过。首轮编译发现 ArkTS 静态方法不允许 `this.token()`，已改用类名后重建成功。
+最终 `BUILD SUCCESSFUL`，未签名产物 `app/entry/build/default/outputs/default/entry-default-unsigned.hap`，SHA256 `1A83A85E574670CD3E118F519EEF110154FC7F958189B579935A1DDB7C2FAC9D`。4 条既有 PromptAction 异常处理告警，签名按配置跳过。首轮编译发现 ArkTS 静态方法不允许 `this.token()`，已改用类名后重建成功。
 
 本轮启动已安装的 DevEco `Pura 90` 模拟器：`OpenHarmony-6.1.1.125` / API 24，1320×2856，`hdc 127.0.0.1:5555`。安装返回 `install bundle successfully`，启动返回 `start ability successfully`。App 在连接设置中改为 `http://10.0.2.2:13086`（模拟器访问主机），后端实际监听本机 13086；本批业务写入未指向共享服务器。
 

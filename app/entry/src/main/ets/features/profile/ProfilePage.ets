@@ -133,7 +133,6 @@ export struct ProfilePage {
       entries.push({ title: '备案审核', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_STAFF_REVIEW });
     }
     entries.push({ title: '消息', icon: $r('app.media.ref_message'), note: '暂未接入', route: '' });
-    entries.push({ title: '个人资料', icon: $r('app.media.ref_profile'), note: '编辑未接入', route: '' });
     return entries;
   }
 
