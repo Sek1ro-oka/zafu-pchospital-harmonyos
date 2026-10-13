@@ -19,7 +19,7 @@ export struct MemberDirectoryPage {
   private retryReset: boolean = true;
   private generation: number = 0;
   aboutToAppear(): void { this.load(true); }
-  aboutToDisappear(): void { this.generation += 1; }
+  aboutToDisappear(): void { this.generation += 1; this.busy = false; }
   private async load(reset: boolean): Promise<void> {
     if (this.busy) return;
     this.busy = true; this.errorText = '';
