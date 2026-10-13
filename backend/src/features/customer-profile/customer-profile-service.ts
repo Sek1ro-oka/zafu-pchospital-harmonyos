@@ -4,7 +4,7 @@ import { inSerializableTransaction } from "@/lib/db/transaction";
 import type { AuthorizedActor } from "@/types/contracts";
 import type { CustomerProfileInput } from "./customer-profile-input";
 
-async function customerUser(actor: AuthorizedActor) {
+export async function customerUser(actor: AuthorizedActor) {
   if (!actor.userId) throw new AppError("UNAUTHENTICATED", "请先登录");
   const user = await getDb().user.findFirst({
     where: { id: actor.userId, status: "ACTIVE", deletedAt: null },

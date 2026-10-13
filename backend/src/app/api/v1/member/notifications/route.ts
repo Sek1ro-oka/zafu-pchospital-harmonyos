@@ -20,11 +20,10 @@ export async function GET(request: Request) {
       { ...pagination, status: notificationStatusFilter(params) },
       actor,
     );
-    return apiSuccess(
-      { items: result.items, unreadCount: result.unreadCount },
-      requestId,
-      { pagination: result.pagination, headers: PRIVATE },
-    );
+    return apiSuccess({ items: result.items, unreadCount: result.unreadCount }, requestId, {
+      pagination: result.pagination,
+      headers: PRIVATE,
+    });
   } catch (error) {
     return apiFailure(error, requestId);
   }

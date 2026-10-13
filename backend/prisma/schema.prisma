@@ -22,6 +22,8 @@ model User {
   rolesGranted       UserRole[]              @relation("GrantedBy")
   memberProfile      MemberProfile?
   customerProfile    CustomerProfile?
+  customerFavorites CustomerFavorite[]
+  customerNotifications CustomerNotification[]
   reviews            JoinApplicationReview[]
   inviteCodesCreated InviteCode[]
   redemptions        InviteCodeRedemption[]
@@ -54,6 +56,39 @@ model CustomerProfile {
   user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@map("customer_profiles")
+}
+
+model CustomerFavorite {
+  id        String    @id @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  kind      String    @db.VarChar(16)
+  sourceId  String    @map("source_id") @db.VarChar(512)
+  createdAt DateTime  @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  deletedAt DateTime? @map("deleted_at") @db.DateTime(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, kind, sourceId], map: "customer_favorites_source_uq")
+  @@index([userId, deletedAt, createdAt], map: "customer_favorites_user_idx")
+  @@map("customer_favorites")
+}
+
+model CustomerNotification {
+  id            String           @id @db.Char(36)
+  userId        String           @map("user_id") @db.Char(36)
+  repairOrderId String           @map("repair_order_id") @db.Char(36)
+  eventId       String           @unique(map: "customer_notifications_event_uq") @map("event_id") @db.Char(36)
+  title         String           @db.VarChar(120)
+  body          String           @db.VarChar(600)
+  readAt        DateTime?        @map("read_at") @db.DateTime(3)
+  deletedAt     DateTime?        @map("deleted_at") @db.DateTime(3)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.DateTime(3)
+  user          User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+  order         RepairOrder      @relation(fields: [repairOrderId], references: [id], onDelete: Restrict)
+  event         RepairOrderEvent @relation(fields: [eventId], references: [id], onDelete: Restrict)
+
+  @@index([userId, deletedAt, readAt, createdAt], map: "customer_notifications_user_idx")
+  @@map("customer_notifications")
 }
 
 model AuthSession {
@@ -392,6 +427,7 @@ model RepairOrder {
   assignee     MemberProfile?    @relation("RepairOrderAssignee", fields: [assigneeMemberProfileId], references: [id], onDelete: Restrict)
   repairRecord RepairRecord?     @relation("RepairOrderToRecord", fields: [repairRecordId], references: [id], onDelete: Restrict)
   events       RepairOrderEvent[]
+  customerNotifications CustomerNotification[]
 
   @@index([submittedByUserId, status, createdAt], map: "repair_orders_submitter_status_idx")
   @@index([status, lastProgressAt], map: "repair_orders_status_progress_idx")
@@ -400,6 +436,7 @@ model RepairOrder {
 
 /// 报修单进度事件：每次状态变更留一条，可追溯（#37 建立，#38 写入工作人员变更）。
 model RepairOrderEvent {
+  customerNotification CustomerNotification?
   id            String      @id @db.Char(36)
   repairOrderId String      @map("repair_order_id") @db.Char(36)
   /// 变更前状态；首次提交事件为 null

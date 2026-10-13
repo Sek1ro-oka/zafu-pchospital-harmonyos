@@ -7,6 +7,7 @@ import { ReferenceBanner, ReferenceSearch, ReferenceShortcut, REFERENCE_BACKGROU
 import { CaseDetailParam, CaseListItem, CaseListQuery } from './KnowledgeCaseContract';
 import { KnowledgeCaseService } from './KnowledgeCaseService';
 import { guideCategory } from './GuideCategory';
+import { ROUTE_PUBLIC_CASES } from '../../core/ui/Routes';
 
 interface GuideItem { id: string; title: string; revision: string | null; }
 interface GuideList { guides: GuideItem[]; }
@@ -148,8 +149,11 @@ export struct KnowledgeLibraryPage {
       }
     } else {
       Column({ space: 10 }) {
+        if (this.authenticated && this.home !== HOME_STAFF) {
+          Button('浏览有效公开案例').onClick(() => { this.onOpen(ROUTE_PUBLIC_CASES, null); })
+        }
         Text('在 AI 问答中查看公开案例引用').fontSize(15).fontWeight(FontWeight.Medium)
-        Text('案例目录当前仅向工作人员开放。').fontSize(12).fontColor('#7A868F')
+        Text(this.authenticated ? '客户可浏览有效公开 AI 案例；原始备案仅向授权成员开放。' : '登录后浏览有效公开案例。').fontSize(12).fontColor('#7A868F')
         Button('去问诊').height(32).fontSize(13).backgroundColor('#F0F5FD').fontColor('#2776D8')
           .onClick(() => { this.onOpen(ROUTE_KNOWLEDGE, null); })
       }.width('100%').padding(20).backgroundColor(Color.White).borderRadius(20)

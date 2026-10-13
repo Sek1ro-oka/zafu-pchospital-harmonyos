@@ -1,6 +1,9 @@
 import { ApiClient, ApiRequestError } from '../../core/network/ApiClient';
 import { ApiConfig } from '../../core/network/ApiConfig';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
+import { HOME_STAFF } from '../../core/auth/AuthContract';
+import { isSessionExpiredCode } from '../../core/network/ApiClient';
+import { CommunityService } from '../profile/CommunityService';
 
 interface PublicGuide {
   id: string;
@@ -14,6 +17,11 @@ interface PublicGuideDetail { title: string; revision: string | null; sections: 
 /** 公开指南目录/详情子页；分类主页面由 KnowledgeLibraryPage 负责。 */
 @Component
 export struct PublicGuidesPage {
+  @Prop authenticated: boolean = false;
+  @Prop home: string = '';
+  onSessionExpired: () => void = () => {};
+  @State favoriting: boolean = false;
+  @State notice: string = '';
   @Prop initialGuideId: string = '';
   onConsult: () => void = () => {};
   @State guides: PublicGuide[] = [];
@@ -32,6 +40,7 @@ export struct PublicGuidesPage {
     this.selectedId = id;
     this.loading = true;
     this.errorText = '';
+    this.detail = null; this.notice = ''; this.favoriting = false;
     try {
       const path = '/api/v1/public/knowledge/guides';
       if (id === '') {
@@ -52,6 +61,18 @@ export struct PublicGuidesPage {
     }
   }
 
+  private async favorite(): Promise<void> {
+    if (this.favoriting || this.loading || this.detail === null) return;
+    this.favoriting = true; this.notice = '';
+    const generation = this.generation;
+    try { await CommunityService.favorite('GUIDE', this.selectedId); if (generation === this.generation) this.notice = '指南已收藏'; }
+    catch (error) { if (generation !== this.generation) return;
+      if (error instanceof ApiRequestError && isSessionExpiredCode(error.code)) { this.onSessionExpired(); return; }
+      this.errorText = error instanceof ApiRequestError ? error.message : '收藏失败';
+      if (error instanceof ApiRequestError && error.code === 'KNOWLEDGE_SOURCE_NOT_FOUND') this.detail = null;
+    } finally { if (generation === this.generation) this.favoriting = false; }
+  }
+
   build() {
     Scroll() {
       Column({ space: 16 }) {
@@ -63,6 +84,10 @@ export struct PublicGuidesPage {
         } else if (this.detail !== null) {
           Button('返回指南目录').onClick(() => { this.load(''); })
           Text(this.detail.title).fontSize(24).fontWeight(FontWeight.Bold)
+          if (this.authenticated && this.home !== HOME_STAFF) {
+            Button(this.favoriting ? '收藏中…' : '收藏指南').enabled(!this.favoriting).onClick(() => { this.favorite(); })
+            if (this.notice !== '') { Text(this.notice).fontColor('#288050') }
+          }
           Text(`来源：电脑医院公开文档 · 版本 ${this.detail.revision === null ? '未知' : this.detail.revision.substring(0, 8)}`)
             .fontSize(12).fontColor('#697071')
           ForEach(this.detail.sections, (section: PublicGuideSection) => {

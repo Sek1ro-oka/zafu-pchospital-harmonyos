@@ -29,6 +29,12 @@ import { PersonalProfilePage } from '../profile/PersonalProfilePage';
 import { MemberDirectoryPage } from '../profile/MemberDirectoryPage';
 import { PersonalProfileParam } from '../profile/PersonalProfileContract';
 import { ROUTE_PERSONAL_PROFILE, ROUTE_MEMBER_DIRECTORY } from '../../core/ui/Routes';
+import { ROUTE_FAVORITES, ROUTE_MESSAGES, ROUTE_PUBLIC_CASES, ROUTE_PUBLIC_CASE_DETAIL } from '../../core/ui/Routes';
+import { FavoritesPage } from '../profile/FavoritesPage';
+import { MessagesPage } from '../profile/MessagesPage';
+import { PublicCasesPage } from '../profile/PublicCasesPage';
+import { PublicCaseDetailPage } from '../profile/PublicCaseDetailPage';
+import { PublicCaseParam } from '../profile/CommunityContract';
 
 /** 五个真实根页面；AI 对话仍是离开即销毁的导航子页。 */
 const TAB_INDEX_HOME: number = 0;
@@ -71,6 +77,10 @@ export struct HomePage {
   };
   @State pathStack: NavPathStack = new NavPathStack();
   @State currentTab: number = TAB_INDEX_HOME;
+  @State favoritesRevision: number = 0;
+  @State messagesRevision: number = 0;
+  @State publicCasesRevision: number = 0;
+  @State publicCaseRevision: number = 0;
   private tabController: TabsController = new TabsController();
   private pusher: NavPusher = new NavPusher();
 
@@ -150,6 +160,26 @@ export struct HomePage {
           onCancel: (): void => { this.cancelLogin(); },
           onBusyChange: (busy: boolean): void => { this.loginBusy = busy; }
         });
+      } else if (name === ROUTE_FAVORITES) {
+        FavoritesPage({ home: this.home, refreshVersion: this.favoritesRevision,
+          onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_MESSAGES) {
+        MessagesPage({ home: this.home, refreshVersion: this.messagesRevision,
+          onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_PUBLIC_CASES) {
+        PublicCasesPage({
+          refreshVersion: this.publicCasesRevision,
+          onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_PUBLIC_CASE_DETAIL) {
+        PublicCaseDetailPage({ param: param as PublicCaseParam, refreshVersion: this.publicCaseRevision,
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
       } else if (name === ROUTE_PERSONAL_PROFILE) {
         PersonalProfilePage({
           home: this.home, permissions: this.permissions, param: param as PersonalProfileParam | null,
@@ -164,6 +194,8 @@ export struct HomePage {
         });
       } else if (name === ROUTE_PUBLIC_GUIDES) {
         PublicGuidesPage({
+          authenticated: this.authenticated, home: this.home,
+          onSessionExpired: (): void => { this.expireSession(); },
           initialGuideId: param !== null && param !== undefined ? (param as GuideFocusParam).guideId : '',
           onConsult: (): void => { this.openRoute(ROUTE_KNOWLEDGE, null); }
         });
@@ -237,6 +269,12 @@ export struct HomePage {
       }
     }
     .title(name === ROUTE_LOGIN ? '登录' : routeTitle(name))
+    .onShown(() => {
+      if (name === ROUTE_FAVORITES) this.favoritesRevision += 1;
+      if (name === ROUTE_MESSAGES) this.messagesRevision += 1;
+      if (name === ROUTE_PUBLIC_CASES) this.publicCasesRevision += 1;
+      if (name === ROUTE_PUBLIC_CASE_DETAIL) this.publicCaseRevision += 1;
+    })
     .onBackPressed((): boolean => {
       if (name === ROUTE_LOGIN) {
         if (this.loginBusy) return true;
