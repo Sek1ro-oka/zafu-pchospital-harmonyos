@@ -16,7 +16,7 @@ export struct PublicCasesPage {
   private generation: number = 0;
   aboutToAppear(): void { this.load(true); }
   private refresh(): void { this.load(true); }
-  aboutToDisappear(): void { this.generation += 1; }
+  aboutToDisappear(): void { this.generation += 1; this.loading = false; }
   private async load(reset: boolean): Promise<void> {
     if (this.loading) return;
     this.loading = true; this.errorText = ''; if (reset) { this.items = []; this.page = 0; this.hasMore = false; }

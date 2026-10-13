@@ -15,7 +15,7 @@ export struct PublicCaseDetailPage {
   private generation: number = 0;
   aboutToAppear(): void { this.load(); }
   private refresh(): void { this.load(); }
-  aboutToDisappear(): void { this.generation += 1; this.detail = null; }
+  aboutToDisappear(): void { this.generation += 1; this.detail = null; this.loading = false; this.busy = false; }
   private async load(): Promise<void> {
     if (this.loading || this.busy) return;
     this.loading = true; this.detail = null; this.errorText = ''; this.notice = '';

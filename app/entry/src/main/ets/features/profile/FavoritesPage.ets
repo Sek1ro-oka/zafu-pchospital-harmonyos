@@ -21,7 +21,7 @@ export struct FavoritesPage {
   private retryReset: boolean = true;
   aboutToAppear(): void { this.load(true); }
   private refresh(): void { this.load(true); }
-  aboutToDisappear(): void { this.generation += 1; }
+  aboutToDisappear(): void { this.generation += 1; this.loading = false; }
   private fail(error: Object): void {
     if (error instanceof ApiRequestError) {
       if (isSessionExpiredCode(error.code)) { this.onSessionExpired(); return; }

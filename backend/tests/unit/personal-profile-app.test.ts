@@ -11,6 +11,7 @@ interface ProfilePage {
   nickname: string;
   phone: string;
   saving: boolean;
+  loading: boolean;
   version: number;
   selected: string[];
   errorText: string;
@@ -20,17 +21,17 @@ interface ProfilePage {
   load(): Promise<void>;
   aboutToDisappear(): void;
 }
-function page(service: Record<string, unknown>): ProfilePage {
-  const source = readFileSync(
-    "../app/entry/src/main/ets/features/profile/PersonalProfilePage.ets",
-    "utf8",
-  );
+function page<T = ProfilePage>(service: Record<string, unknown>, name = "PersonalProfilePage"): T {
+  const source = readFileSync(`../app/entry/src/main/ets/features/profile/${name}.ets`, "utf8");
   const state = source
-    .slice(0, source.indexOf("  @Builder"))
+    .slice(
+      0,
+      source.indexOf("  @Builder") > 0 ? source.indexOf("  @Builder") : source.indexOf("  build()"),
+    )
     .replace(/import[\s\S]*?from\s+['"][^'"]+['"];\s*/g, "")
     .replace(/@(Component|State|Prop)\s*/g, "")
-    .replace("export struct PersonalProfilePage", "class PersonalProfilePage");
-  const code = ts.transpileModule(state + "\n}\nnew PersonalProfilePage();", {
+    .replace(`export struct ${name}`, `class ${name}`);
+  const code = ts.transpileModule(state + `\n}\nnew ${name}();`, {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
   }).outputText;
   return runInNewContext(code, {
@@ -38,7 +39,7 @@ function page(service: Record<string, unknown>): ProfilePage {
     PersonalProfileService: service,
     ApiRequestError: Error,
     isSessionExpiredCode: () => false,
-  }) as ProfilePage;
+  }) as T;
 }
 test("资料请求防重复提交，服务端版本/昵称即时回传；离开后不更新新页面", async () => {
   let resolve!: (value: unknown) => void,
@@ -108,4 +109,98 @@ test("成员昵称与技能写入共享服务端版本，避免后一次使用�
   await profile.saveSkills();
   assert.equal(skillVersion, 2);
   assert.equal(profile.version, 3);
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+const result = (nickname: string, version: number) => ({
+  displayName: nickname,
+  nickname,
+  phone: null,
+  version,
+});
+test("资料读取离开/返回：新请求可以启动，旧 finally 不清新请求的 loading", async () => {
+  const old = deferred<unknown>(),
+    current = deferred<unknown>();
+  let calls = 0;
+  const profile = page({ customer: () => (++calls === 1 ? old.promise : current.promise) });
+  const first = profile.load();
+  profile.aboutToDisappear();
+  assert.equal(profile.loading, false);
+  const second = profile.load();
+  assert.equal(calls, 2);
+  old.resolve(result("旧资料", 1));
+  await first;
+  assert.equal(profile.loading, true);
+  assert.equal(profile.ready, false);
+  current.resolve(result("最新资料", 2));
+  await second;
+  assert.equal(profile.loading, false);
+  assert.equal(profile.nickname, "最新资料");
+});
+test("资料和技能写入离开/返回：解除 saving，旧写响应不覆盖新资料或清新写状态", async () => {
+  for (const skills of [false, true]) {
+    const old = deferred<unknown>(),
+      current = deferred<unknown>();
+    let writes = 0,
+      saved = 0;
+    const service = {
+      customer: async () => result("重新加载", 2),
+      member: async () => ({ profile: { ...result("重新加载", 2), skills: [] } }),
+      skills: async () => [],
+      saveCustomer: () => (++writes === 1 ? old.promise : current.promise),
+      saveSkills: () => (++writes === 1 ? old.promise : current.promise),
+    };
+    const profile = page(service);
+    profile.ready = true;
+    profile.onSaved = () => {
+      saved++;
+    };
+    if (skills) {
+      profile.home = "STAFF";
+      profile.permissions = ["member.skill.assign_self"];
+    }
+    const write = () => (skills ? profile.saveSkills() : profile.saveNickname());
+    const first = write();
+    profile.aboutToDisappear();
+    assert.equal(profile.saving, false);
+    await profile.load();
+    const second = write();
+    old.resolve(skills ? { skills: [], version: 99 } : result("迟到写入", 99));
+    await first;
+    assert.equal(profile.saving, true);
+    assert.equal(profile.version, 2);
+    assert.equal(saved, 0);
+    current.resolve(skills ? { skills: [], version: 3 } : result("本代保存", 3));
+    await second;
+    assert.equal(profile.saving, false);
+    assert.equal(profile.version, 3);
+  }
+});
+test("成员目录离开/返回：旧响应不能清新请求 busy 或回填旧目录", async () => {
+  const old = deferred<unknown>(),
+    current = deferred<unknown>();
+  let calls = 0;
+  const directory = page<{
+    busy: boolean;
+    items: unknown[];
+    load(reset: boolean): Promise<void>;
+    aboutToDisappear(): void;
+  }>({ directory: () => (++calls === 1 ? old.promise : current.promise) }, "MemberDirectoryPage");
+  const first = directory.load(true);
+  directory.aboutToDisappear();
+  const second = directory.load(true);
+  assert.equal(calls, 2);
+  old.resolve({ items: [{ memberProfileId: "old" }], page: 1, hasMore: false });
+  await first;
+  assert.equal(directory.busy, true);
+  assert.equal(directory.items.length, 0);
+  current.resolve({ items: [], page: 1, hasMore: false });
+  await second;
+  assert.equal(directory.busy, false);
 });
