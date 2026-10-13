@@ -2,7 +2,7 @@ import { memberProfileService } from "@/features/member-profile/member-profile-s
 import { updateProfileInput } from "@/features/member-profile/member-profile-http";
 import { apiFailure, apiSuccess } from "@/lib/api/response";
 import { getRequestId } from "@/lib/api/request-id";
-import { assertSameOrigin, authenticateRequest } from "@/lib/auth/request";
+import { assertWriteAccess, authenticateRequest } from "@/lib/auth/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,14 +22,19 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   const requestId = getRequestId(request.headers);
   try {
-    // Cookie 写接口必须校验同源（M3 任务书 §10、§8）。
-    assertSameOrigin(request);
+    assertWriteAccess(request);
     const { actor } = await authenticateRequest(request, requestId);
     const body = (await request.json()) as Record<string, unknown>;
-    return apiSuccess(await memberProfileService.updateProfile(updateProfileInput(body), actor), requestId, {
-      headers: PRIVATE,
-    });
+    return apiSuccess(
+      await memberProfileService.updateProfile(updateProfileInput(body), actor),
+      requestId,
+      {
+        headers: PRIVATE,
+      },
+    );
   } catch (error) {
     return apiFailure(error, requestId);
   }
 }
+
+export const POST = PATCH;

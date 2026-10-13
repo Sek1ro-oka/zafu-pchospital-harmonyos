@@ -21,6 +21,7 @@ model User {
   roles              UserRole[]              @relation("UserRoles")
   rolesGranted       UserRole[]              @relation("GrantedBy")
   memberProfile      MemberProfile?
+  customerProfile    CustomerProfile?
   reviews            JoinApplicationReview[]
   inviteCodesCreated InviteCode[]
   redemptions        InviteCodeRedemption[]
@@ -40,6 +41,19 @@ model User {
 
   @@index([status, deletedAt], map: "users_status_deleted_idx")
   @@map("users")
+}
+
+// 客户联系资料与成员档案分离；历史单据保留其原始联系快照。
+model CustomerProfile {
+  userId    String   @id @map("user_id") @db.Char(36)
+  nickname  String?  @db.VarChar(64)
+  phone     String?  @db.VarChar(32)
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@map("customer_profiles")
 }
 
 model AuthSession {

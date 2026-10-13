@@ -228,6 +228,8 @@ corepack pnpm accounts:prepare
 
 ## 本轮未覆盖
 
+2026-10-13：Issue #61 第一批接通客户本人资料与成员昵称/技能原生写入、内部资料只读；详见 [个人资料契约](personal-profile-api.md)。身份仍来自本文件定义的会话，不开放客户访问成员档案，也不提供原生改密页面。
+
 原生改密接口、找回密码、第三方登录、rememberMe，以及 App 侧的注册 / 改密页面（后续 PR）。
 业务接口已分文档接入：客户报修（#37，`/api/v1/repair-orders`）、
 工作人员处理与维修备案（#38，[说明](native-repairs-api.md)）、知识问答（#39，[说明](knowledge-ai.md)）；

@@ -2,7 +2,7 @@ import { memberProfileService } from "@/features/member-profile/member-profile-s
 import { updateSkillsInput } from "@/features/member-profile/member-profile-http";
 import { apiFailure, apiSuccess } from "@/lib/api/response";
 import { getRequestId } from "@/lib/api/request-id";
-import { assertSameOrigin, authenticateRequest } from "@/lib/auth/request";
+import { assertWriteAccess, authenticateRequest } from "@/lib/auth/request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export async function PUT(request: Request) {
   const requestId = getRequestId(request.headers);
   try {
-    assertSameOrigin(request);
+    assertWriteAccess(request);
     const { actor } = await authenticateRequest(request, requestId);
     const body = (await request.json()) as Record<string, unknown>;
     return apiSuccess(
@@ -23,3 +23,5 @@ export async function PUT(request: Request) {
     return apiFailure(error, requestId);
   }
 }
+
+export const POST = PUT;

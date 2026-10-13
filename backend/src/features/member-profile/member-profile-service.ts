@@ -4,6 +4,7 @@ import { appendAuditLog } from "@/lib/audit/audit-service";
 import { AppError } from "@/lib/api/errors";
 import { requirePermission } from "@/lib/auth/permissions";
 import { inSerializableTransaction } from "@/lib/db/transaction";
+import { getDb } from "@/lib/db/client";
 import {
   memberProfilePolicy,
   resolveDisplayName,
@@ -43,6 +44,34 @@ function profileNotFound(): AppError {
 }
 
 export const memberProfileService = {
+  /** 原生资料选择器，只返回有效成员的最小摘要，不提供联系方式。 */
+  async directory(query: string, page: number, actor: AuthorizedActor) {
+    requirePermission(actor, "member.profile.read_internal");
+    const rows = await getDb().memberProfile.findMany({
+      where: {
+        deletedAt: null,
+        status: "ACTIVE",
+        user: { status: "ACTIVE", deletedAt: null },
+        ...(query
+          ? { OR: [{ nickname: { contains: query } }, { realName: { contains: query } }] }
+          : {}),
+      },
+      select: { id: true, nickname: true, realName: true },
+      orderBy: { id: "asc" },
+      skip: (page - 1) * 20,
+      take: 21,
+    });
+    return {
+      items: rows
+        .slice(0, 20)
+        .map((row) => ({
+          memberProfileId: row.id,
+          displayName: row.nickname?.trim() || row.realName || "成员",
+        })),
+      hasMore: rows.length > 20,
+      page,
+    };
+  },
   /** `GET /api/v1/member/profile` —— 本人完整资料 + 已通过摘要 + 最近已通过记录。 */
   async getSelf(actor: AuthorizedActor): Promise<MemberSelfProfileView> {
     requirePermission(actor, "member.profile.read_self");
