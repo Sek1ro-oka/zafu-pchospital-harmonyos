@@ -10,6 +10,9 @@ export const NATIVE_CLIENT_VALUE = "native";
 
 export type SessionTokenSource = "cookie" | "bearer";
 
+/** 公开写接口实际走通的通道：Web（同源 Origin）或原生（显式客户端标识）。 */
+export type PublicChannel = "web" | "native";
+
 export function requestContext(request: Request, requestId: string): PublicRequestContext {
   return {
     requestId,
@@ -76,6 +79,30 @@ export function assertWriteAccess(request: Request): void {
     // Bearer 或无凭证（之后会 401）：要求显式原生头，杜绝浏览器伪造成原生通道。
     assertNativeClient(request);
   }
+}
+
+/**
+ * **公开写接口**（注册这类还没有令牌的入口）的来源分流，返回请求实际走通的通道。
+ *
+ * 与 `assertWriteAccess` 的分工：那个按「令牌实际来源」分流，只适用于已登录请求；
+ * 注册时没有令牌可依据，于是按请求真正携带的来源信息分流，两条分支各自独立校验：
+ * - 带 `Origin`：一律按 Web 严格校验 `APP_BASE_URL` 白名单 —— 原生客户端伪造 `Origin`
+ *   只会撞上这条更严的规则，绕不过去；
+ * - 不带 `Origin`：按原生校验显式 `X-Client-Type: native`。浏览器设置该自定义头会触发
+ *   预检、而本站不返回 CORS 头，无法伪装成原生请求。
+ *
+ * 客户端标识只用来**选择校验方式**，不是身份凭证：注册产生的身份与角色一律由服务端决定，
+ * 请求体里的 `roles` / `permissions` 等字段不参与任何判断（见 `RegistrationService`）。
+ */
+export function assertPublicWriteAccess(request: Request): PublicChannel {
+  // 用 `has` 而不是真值判断：`Origin: `（空值）同样属于「Web 请求带了 Origin」，
+  // 交给 `assertSameOrigin` 明确拒绝，而不是滑进原生分支。
+  if (request.headers.has("origin")) {
+    assertSameOrigin(request);
+    return "web";
+  }
+  assertNativeClient(request);
+  return "native";
 }
 
 export async function authenticateRequest(

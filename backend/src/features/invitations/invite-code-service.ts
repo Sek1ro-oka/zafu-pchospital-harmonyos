@@ -6,6 +6,7 @@ import {
   resolveOrCreateUser,
   setRegistrationPassword,
 } from "@/features/accounts/account-repository";
+import { authService } from "@/features/auth/auth-service";
 import type { InviteCode, Prisma } from "@/generated/prisma/client";
 import { paginationMeta } from "@/lib/api/pagination";
 import { AppError } from "@/lib/api/errors";
@@ -16,8 +17,9 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { inSerializableTransaction } from "@/lib/db/transaction";
 import { getDb } from "@/lib/db/client";
 import { normalizePhone, normalizeQq } from "@/lib/security/normalization";
-import { digestInviteCode, generateInviteCode } from "@/lib/security/secrets";
+import { digestInviteCode, generateInviteCode, verifyPassword } from "@/lib/security/secrets";
 import type {
+  AuthSessionResult,
   AuthorizedActor,
   CreateInviteCodeInput,
   CreateInviteCodeResult,
@@ -203,117 +205,192 @@ export class InviteCodeService implements InviteCodeServiceContract {
     input: RedeemInviteCodeInput,
     context: PublicRequestContext,
   ): Promise<MemberRegistrationResult> {
-    if (!isPasswordLengthValid(input.password)) {
-      throw new AppError("VALIDATION_FAILED", passwordLengthMessage());
-    }
-    if (input.realName.trim().length < 2 || input.realName.trim().length > 64) {
-      throw new AppError("VALIDATION_FAILED", "姓名长度应为 2–64 个字符");
-    }
-    const qq = normalizeQq(input.qq);
-    const phone = normalizePhone(input.phone);
-    const digest = digestInviteCode(input.code);
+    const normalized = normalizeRedeemInput(input);
+    return inSerializableTransaction((tx) => this.redeemWithin(tx, input, context, normalized));
+  }
+
+  /**
+   * 邀请码注册**并当场发会话**（PR #65 审查 P2：注册与发会话必须原子）。
+   *
+   * 「建账号 / 发角色 / 建档案 / 扣名额 / 落兑换记录 / 写会话」全部在同一个串行化事务里
+   * 完成：任何一步失败（包括会话写库）都整体回滚，不会留下「注册失败但账号已存在」的状态。
+   * 旧实现是先提交账号、再在事务外发会话，会话一发失败就只能返回 500，而账号已经落库 ——
+   * 用户重试只会拿到 `409 ACCOUNT_IDENTITY_TAKEN`，等于被自己的失败请求锁在门外。
+   *
+   * 与 `redeem()` 的差别只在返回值（`AuthSessionResult` 而非 `MemberRegistrationResult`）；
+   * 校验、并发与幂等规则完全共用 `redeemWithin`，不复制第二套。
+   */
+  async redeemWithSession(
+    input: RedeemInviteCodeInput,
+    context: PublicRequestContext,
+  ): Promise<AuthSessionResult> {
+    const normalized = normalizeRedeemInput(input);
     return inSerializableTransaction(async (tx) => {
-      const replay = await tx.inviteCodeRedemption.findUnique({
-        where: { idempotencyKey: input.idempotencyKey },
-        include: {
-          inviteCode: { select: { codeDigest: true } },
-          user: {
-            select: {
-              identities: {
-                where: { type: { in: ["QQ", "PHONE"] }, deletedAt: null },
-                select: { type: true, identifierNormalized: true },
-              },
-            },
-          },
-        },
-      });
-      if (replay) {
-        const sameCode = Buffer.from(replay.inviteCode.codeDigest).equals(Buffer.from(digest));
-        const sameQq = replay.user.identities.some(
-          (identity) => identity.type === "QQ" && identity.identifierNormalized === qq,
-        );
-        const samePhone = replay.user.identities.some(
-          (identity) => identity.type === "PHONE" && identity.identifierNormalized === phone,
-        );
-        if (!sameCode || !sameQq || !samePhone) {
-          throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已用于另一项注册请求");
-        }
-        const provision = await tx.accountProvision.findUniqueOrThrow({
-          where: {
-            sourceType_sourceId: { sourceType: "INVITE_REDEMPTION", sourceId: replay.id },
-          },
-        });
-        return {
-          userId: replay.userId,
-          memberProfileId: replay.memberProfileId,
-          redemptionId: replay.id,
-          provisionId: provision.id,
-        };
-      }
-
-      await tx.$queryRaw`SELECT id FROM invite_codes WHERE code_digest = ${digest} FOR UPDATE`;
-      const code = await tx.inviteCode.findUnique({ where: { codeDigest: digest } });
-      if (!code || code.deletedAt) throw new AppError("INVITE_CODE_INVALID", "邀请码无效");
-      assertRedeemable(code, qq, phone);
-
-      const userId = await resolveOrCreateUser(tx, { qq, phone }, input.realName.trim());
-      const memberProfileId = await ensureMemberProfile(tx, {
-        userId,
-        realName: input.realName.trim(),
-        studentId: input.studentId?.trim(),
-        className: input.className?.trim(),
-      });
-      await grantMemberRole(tx, {
-        userId,
-        sourceType: "INVITE_REDEMPTION",
-        sourceId: code.id,
-      });
-      await setRegistrationPassword(tx, userId, input.password);
-
-      const consumed = await tx.inviteCode.updateMany({
-        where: { id: code.id, status: "ACTIVE", usedCount: { lt: code.maxUses } },
-        data: { usedCount: { increment: 1 } },
-      });
-      if (consumed.count !== 1) throw new AppError("INVITE_CODE_EXHAUSTED", "邀请码已用尽");
-
-      const redemptionId = randomUUID();
-      await tx.inviteCodeRedemption.create({
-        data: {
-          id: redemptionId,
-          inviteCodeId: code.id,
-          userId,
-          memberProfileId,
-          idempotencyKey: input.idempotencyKey,
-          redeemedAt: new Date(),
-        },
-      });
-      const provision = await tx.accountProvision.create({
-        data: {
-          id: randomUUID(),
-          sourceType: "INVITE_REDEMPTION",
-          sourceId: redemptionId,
-          idempotencyKey: input.idempotencyKey,
-          status: "SUCCEEDED",
-          userId,
-          memberProfileId,
-          attemptCount: 1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          completedAt: new Date(),
-        },
-      });
-      await appendAuditLog(tx, {
-        actor: context,
-        actorType: "SYSTEM",
-        action: "invite.code.redeemed",
-        targetType: "InviteCode",
-        targetId: code.id,
-        result: "SUCCESS",
-        after: { displayPrefix: code.displayPrefix, userId, memberProfileId },
-      });
-      return { userId, memberProfileId, redemptionId, provisionId: provision.id };
+      const registration = await this.redeemWithin(tx, input, context, normalized);
+      return authService.openSessionWith(
+        tx,
+        registration.userId,
+        context,
+        "auth.register.succeeded",
+      );
     });
   }
+
+  /** `redeem` 的事务主体：重放判定、邀请码扣减、账号与档案创建、审计（可被复用）。 */
+  private async redeemWithin(
+    tx: Prisma.TransactionClient,
+    input: RedeemInviteCodeInput,
+    context: PublicRequestContext,
+    normalized: { qq: string; phone: string; digest: Uint8Array<ArrayBuffer> },
+  ): Promise<MemberRegistrationResult> {
+    const { qq, phone, digest } = normalized;
+    const replay = await tx.inviteCodeRedemption.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
+      include: {
+        inviteCode: { select: { codeDigest: true } },
+        user: {
+          select: {
+            identities: {
+              where: { type: { in: ["QQ", "PHONE"] }, deletedAt: null },
+              select: { type: true, identifierNormalized: true },
+            },
+            passwordCredential: { select: { passwordHash: true } },
+          },
+        },
+      },
+    });
+    if (replay) {
+      const sameCode = Buffer.from(replay.inviteCode.codeDigest).equals(Buffer.from(digest));
+      const sameQq = replay.user.identities.some(
+        (identity) => identity.type === "QQ" && identity.identifierNormalized === qq,
+      );
+      const samePhone = replay.user.identities.some(
+        (identity) => identity.type === "PHONE" && identity.identifierNormalized === phone,
+      );
+      if (!sameCode || !sameQq || !samePhone) {
+        throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已用于另一项注册请求");
+      }
+      /*
+       * 重放分支必须校验本次请求的密码与该账号**当前**凭证一致（PR #65 审查 P1）。
+       *
+       * 只比 code / QQ / 手机号是不够的：这三项都能从原始成功请求里原样抄过来，
+       * 而把 `password` 换成任意值 —— 不改任何数据就能拿到一个有效的工作人员令牌，
+       * 相当于把「知道邀请码 + 知道幂等键」变成了免密凭证。账号改密之后重放旧请求
+       * （密码已经对不上）同样能登录。所以这里按登录链路同一条规则验口令：
+       * 先拿 `userId`，再读 `password_credentials.passwordHash`，用 `verifyPassword`
+       * 比对本次请求的明文口令。失败一律按认证失败处理（`AUTH_INVALID_CREDENTIALS`，
+       * 与 `auth-service.ts` 登录失败同一个错误码），**不发放任何会话**。
+       *
+       * 这里是串行化事务内的同一份快照，与登录路径的竞态窗口一致；没有凭据行
+       * （例如账号被清理过）同样视为认证失败，绝不因为「查不到口令」就放行。
+       */
+      const passwordHash = replay.user.passwordCredential?.passwordHash;
+      const passwordMatches = passwordHash
+        ? await verifyPassword(input.password, passwordHash)
+        : false;
+      if (!passwordMatches) {
+        throw new AppError("AUTH_INVALID_CREDENTIALS", "QQ 号或密码错误");
+      }
+      const provision = await tx.accountProvision.findUniqueOrThrow({
+        where: {
+          sourceType_sourceId: { sourceType: "INVITE_REDEMPTION", sourceId: replay.id },
+        },
+      });
+      return {
+        userId: replay.userId,
+        memberProfileId: replay.memberProfileId,
+        redemptionId: replay.id,
+        provisionId: provision.id,
+      };
+    }
+
+    await tx.$queryRaw`SELECT id FROM invite_codes WHERE code_digest = ${digest} FOR UPDATE`;
+    const code = await tx.inviteCode.findUnique({ where: { codeDigest: digest } });
+    if (!code || code.deletedAt) throw new AppError("INVITE_CODE_INVALID", "邀请码无效");
+    assertRedeemable(code, qq, phone);
+
+    const userId = await resolveOrCreateUser(tx, { qq, phone }, input.realName.trim());
+    const memberProfileId = await ensureMemberProfile(tx, {
+      userId,
+      realName: input.realName.trim(),
+      studentId: input.studentId?.trim(),
+      className: input.className?.trim(),
+    });
+    await grantMemberRole(tx, {
+      userId,
+      sourceType: "INVITE_REDEMPTION",
+      sourceId: code.id,
+    });
+    await setRegistrationPassword(tx, userId, input.password);
+
+    const consumed = await tx.inviteCode.updateMany({
+      where: { id: code.id, status: "ACTIVE", usedCount: { lt: code.maxUses } },
+      data: { usedCount: { increment: 1 } },
+    });
+    if (consumed.count !== 1) throw new AppError("INVITE_CODE_EXHAUSTED", "邀请码已用尽");
+
+    const redemptionId = randomUUID();
+    await tx.inviteCodeRedemption.create({
+      data: {
+        id: redemptionId,
+        inviteCodeId: code.id,
+        userId,
+        memberProfileId,
+        idempotencyKey: input.idempotencyKey,
+        redeemedAt: new Date(),
+      },
+    });
+    const provision = await tx.accountProvision.create({
+      data: {
+        id: randomUUID(),
+        sourceType: "INVITE_REDEMPTION",
+        sourceId: redemptionId,
+        idempotencyKey: input.idempotencyKey,
+        status: "SUCCEEDED",
+        userId,
+        memberProfileId,
+        attemptCount: 1,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        completedAt: new Date(),
+      },
+    });
+    await appendAuditLog(tx, {
+      actor: context,
+      actorType: "SYSTEM",
+      action: "invite.code.redeemed",
+      targetType: "InviteCode",
+      targetId: code.id,
+      result: "SUCCESS",
+      after: { displayPrefix: code.displayPrefix, userId, memberProfileId },
+    });
+    return { userId, memberProfileId, redemptionId, provisionId: provision.id };
+  }
+}
+
+/**
+ * 兑换入参的公共规范化（`redeem` / `redeemWithSession` 共用，顺序与错误码保持一致）。
+ *
+ * 必须在事务外先做：密码长度、姓名长度这类错误与并发无关，先挡掉可以少占一个串行化事务；
+ * QQ / 手机号规范化与邀请码摘要则要求 `redeem` 与 `redeemWithSession` 得到**完全相同**的
+ * 归一化结果，否则同一个请求走两条入口会判定出不同的「同一项注册」。
+ */
+function normalizeRedeemInput(input: RedeemInviteCodeInput): {
+  qq: string;
+  phone: string;
+  digest: Uint8Array<ArrayBuffer>;
+} {
+  if (!isPasswordLengthValid(input.password)) {
+    throw new AppError("VALIDATION_FAILED", passwordLengthMessage());
+  }
+  if (input.realName.trim().length < 2 || input.realName.trim().length > 64) {
+    throw new AppError("VALIDATION_FAILED", "姓名长度应为 2–64 个字符");
+  }
+  return {
+    qq: normalizeQq(input.qq),
+    phone: normalizePhone(input.phone),
+    digest: digestInviteCode(input.code),
+  };
 }
 
 function assertRedeemable(code: InviteCode, qq: string, phone: string): void {

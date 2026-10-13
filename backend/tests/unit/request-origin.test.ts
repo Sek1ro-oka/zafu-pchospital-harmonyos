@@ -3,7 +3,11 @@ import test from "node:test";
 
 import { clientIp } from "../../src/lib/api/client-ip";
 import { AppError } from "../../src/lib/api/errors";
-import { assertSameOrigin, assertWriteAccess } from "../../src/lib/auth/request";
+import {
+  assertPublicWriteAccess,
+  assertSameOrigin,
+  assertWriteAccess,
+} from "../../src/lib/auth/request";
 import { resetServerEnvForTests } from "../../src/lib/env";
 
 const REQUIRED_ENV = {
@@ -124,9 +128,7 @@ test("APP_BASE_URL 非法时显式报配置错误，而不是静默放行", () =
 test("Bearer + 原生头：无 Origin 的原生写请求放行（App 真实路径）", () => {
   withEnv({ APP_BASE_URL: "https://pczafu.cn" }, () => {
     assert.doesNotThrow(() =>
-      assertWriteAccess(
-        request({ authorization: "Bearer token-1", "x-client-type": "native" }),
-      ),
+      assertWriteAccess(request({ authorization: "Bearer token-1", "x-client-type": "native" })),
     );
   });
 });
@@ -175,5 +177,41 @@ test("无凭证写请求：先按原生通道拒绝，不泄露后续鉴权逻�
       () => assertWriteAccess(request({})),
       (error) => error instanceof AppError && error.code === "FORBIDDEN",
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Issue #60：公开写接口（注册，无令牌）按实际携带的来源分流
+// ---------------------------------------------------------------------------
+
+test("公开写通道：带合法 Origin 判为 Web，带原生头判为原生", () => {
+  withEnv({ APP_BASE_URL: "https://pczafu.cn" }, () => {
+    assert.equal(assertPublicWriteAccess(request({ origin: "https://pczafu.cn" })), "web");
+    assert.equal(assertPublicWriteAccess(request({ "x-client-type": "native" })), "native");
+  });
+});
+
+test("公开写通道：既没有 Origin 也没有客户端标识的请求被拒", () => {
+  withEnv({ APP_BASE_URL: "https://pczafu.cn" }, () => {
+    assert.throws(
+      () => assertPublicWriteAccess(request({})),
+      (error) => error instanceof AppError && error.code === "FORBIDDEN",
+    );
+    assert.throws(
+      () => assertPublicWriteAccess(request({ "x-client-type": "web" })),
+      (error) => error instanceof AppError && error.code === "FORBIDDEN",
+    );
+  });
+});
+
+test("公开写通道：原生头不能顶替 Origin 白名单（伪造 Origin 仍被拒）", () => {
+  withEnv({ APP_BASE_URL: "https://pczafu.cn" }, () => {
+    for (const origin of ["https://evil.com", "http://pczafu.cn", ""]) {
+      assert.throws(
+        () => assertPublicWriteAccess(request({ origin, "x-client-type": "native" })),
+        (error) => error instanceof AppError && error.code === "FORBIDDEN",
+        `Origin=${JSON.stringify(origin)} 不应因为带原生头而放行`,
+      );
+    }
   });
 });

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import type { Prisma } from "@/generated/prisma/client";
 import { AppError } from "@/lib/api/errors";
 import { appendAuditLog } from "@/lib/audit/audit-service";
 import { permissionsForRoles } from "@/lib/auth/permissions";
@@ -74,33 +75,71 @@ export class AuthService {
     }
 
     await getDb().loginThrottle.deleteMany({ where: { keyDigest } });
+    return this.openSession(identity.userId, principal, context, "auth.login.succeeded");
+  }
+
+  /**
+   * 注册即登录（Issue #60）：在**调用方给定的事务客户端内**为刚创建的账号发放会话，
+   * 不重走密码校验与登录节流。
+   *
+   * 为什么不用 `login()`：注册成功后账号必然存在、口令就是刚写入的那一个，再校验一次没有
+   * 安全收益，却会把「同一 QQ + IP 的历史登录失败计数」带进来 —— 注册已经成功、会话却拿到
+   * 429，客户端停在没有会话的中间态。身份 / 角色 / 入口仍然只由服务端读库决定。
+   *
+   * 为什么必须收 `tx`（PR #65 审查 P2）：注册要「建账号 + 发会话」原子完成。会话写库
+   * 放在事务外时，账号已经提交、会话却可能失败，用户重试只能拿到
+   * `409 ACCOUNT_IDENTITY_TAKEN`，被自己的失败请求锁在门外。把会话落库并入同一个
+   * 串行化事务后，任何一步失败都整体回滚，不会留下「注册失败但账号已存在」的状态。
+   *
+   * 读身份也必须走同一个 `tx`：账号是同一事务里刚写的，事务外的 `getDb()` 快照
+   * 看不到它（读不到会误判成 `ACCOUNT_DISABLED`）。
+   */
+  async openSessionWith(
+    tx: Prisma.TransactionClient,
+    userId: string,
+    context: PublicRequestContext,
+    auditAction: string,
+  ): Promise<AuthSessionResult> {
+    const principal = await this.readPrincipal(userId, tx);
+    const token = generateSessionToken();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS);
+    const sessionId = randomUUID();
+    await tx.authSession.create({
+      data: sessionRowData(sessionId, userId, token, now, expiresAt, context),
+    });
+    await appendAuditLog(tx, {
+      actor: context,
+      actorType: "SYSTEM",
+      action: auditAction,
+      targetType: "User",
+      targetId: userId,
+      result: "SUCCESS",
+    });
+    return { ...principal, sessionId, token, expiresAt: expiresAt.toISOString() };
+  }
+
+  /** 会话落库 + 审计（登录与注册共用；令牌只在这里生成，摘要入库、明文只回客户端）。 */
+  private async openSession(
+    userId: string,
+    principal: SessionPrincipal,
+    context: PublicRequestContext,
+    auditAction: string,
+  ): Promise<AuthSessionResult> {
     const token = generateSessionToken();
     const now = new Date();
     const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS);
     const sessionId = randomUUID();
     await inSerializableTransaction(async (tx) => {
       await tx.authSession.create({
-        data: {
-          id: sessionId,
-          userId: identity.userId,
-          tokenDigest: digestSessionToken(token),
-          createdAt: now,
-          lastSeenAt: now,
-          expiresAt,
-          ipDigest: context.ipAddress
-            ? digestLoginThrottleKey(identity.userId, context.ipAddress)
-            : undefined,
-          userAgentDigest: context.userAgent
-            ? digestLoginThrottleKey(identity.userId, context.userAgent)
-            : undefined,
-        },
+        data: sessionRowData(sessionId, userId, token, now, expiresAt, context),
       });
       await appendAuditLog(tx, {
         actor: context,
         actorType: "SYSTEM",
-        action: "auth.login.succeeded",
+        action: auditAction,
         targetType: "User",
-        targetId: identity.userId,
+        targetId: userId,
         result: "SUCCESS",
       });
     });
@@ -233,8 +272,15 @@ export class AuthService {
     };
   }
 
-  private async readPrincipal(userId: string): Promise<SessionPrincipal> {
-    const user = await getDb().user.findUnique({
+  /**
+   * 读会话身份。`client` 默认是库连接；注册链路传的是同一个事务客户端，
+   * 因为账号是那个事务里刚建的，事务外的快照读不到（会误判 `ACCOUNT_DISABLED`）。
+   */
+  private async readPrincipal(
+    userId: string,
+    client: Prisma.TransactionClient = getDb(),
+  ): Promise<SessionPrincipal> {
+    const user = await client.user.findUnique({
       where: { id: userId },
       include: {
         passwordCredential: true,
@@ -369,6 +415,34 @@ async function auditAuth(
       errorCode,
     }),
   );
+}
+
+/**
+ * 会话行的构造（登录与注册共用）。
+ *
+ * IP / UA 摘要用的是 `(userId, 值)` 双元素 HMAC：和登录节流键同源，既能在审计里关联到
+ * 同一个用户，又不会把原始 IP 落库。摘要与令牌本身一样只进数据库，明文只回客户端。
+ */
+function sessionRowData(
+  sessionId: string,
+  userId: string,
+  token: string,
+  now: Date,
+  expiresAt: Date,
+  context: PublicRequestContext,
+): Prisma.AuthSessionUncheckedCreateInput {
+  return {
+    id: sessionId,
+    userId,
+    tokenDigest: digestSessionToken(token),
+    createdAt: now,
+    lastSeenAt: now,
+    expiresAt,
+    ipDigest: context.ipAddress ? digestLoginThrottleKey(userId, context.ipAddress) : undefined,
+    userAgentDigest: context.userAgent
+      ? digestLoginThrottleKey(userId, context.userAgent)
+      : undefined,
+  };
 }
 
 export const authService = new AuthService();
