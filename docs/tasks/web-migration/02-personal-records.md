@@ -18,7 +18,7 @@
 
 - 第一批：[个人资料契约](../../../backend/docs/personal-profile-api.md) · [验证](../../verification/issue-61-profile.md) · [PR #66](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/pull/66)。
 - 第二批：[收藏/消息契约](../../../backend/docs/customer-community-api.md) · [验证](../../verification/issue-61-community.md) · [PR #67](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/pull/67)。
-- 第三批：[完整备案契约](../../../backend/docs/personal-records-api.md) · [验证](../../verification/issue-61-records.md)。维护者确认保留课设提交要求，只同步机主字段及权限。相册选图上传/真机补证未完成。
+- 第三批：[完整备案契约](../../../backend/docs/personal-records-api.md) · [验证](../../verification/issue-61-records.md) · [PR #68](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/pull/68)。维护者确认保留课设提交要求，只同步机主字段及权限。相册选图上传/真机补证未完成。
 
 - [x] 客户资料读取/编辑昵称与联系电话，默认头像；权限限本人，修改不覆盖历史报修/报名快照。成员资料/本人昵称、技能、授权的其他成员资料按 Web 原规则接原生页面。
 - [x] 客户收藏维修指南与有效公开 KnowledgeCase，支持收藏/取消/分页和跳转；使用稳定来源 ID，收藏恢复/重复请求不产生多份。成员保留 RepairRecord 收藏，不混淆对象。

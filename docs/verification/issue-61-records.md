@@ -1,6 +1,6 @@
 # Issue #61 第三批验证：完整备案与工作摘要
 
-2026-10-13。分支 `feat/issue-61-records-workbench`，基于第二批 `8b02813`（PR #67），第一批 PR #66。`origin/main` 包含指定 PR #65 提交 `839c74f`；本批不推 main、不自行合并、不关闭 #61。
+2026-10-13。分支 `feat/issue-61-records-workbench`，基于第二批 `8b02813`（PR #67），第一批 PR #66；本批 [PR #68](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/pull/68)，代码提交 `54c4062`。`origin/main` 包含指定 PR #65 提交 `839c74f`；本批不推 main、不自行合并、不关闭 #61。
 
 ## 实际交付与用户确认
 
