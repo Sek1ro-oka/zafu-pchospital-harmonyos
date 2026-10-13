@@ -66,6 +66,8 @@ export function toRepairDetail(
       canViewOwnerPhone: owner || actor.permissions.includes("repair:review"),
     }),
     canEdit: owner && (record.status === "DRAFT" || record.status === "REJECTED"),
+    canEditDeviceModel:
+      owner && (record.status === "DRAFT" || record.status === "REJECTED") && !record.repairOrder,
     canReview: actor.permissions.includes("repair:review") && record.status === "PENDING",
     canFlag: actor.permissions.includes("repair:flag"),
     isFavorited: options.isFavorited === true,

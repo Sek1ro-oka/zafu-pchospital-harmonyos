@@ -34,7 +34,7 @@ export struct RepairRecordsPage {
   // 网络失败重试复用同一幂等键，成功后才换新。
   private createKey: string = RepairRecordService.createKey();
   aboutToAppear(): void { this.loadCategories(); this.load(true); }
-  aboutToDisappear(): void { this.generation += 1; this.categoryGeneration += 1; }
+  aboutToDisappear(): void { this.generation += 1; this.categoryGeneration += 1; this.loading = false; this.creating = false; }
   private refresh(): void { this.loadCategories(); this.load(true); }
   private fail(error: Object): void {
     if (error instanceof ApiRequestError) {

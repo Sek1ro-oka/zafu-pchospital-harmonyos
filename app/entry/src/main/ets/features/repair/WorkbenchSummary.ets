@@ -25,7 +25,7 @@ export struct WorkbenchSummary {
   @State errorText: string = '';
   private generation: number = 0;
   aboutToAppear(): void { this.load(); }
-  aboutToDisappear(): void { this.generation += 1; }
+  aboutToDisappear(): void { this.generation += 1; this.loading = false; }
   private refresh(): void { this.load(); }
   private async load(): Promise<void> {
     if (this.loading) return;

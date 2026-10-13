@@ -570,6 +570,7 @@ export type RepairDetailView = RepairView & {
   reviews: RepairReviewView[];
   timeline: RepairTimelineView[];
   canEdit: boolean;
+  canEditDeviceModel: boolean;
   canReview: boolean;
   canFlag: boolean;
   isFavorited: boolean;

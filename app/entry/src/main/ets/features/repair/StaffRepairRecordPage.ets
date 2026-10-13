@@ -91,6 +91,7 @@ export struct StaffRepairRecordPage {
   @State result: string = '';
   @State remark: string = '';
   private generation: number = 0;
+  private lifetime: number = 0;
   /** 提交幂等键：重试复用同一个，成功后换新。 */
   private submitKey: string = '';
   /** 最近一次加载是否为保留编辑缓冲的局部刷新：加载失败后的重试沿用同一模式。 */
@@ -151,7 +152,11 @@ export struct StaffRepairRecordPage {
     }
   }
 
-  aboutToDisappear(): void { this.generation += 1; }
+  aboutToDisappear(): void {
+    this.generation += 1; this.lifetime += 1;
+    this.loading = false; this.saving = false; this.submitting = false; this.uploading = false;
+    this.favoriting = false; this.deletingPhotoId = ''; this.previewPhotoId = ''; this.record = null;
+  }
 
   private applyRecord(record: RepairRecordDetailView): void {
     this.record = record;
@@ -249,7 +254,7 @@ export struct StaffRepairRecordPage {
     const date = this.repairDate.trim();
     const duration = this.durationValue();
     return {
-      deviceModel: this.deviceModel.trim() || null,
+      deviceModel: this.record?.canEditDeviceModel === true ? this.deviceModel.trim() || null : undefined,
       ownerName: this.ownerName.trim() || null,
       ownerPhone: this.ownerPhone.trim() || null,
       repairDate: date === '' ? null : date,
@@ -300,18 +305,22 @@ export struct StaffRepairRecordPage {
     if (Object.keys(local).length > 0) {
       return;
     }
+    const lifetime = this.lifetime;
     this.saving = true;
     try {
       await RepairRecordService.save(record.id, record.version, this.buildFields());
+      if (lifetime !== this.lifetime) return;
       await this.load();
+      if (lifetime !== this.lifetime) return;
       this.noticeText = '草稿已保存。';
       this.bumpRecordRevision();
     } catch (error) {
-      this.handleWriteError(error, '保存失败，请重试');
+      if (lifetime === this.lifetime) this.handleWriteError(error, '保存失败，请重试');
     } finally {
-      this.saving = false;
+      if (lifetime === this.lifetime) this.saving = false;
     }
   }
+
 
   private async submitForReview(): Promise<void> {
     const record = this.record;
@@ -325,21 +334,26 @@ export struct StaffRepairRecordPage {
     if (Object.keys(local).length > 0) {
       return;
     }
+    const lifetime = this.lifetime;
     this.submitting = true;
     try {
       // 先保存当前编辑内容，再按保存后的版本提交：避免用户改了字段直接点提交时丢掉修改。
       const saved = await RepairRecordService.save(record.id, record.version, this.buildFields());
+      if (lifetime !== this.lifetime) return;
       await RepairRecordService.submit(record.id, saved.version, this.submitKey);
+      if (lifetime !== this.lifetime) return;
       this.submitKey = `app-submit-${util.generateRandomUUID(true)}`;
       await this.load();
+      if (lifetime !== this.lifetime) return;
       this.noticeText = '已提交审核，等待管理员处理。';
       this.bumpRecordRevision();
     } catch (error) {
-      this.handleWriteError(error, '提交失败，请重试');
+      if (lifetime === this.lifetime) this.handleWriteError(error, '提交失败，请重试');
     } finally {
-      this.submitting = false;
+      if (lifetime === this.lifetime) this.submitting = false;
     }
   }
+
 
   private handleWriteError(error: Object, fallback: string): void {
     if (error instanceof ApiRequestError) {
@@ -372,7 +386,9 @@ export struct StaffRepairRecordPage {
       this.actionError = `最多上传 ${record.photoLimits.maxFiles} 张照片。`;
       return;
     }
+    const lifetime = this.lifetime;
     const picked = await PhotoPicker.pick(remaining);
+      if (lifetime !== this.lifetime) return;
     if (picked.length === 0) {
       return;
     }
@@ -403,15 +419,18 @@ export struct StaffRepairRecordPage {
     this.uploading = true;
     try {
       await RepairRecordService.uploadPhotos(record.id, accepted);
+      if (lifetime !== this.lifetime) return;
       await this.load(true);
+      if (lifetime !== this.lifetime) return;
       this.noticeText = `已上传 ${accepted.length} 张照片。`;
       this.bumpRecordRevision();
     } catch (error) {
-      this.handleWriteError(error, '照片上传失败，请重试');
+      if (lifetime === this.lifetime) this.handleWriteError(error, '照片上传失败，请重试');
     } finally {
-      this.uploading = false;
+      if (lifetime === this.lifetime) this.uploading = false;
     }
   }
+
 
   private async removePhoto(photoId: string): Promise<void> {
     const record = this.record;
@@ -420,20 +439,24 @@ export struct StaffRepairRecordPage {
     }
     this.actionError = '';
     this.noticeText = '';
+    const lifetime = this.lifetime;
     this.deletingPhotoId = photoId;
     try {
       await RepairRecordService.removePhoto(record.id, photoId);
+      if (lifetime !== this.lifetime) return;
       await this.load(true);
+      if (lifetime !== this.lifetime) return;
       this.noticeText = '照片已删除。';
       this.bumpRecordRevision();
     } catch (error) {
-      this.handleWriteError(error, '删除照片失败，请重试');
+      if (lifetime === this.lifetime) this.handleWriteError(error, '删除照片失败，请重试');
     } finally {
-      this.deletingPhotoId = '';
+      if (lifetime === this.lifetime) this.deletingPhotoId = '';
     }
   }
 
   /** 通知导航栈中可能打开的报修详情页刷新备案摘要（两页互不可见，用共享存储广播）。 */
+
   private bumpRecordRevision(): void {
     const current = AppStorage.get<number>('staffRecordRevision');
     AppStorage.setOrCreate<number>('staffRecordRevision', (current === undefined ? 0 : current) + 1);
@@ -530,11 +553,12 @@ export struct StaffRepairRecordPage {
     this.favoriting = true;
     this.actionError = ''; this.noticeText = '';
     const generation = this.generation;
+    const lifetime = this.lifetime;
     try { await CommunityService.memberFavorite(this.record.id); if (generation === this.generation) this.noticeText = '备案已收藏'; }
     catch (error) { if (generation !== this.generation) return;
       if (error instanceof ApiRequestError && isSessionExpiredCode(error.code)) { this.onSessionExpired(); return; }
       this.actionError = error instanceof ApiRequestError ? error.message : '收藏失败';
-    } finally { if (generation === this.generation) this.favoriting = false; }
+    } finally { if (lifetime === this.lifetime) this.favoriting = false; }
   }
 
   @Builder
@@ -685,8 +709,13 @@ export struct StaffRepairRecordPage {
 
       Column({ space: 6 }) {
         this.fieldLabel('设备机型（选填）')
-        TextInput({ text: this.deviceModel, placeholder: '设备机型，最多 60 字' }).maxLength(60)
-          .enabled(!this.isBusy()).onChange((value: string) => { this.deviceModel = value; this.clearFieldError('deviceModel'); })
+        if (record.canEditDeviceModel === true) {
+          TextInput({ text: this.deviceModel, placeholder: '设备机型，最多 60 字' }).maxLength(60)
+            .enabled(!this.isBusy()).onChange((value: string) => { this.deviceModel = value; this.clearFieldError('deviceModel'); })
+        } else {
+          Text(record.deviceModel || '未填写').fontSize(15)
+          Text('当前备案机型只读；关联报修的机型由报修单预填。').fontSize(12).fontColor('#747A7F')
+        }
         this.errorLine('deviceModel')
         this.fieldLabel('机主姓名（选填）')
         TextInput({ text: this.ownerName, placeholder: '实际机主姓名，最多 40 字' }).maxLength(40)

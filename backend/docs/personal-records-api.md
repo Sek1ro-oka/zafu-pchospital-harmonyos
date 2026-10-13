@@ -11,7 +11,7 @@
 | `RepairRecord.memberProfileId` | 备案作者；服务器按有效成员档案定位，不接受请求改写 |
 | `ownerName` | 可空、去首尾空格、最多 40 字；未知不根据昵称推断 |
 | `ownerPhone` | 可空、最多 32 字符；至少 7 位数字，只允许数字、`+`、`-`、空格、括号，与报修电话校验相同 |
-| `deviceModel` | 可空、最多 60 字；独立备案可编辑，修改关联备案不回写原报修单 |
+| `deviceModel` | 可空、最多 60 字；独立备案可编辑，关联报修备案内只读，由服务器拒绝改写 |
 | 独立草稿结果 | 默认为 `null`；工作人员真实选择后保存，不预置“已完成” |
 
 迁移 `20261013130000_issue61_repair_owner` 只新增两列 nullable 字段，保留已有课设数据。历史值维持空值；不导入 Web 数据。
@@ -31,9 +31,9 @@
 | --- | --- |
 | `GET /api/v1/member/repairs` | 新增本人列表；服务器强制当前有效成员 ID，忽略客户端 `memberId`；纯管理员无成员档案时 `MEMBER_REQUIRED` |
 | `GET /api/v1/repairs?status=APPROVED` | 复用内部已审核备案库；列表每条保留原始备案来源，与 AI `KnowledgeCase` 分开 |
-| `POST /api/v1/repairs` | 创建独立 `DRAFT`，`Idempotency-Key` 必填；并发/重试复用原备案，不重复写 CREATED；其他作者复用键为 409 |
-| `GET /api/v1/repairs/{id}` | 原详情，增加机主字段；含服务器 `canEdit/canReview`、照片、审核和时间线 |
-| `POST /api/v1/repairs/{id}` | 原 PATCH 的原生别名；要求 version，只允许本人 DRAFT/REJECTED；新增 deviceModel/ownerName/ownerPhone 可空字段 |
+| `POST /api/v1/repairs` | 创建独立 `DRAFT`，`Idempotency-Key` 必填；并发/重试复用本流程原备案，不重复写 CREATED；其他作者或报修/活动来源复用键为 409 |
+| `GET /api/v1/repairs/{id}` | 原详情，增加机主字段；含服务器 `canEdit/canEditDeviceModel/canReview`、照片、审核和时间线 |
+| `POST /api/v1/repairs/{id}` | 原 PATCH 的原生别名；要求 version，只允许本人 DRAFT/REJECTED；新增 ownerName/ownerPhone 可空字段；仅独立备案允许 deviceModel |
 | `/repairs/{id}/photos`、`/submit` | 复用已有照片/提交服务；版本冲突、照片必填、幂等、退回重提规则不变 |
 
 两种列表都支持原 `page/pageSize`、`categoryId`、`query`（正文/备注/作者）、`result`、`repairDateFrom/To`、`isTypical/isDifficult`；本人列表额外支持状态。响应为原信封 `data:RepairView[]`、`meta.pagination`。App 每页 20，整页时允许继续请求，末尾无结果显示已到末尾；下一页失败不推进页码，不把尚未应用的输入混进旧分页。

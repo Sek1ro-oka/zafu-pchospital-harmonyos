@@ -6,7 +6,7 @@ import { AppError } from "@/lib/api/errors";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
 import { inSerializableTransaction } from "@/lib/db/transaction";
-import { assertCanEditRepair } from "./repair-policy";
+import { assertCanEditRepair, assertCanChangeRepairDeviceModel } from "./repair-policy";
 import { invalidateRecordSources } from "@/features/knowledge-cases/case-service";
 import { materialHashOf, materialOf } from "@/features/knowledge-cases/case-material";
 import { repairDetailInclude, repairRepository } from "./repair-repository";
@@ -31,7 +31,11 @@ export const repairService: RepairServiceContract = {
       include: repairDetailInclude,
     });
     if (existing) {
-      if (existing.memberProfileId !== member.id || existing.deletedAt)
+      if (
+        existing.memberProfileId !== member.id ||
+        existing.deletedAt ||
+        !isIndependentDraftSource(existing)
+      )
         throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已被使用");
       return toRepairView(existing, { canViewOwnerPhone: true });
     }
@@ -47,7 +51,11 @@ export const repairService: RepairServiceContract = {
         include: repairDetailInclude,
       });
       if (replay) {
-        if (replay.memberProfileId !== member.id || replay.deletedAt)
+        if (
+          replay.memberProfileId !== member.id ||
+          replay.deletedAt ||
+          !isIndependentDraftSource(replay)
+        )
           throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已被使用");
         return replay;
       }
@@ -79,6 +87,7 @@ export const repairService: RepairServiceContract = {
     const fields = normalizeDraftFields(input);
     validateDraftFields(fields);
     const changes = changedFields(record, fields);
+    assertCanChangeRepairDeviceModel(record, fields.deviceModel);
     const updated = await inSerializableTransaction(async (tx) => {
       const result = await tx.repairRecord.updateMany({
         where: { id: recordId, version: input.version, deletedAt: null },
@@ -177,6 +186,21 @@ export const repairService: RepairServiceContract = {
     await invalidateRecordSources(recordId, "备案已被软删除");
   },
 };
+
+function isIndependentDraftSource(record: {
+  repairOrder: { id: string } | null;
+  activityRegistration: { id: string } | null;
+  timeline: { eventType: string; summary: unknown }[];
+}): boolean {
+  if (record.repairOrder || record.activityRegistration) return false;
+  // 活动内部创建与报名关联可能分两步，创建事件已足以确定流程，不能靠键前缀猜测。
+  return !record.timeline.some(
+    (event) =>
+      event.eventType === "CREATED" &&
+      typeof (event.summary as { source?: unknown } | null)?.source === "string" &&
+      (event.summary as { source: string }).source !== "independent",
+  );
+}
 
 /** 草稿字段 → 数据库列。管理端编辑（`repair-admin-service`）复用同一映射与 diff 计算。 */
 export function dataFields(input: RepairDraftFields) {

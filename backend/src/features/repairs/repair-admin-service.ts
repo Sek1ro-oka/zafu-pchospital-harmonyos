@@ -13,6 +13,7 @@ import { changedFields, dataFields, timeline } from "./repair-service";
 import { repairReviewService } from "./repair-review-service";
 import { normalizeDraftFields, validateDraftFields } from "./repair-validation";
 import { toRepairView } from "./repair-view";
+import { assertCanChangeRepairDeviceModel } from "./repair-policy";
 import {
   ADMIN_BATCH_LIMIT,
   type AuthorizedActor,
@@ -100,6 +101,7 @@ export const repairAdminService: RepairAdminServiceContract = {
     const before = await repairRepository.getById(recordId);
     if (before.version !== input.version)
       throw new AppError("REPAIR_VERSION_CONFLICT", "记录已被更新，请刷新后重试");
+    assertCanChangeRepairDeviceModel(before, fields.deviceModel);
     // 分类若被改动，必须指向存在且启用中的分类（与成员提交时的口径一致）。
     if (fields.categoryId !== undefined && fields.categoryId !== before.categoryId) {
       if (fields.categoryId !== null) {

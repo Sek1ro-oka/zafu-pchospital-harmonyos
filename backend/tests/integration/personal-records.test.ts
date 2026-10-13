@@ -9,6 +9,10 @@ import { GET as list } from "../../src/app/api/v1/repairs/route";
 import { GET as comments, POST as comment } from "../../src/app/api/v1/repairs/[id]/comments/route";
 import { DELETE as deleteComment } from "../../src/app/api/v1/repairs/[id]/comments/[commentId]/route";
 import { GET as dashboard } from "../../src/app/api/v1/member/dashboard/route";
+import { POST as orderCreate } from "../../src/app/api/v1/repair-orders/route";
+import { POST as orderAccept } from "../../src/app/api/v1/staff/repair-orders/[id]/accept/route";
+import { POST as linkedCreate } from "../../src/app/api/v1/staff/repair-orders/[id]/record/route";
+import { PATCH as adminEdit } from "../../src/app/api/v1/admin/repairs/[id]/route";
 import { repairService } from "../../src/features/repairs/repair-service";
 import { createSubmittedForActivity } from "../../src/features/repairs/repair-service";
 import { getDb, disconnectDb } from "../../src/lib/db/client";
@@ -96,6 +100,128 @@ async function actor(headers: Record<string, string>) {
   return (await authenticateRequest(new Request("http://localhost", { headers }), randomUUID()))
     .actor;
 }
+
+async function linkedDraft(key: string) {
+  const made = await route(orderCreate, { ...customer, "idempotency-key": randomUUID() }, "POST", {
+    deviceModel: "关联机型61",
+    faultDescription: "合成测试故障",
+    contactPhone: "13800138000",
+  });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  const orderId = dataOf(made.json).id as string;
+  assert.equal((await route(orderAccept, a, "POST", {}, orderId)).status, 200);
+  const linked = await route(linkedCreate, { ...a, "idempotency-key": key }, "POST", {}, orderId);
+  assert.equal(linked.status, 201, JSON.stringify(linked.json));
+  return { orderId, record: dataOf(linked.json) };
+}
+
+dbTest("关联备案机型只读：服务端拒绝改机型，仍允许机主字段编辑；独立备案可编辑机型", async () => {
+  const { record, orderId } = await linkedDraft(randomUUID());
+  const id = record.id as string;
+  const view = dataOf((await route(detail, a, "GET", undefined, id)).json);
+  assert.equal(view.canEditDeviceModel, false);
+  const changed = await route(
+    edit,
+    a,
+    "POST",
+    { version: record.version, deviceModel: "串改机型" },
+    id,
+  );
+  assert.equal(changed.status, 400);
+  assert.equal(dataOf(changed.json).ownerPhone, undefined);
+  assert.equal(
+    (await getDb().repairRecord.findUniqueOrThrow({ where: { id } })).deviceModel,
+    "关联机型61",
+  );
+  assert.equal(
+    (await getDb().repairOrder.findUniqueOrThrow({ where: { id: orderId } })).deviceModel,
+    "关联机型61",
+  );
+  const saved = await route(
+    edit,
+    a,
+    "POST",
+    { version: record.version, ownerName: "实际填写机主", ownerPhone: "0571-12345678" },
+    id,
+  );
+  assert.equal(saved.status, 200);
+  const privileged = await callRoute(adminEdit, "http://localhost/api/v1/fixture", {
+    headers: { cookie: await cookieFor(ADMIN_ID) },
+    method: "PATCH",
+    body: { version: dataOf(saved.json).version, deviceModel: "管理员串改", reason: "合成验证" },
+    params: { id },
+  });
+  assert.equal(privileged.status, 400);
+  const independent = await draft(a, { deviceModel: "独立旧机型" });
+  const independentId = independent.id as string;
+  assert.equal(
+    dataOf((await route(detail, a, "GET", undefined, independentId)).json).canEditDeviceModel,
+    true,
+  );
+  assert.equal(
+    (
+      await route(
+        edit,
+        a,
+        "POST",
+        { version: independent.version, deviceModel: "独立新机型" },
+        independentId,
+      )
+    ).status,
+    200,
+  );
+});
+
+dbTest("独立建档拒绝同作者报修/活动来源键；包括关联尚未建立的活动创建事件", async () => {
+  const key = randomUUID();
+  await linkedDraft(key);
+  const count = await getDb().repairRecord.count({ where: { memberProfileId: MP_A_ID } });
+  const replay = await route(create, { ...a, "idempotency-key": key }, "POST", {});
+  assert.equal(replay.status, 409);
+  assert.equal((replay.json.error as { code: string }).code, "IDEMPOTENCY_CONFLICT");
+  assert.equal(await getDb().repairRecord.count({ where: { memberProfileId: MP_A_ID } }), count);
+  const category = await getDb().repairCategory.findFirstOrThrow({
+    where: { deletedAt: null, isActive: true },
+  });
+  const activityKey = randomUUID(),
+    member = await actor(a);
+  await getDb().$transaction((tx) =>
+    createSubmittedForActivity(
+      tx,
+      {
+        memberProfileId: MP_A_ID,
+        categoryId: category.id,
+        repairDate: "2026-10-13",
+        content: "活动合成材料",
+        remark: "test",
+        durationMinutes: 30,
+        deviceModel: null,
+        createRequestKey: activityKey,
+        registrationId: randomUUID(),
+        activityId: randomUUID(),
+      },
+      member,
+      new Date(),
+    ),
+  );
+  const activityReplay = await route(create, { ...a, "idempotency-key": activityKey }, "POST", {});
+  assert.equal(activityReplay.status, 409);
+  assert.equal(activityReplay.json.data, undefined);
+  const legitimate = await draft();
+  const ownReplay = await route(
+    create,
+    {
+      ...a,
+      "idempotency-key": (
+        await getDb().repairRecord.findUniqueOrThrow({ where: { id: legitimate.id as string } })
+      ).createRequestKey,
+    },
+    "POST",
+    {},
+  );
+  assert.equal(ownReplay.status, 201);
+  assert.equal(dataOf(ownReplay.json).id, legitimate.id);
+});
 
 dbTest("独立备案：结果留空、作者固定、字段验证、版本冲突与编辑权限", async () => {
   const record = await draft(a, {

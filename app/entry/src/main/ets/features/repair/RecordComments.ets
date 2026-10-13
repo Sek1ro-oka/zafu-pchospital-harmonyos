@@ -33,7 +33,10 @@ export struct RecordComments {
   private searchGeneration: number = 0;
   private retryReset: boolean = true;
   aboutToAppear(): void { this.load(true); }
-  aboutToDisappear(): void { this.generation += 1; this.searchGeneration += 1; }
+  aboutToDisappear(): void {
+    this.generation += 1; this.searchGeneration += 1;
+    this.loading = false; this.writing = false; this.searching = false;
+  }
   private fail(error: Object): void {
     if (error instanceof ApiRequestError) {
       if (isSessionExpiredCode(error.code)) { this.onSessionExpired(); return; }
