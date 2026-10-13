@@ -5,7 +5,10 @@ import type { AuthorizedActor, RepairDetailView, RepairView } from "@/types/cont
 
 type RecordRow = Prisma.RepairRecordGetPayload<{ include: typeof repairDetailInclude }>;
 
-export function toRepairView(record: RecordRow): RepairView {
+export function toRepairView(
+  record: RecordRow,
+  options: { canViewOwnerPhone?: boolean } = {},
+): RepairView {
   const name =
     record.memberProfile.nickname ||
     record.memberProfile.realName ||
@@ -27,6 +30,8 @@ export function toRepairView(record: RecordRow): RepairView {
         }
       : null,
     deviceModel: record.deviceModel,
+    ownerName: record.ownerName ?? null,
+    ownerPhone: options.canViewOwnerPhone === true ? (record.ownerPhone ?? null) : null,
     content: record.content,
     result: record.result as RepairView["result"],
     remark: record.remark,
@@ -57,8 +62,12 @@ export function toRepairDetail(
 ): RepairDetailView {
   const owner = record.memberProfile.userId === actor.userId;
   return {
-    ...toRepairView(record),
+    ...toRepairView(record, {
+      canViewOwnerPhone: owner || actor.permissions.includes("repair:review"),
+    }),
     canEdit: owner && (record.status === "DRAFT" || record.status === "REJECTED"),
+    canEditDeviceModel:
+      owner && (record.status === "DRAFT" || record.status === "REJECTED") && !record.repairOrder,
     canReview: actor.permissions.includes("repair:review") && record.status === "PENDING",
     canFlag: actor.permissions.includes("repair:flag"),
     isFavorited: options.isFavorited === true,

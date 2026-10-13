@@ -1,0 +1,48 @@
+{
+  "scope": "本机合成报修/备案，真实HTTP，不涉及生产库",
+  "checks": [
+    {
+      "name": "创建合成报修",
+      "status": 201,
+      "passed": true
+    },
+    {
+      "name": "工作人员受理",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "name": "关联建档",
+      "status": 201,
+      "passed": true
+    },
+    {
+      "name": "关联详情",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "name": "关联机型编辑能力为false",
+      "passed": true
+    },
+    {
+      "name": "关联机型修改拒绝",
+      "status": 400,
+      "passed": true
+    },
+    {
+      "name": "关联键复用为独立草稿拒绝",
+      "status": 409,
+      "passed": true
+    },
+    {
+      "name": "机主字段仍可修改",
+      "status": 200,
+      "passed": true
+    },
+    {
+      "name": "原关联机型未改写",
+      "passed": true
+    }
+  ]
+}

@@ -3,6 +3,8 @@ import { AppError } from "@/lib/api/errors";
 import { Prisma } from "@/generated/prisma/client";
 
 export const repairDetailInclude = {
+  repairOrder: { select: { id: true } },
+  activityRegistration: { select: { id: true } },
   memberProfile: { include: { user: true } },
   category: true,
   photos: {

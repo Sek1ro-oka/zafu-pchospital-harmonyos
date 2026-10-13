@@ -212,6 +212,8 @@ dbTest("建档：仅受理人可建、机型预填、结果不预置、关联原
   const record = dataOf(created.json);
   assert.equal(record.status, "DRAFT");
   assert.equal(record.deviceModel, "荣耀 MagicBook 14（Issue38）");
+  assert.equal(record.ownerName, null, "未知机主姓名不猜测为客户昵称");
+  assert.equal(record.ownerPhone, "13700137000", "复制原报修联系快照");
   assert.equal(record.result, null, "不预置成功结果，由工作人员如实填写");
   assert.equal(record.content, null);
   assert.equal(record.repairDate, null);

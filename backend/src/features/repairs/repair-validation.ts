@@ -4,6 +4,9 @@ import type { RepairDraftFields, RepairResult } from "@/types/contracts";
 
 export function normalizeDraftFields(input: RepairDraftFields): RepairDraftFields {
   return {
+    deviceModel: input.deviceModel === undefined ? undefined : clean(input.deviceModel),
+    ownerName: input.ownerName === undefined ? undefined : clean(input.ownerName),
+    ownerPhone: input.ownerPhone === undefined ? undefined : clean(input.ownerPhone),
     repairDate: input.repairDate === undefined ? undefined : input.repairDate || null,
     durationMinutes: input.durationMinutes,
     categoryId: input.categoryId === undefined ? undefined : input.categoryId || null,
@@ -15,6 +18,18 @@ export function normalizeDraftFields(input: RepairDraftFields): RepairDraftField
 
 export function validateDraftFields(input: RepairDraftFields): void {
   const errors: Record<string, string[]> = {};
+  if (input.deviceModel != null && input.deviceModel.length > 60)
+    errors.deviceModel = ["设备机型不能超过 60 字"];
+  if (input.ownerName != null && input.ownerName.length > 40)
+    errors.ownerName = ["机主姓名不能超过 40 字"];
+  // 2026-10-13 用户确认：沿用课设报修电话口径，保持旧座机/区号联系快照可建档。
+  if (
+    input.ownerPhone != null &&
+    (input.ownerPhone.length > 32 ||
+      !/^[0-9+\-\s()]*$/.test(input.ownerPhone) ||
+      input.ownerPhone.replace(/\D/g, "").length < 7)
+  )
+    errors.ownerPhone = ["机主电话需至少 7 位数字，只允许数字、+、-、空格和括号，最多 32 字符"];
   if (input.repairDate != null && !isDate(input.repairDate)) {
     errors.repairDate = ["维修日期格式无效"];
   } else if (input.repairDate) {

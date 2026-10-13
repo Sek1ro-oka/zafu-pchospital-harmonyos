@@ -447,6 +447,8 @@ export const repairActivityStaffService = {
           durationMinutes: ACTIVITY_SERVE_DURATION_MINUTES,
           // 报名时填的机型随记录带过去（issue #68）；没填就是 null。
           deviceModel: reg.deviceModel,
+          ownerName: reg.name,
+          ownerPhone: reg.phone,
           createRequestKey,
           registrationId,
           activityId,

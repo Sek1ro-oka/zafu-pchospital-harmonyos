@@ -25,3 +25,15 @@ export function assertCanEditRepair(
   if (record.status !== "DRAFT" && record.status !== "REJECTED")
     throw new AppError("REPAIR_STATE_INVALID", "当前状态不能编辑");
 }
+
+/** 报修关联备案的机型是联系单快照，备案写入口不能单独改写。 */
+export function assertCanChangeRepairDeviceModel(
+  record: { deviceModel: string | null; repairOrder: { id: string } | null },
+  deviceModel: string | null | undefined,
+): void {
+  if (record.repairOrder && deviceModel !== undefined && deviceModel !== record.deviceModel) {
+    throw new AppError("VALIDATION_FAILED", "关联报修备案的机型只读", {
+      fieldErrors: { deviceModel: ["机型来自报修单，关联备案内不能修改"] },
+    });
+  }
+}

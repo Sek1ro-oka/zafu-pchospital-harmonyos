@@ -27,6 +27,7 @@ export const ROUTE_KNOWLEDGE: string = 'knowledge';
 export const ROUTE_KNOWLEDGE_SOURCE: string = 'knowledgeSource';
 export const ROUTE_STAFF_ORDERS: string = 'staff-repair-orders';
 export const ROUTE_STAFF_ORDER_DETAIL: string = 'staff-repair-order-detail';
+export const ROUTE_REPAIR_RECORDS: string = 'repair-records';
 export const ROUTE_STAFF_RECORD: string = 'staff-repair-record';
 export const ROUTE_STAFF_REVIEW: string = 'staff-repair-review';
 
@@ -55,6 +56,7 @@ export function routeTitle(name: string): string {
   if (name === ROUTE_STAFF_ORDER_DETAIL) {
     return '报修处理';
   }
+  if (name === ROUTE_REPAIR_RECORDS) return '维修备案记录';
   if (name === ROUTE_STAFF_RECORD) {
     return '维修备案';
   }

@@ -6,8 +6,9 @@ import { AppError } from "@/lib/api/errors";
 import { requirePermission } from "@/lib/auth/permissions";
 import { getDb } from "@/lib/db/client";
 import { inSerializableTransaction } from "@/lib/db/transaction";
-import { assertCanEditRepair } from "./repair-policy";
+import { assertCanEditRepair, assertCanChangeRepairDeviceModel } from "./repair-policy";
 import { invalidateRecordSources } from "@/features/knowledge-cases/case-service";
+import { materialHashOf, materialOf } from "@/features/knowledge-cases/case-material";
 import { repairDetailInclude, repairRepository } from "./repair-repository";
 import {
   normalizeDraftFields,
@@ -30,15 +31,34 @@ export const repairService: RepairServiceContract = {
       include: repairDetailInclude,
     });
     if (existing) {
-      if (existing.memberProfileId !== member.id)
+      if (
+        existing.memberProfileId !== member.id ||
+        existing.deletedAt ||
+        !isIndependentDraftSource(existing)
+      )
         throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已被使用");
-      return toRepairView(existing);
+      return toRepairView(existing, { canViewOwnerPhone: true });
     }
     const fields = normalizeDraftFields(input);
     validateDraftFields(fields);
-    const draft = { ...fields, result: fields.result ?? defaultRepairResult };
+    // 独立草稿与报修关联草稿一致：结果留空，人工确认后填写。
+    const draft = { ...fields, result: fields.result ?? null };
     const now = new Date();
     const record = await inSerializableTransaction(async (tx) => {
+      // 重试事务也重读幂等键，避免并发点击落多份或重复写 CREATED 时间线。
+      const replay = await tx.repairRecord.findUnique({
+        where: { createRequestKey: key },
+        include: repairDetailInclude,
+      });
+      if (replay) {
+        if (
+          replay.memberProfileId !== member.id ||
+          replay.deletedAt ||
+          !isIndependentDraftSource(replay)
+        )
+          throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已被使用");
+        return replay;
+      }
       const created = await tx.repairRecord.create({
         data: {
           id: randomUUID(),
@@ -56,7 +76,7 @@ export const repairService: RepairServiceContract = {
         include: repairDetailInclude,
       });
     });
-    return toRepairView(record);
+    return toRepairView(record, { canViewOwnerPhone: true });
   },
 
   async update(recordId, input, actor) {
@@ -67,6 +87,7 @@ export const repairService: RepairServiceContract = {
     const fields = normalizeDraftFields(input);
     validateDraftFields(fields);
     const changes = changedFields(record, fields);
+    assertCanChangeRepairDeviceModel(record, fields.deviceModel);
     const updated = await inSerializableTransaction(async (tx) => {
       const result = await tx.repairRecord.updateMany({
         where: { id: recordId, version: input.version, deletedAt: null },
@@ -80,7 +101,9 @@ export const repairService: RepairServiceContract = {
         include: repairDetailInclude,
       });
     });
-    return toRepairView(updated);
+    if (materialHashOf(materialOf(record)) !== materialHashOf(materialOf(updated)))
+      await invalidateRecordSources(recordId, "本人修改了备案内容");
+    return toRepairView(updated, { canViewOwnerPhone: true });
   },
 
   async submit(recordId, input, actor) {
@@ -91,7 +114,11 @@ export const repairService: RepairServiceContract = {
       const summary = event.summary as { idempotencyKey?: unknown } | null;
       return summary?.idempotencyKey === input.idempotencyKey;
     });
-    if (record.status === "PENDING" && retry) return toRepairView(record);
+    if (record.status === "PENDING" && retry) {
+      if (record.memberProfile.userId !== actor.userId)
+        throw new AppError("REPAIR_FORBIDDEN", "只能提交自己的维修记录");
+      return toRepairView(record, { canViewOwnerPhone: true });
+    }
     assertCanEditRepair(actor, record);
     if (record.version !== input.version)
       throw new AppError("REPAIR_VERSION_CONFLICT", "记录已被更新，请刷新后重试");
@@ -127,7 +154,7 @@ export const repairService: RepairServiceContract = {
         include: repairDetailInclude,
       });
     });
-    return toRepairView(updated);
+    return toRepairView(updated, { canViewOwnerPhone: true });
   },
 
   async softDelete(recordId, reason, actor) {
@@ -160,9 +187,27 @@ export const repairService: RepairServiceContract = {
   },
 };
 
+function isIndependentDraftSource(record: {
+  repairOrder: { id: string } | null;
+  activityRegistration: { id: string } | null;
+  timeline: { eventType: string; summary: unknown }[];
+}): boolean {
+  if (record.repairOrder || record.activityRegistration) return false;
+  // 活动内部创建与报名关联可能分两步，创建事件已足以确定流程，不能靠键前缀猜测。
+  return !record.timeline.some(
+    (event) =>
+      event.eventType === "CREATED" &&
+      typeof (event.summary as { source?: unknown } | null)?.source === "string" &&
+      (event.summary as { source: string }).source !== "independent",
+  );
+}
+
 /** 草稿字段 → 数据库列。管理端编辑（`repair-admin-service`）复用同一映射与 diff 计算。 */
 export function dataFields(input: RepairDraftFields) {
   return {
+    deviceModel: input.deviceModel,
+    ownerName: input.ownerName,
+    ownerPhone: input.ownerPhone,
     repairDate: parseRepairDate(input.repairDate),
     durationMinutes: input.durationMinutes,
     categoryId: input.categoryId,
@@ -197,6 +242,8 @@ export async function timeline(
  * 跳过照片必填；仍写 timeline（CREATED + SUBMITTED）与审计；直接落 PENDING。
  */
 export type CreateSubmittedForActivityInput = {
+  ownerName?: string | null;
+  ownerPhone?: string | null;
   memberProfileId: string;
   categoryId: string;
   repairDate: string; // YYYY-MM-DD（上海日历日）
@@ -240,6 +287,8 @@ export async function createSubmittedForActivity(
       durationMinutes: input.durationMinutes,
       categoryId: input.categoryId,
       deviceModel: input.deviceModel,
+      ownerName: input.ownerName ?? null,
+      ownerPhone: input.ownerPhone ?? null,
       content: input.content,
       result: defaultRepairResult,
       remark: input.remark,
@@ -247,18 +296,32 @@ export async function createSubmittedForActivity(
       createdAt: now,
     },
   });
-  await timeline(tx, recordId, actor.userId, "CREATED", {
-    status: "PENDING",
-    source: "repair_activity_serve",
-    activityId: input.activityId,
-    registrationId: input.registrationId,
-  }, now);
-  await timeline(tx, recordId, actor.userId, "SUBMITTED", {
-    from: "DRAFT",
-    to: "PENDING",
-    source: "repair_activity_serve",
-    idempotencyKey: input.createRequestKey,
-  }, now);
+  await timeline(
+    tx,
+    recordId,
+    actor.userId,
+    "CREATED",
+    {
+      status: "PENDING",
+      source: "repair_activity_serve",
+      activityId: input.activityId,
+      registrationId: input.registrationId,
+    },
+    now,
+  );
+  await timeline(
+    tx,
+    recordId,
+    actor.userId,
+    "SUBMITTED",
+    {
+      from: "DRAFT",
+      to: "PENDING",
+      source: "repair_activity_serve",
+      idempotencyKey: input.createRequestKey,
+    },
+    now,
+  );
   await appendAuditLog(tx, {
     actor,
     actorType: "USER",

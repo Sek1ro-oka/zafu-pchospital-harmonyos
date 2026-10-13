@@ -1,3 +1,4 @@
+import { WorkbenchSummary } from '../repair/WorkbenchSummary';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { RepairOrderFocusParam, ROUTE_CASE_LIBRARY, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
@@ -44,6 +45,7 @@ function serviceEntries(): ServiceEntry[] {
  */
 @Component
 export struct ServicePage {
+  @Prop refreshVersion: number = 0;
   @Prop @Watch('authChanged') authenticated: boolean = false;
   onActivities: () => void = () => {};
   onOpen: (route: string, param: Object | null) => void = () => {};
@@ -237,6 +239,9 @@ export struct ServicePage {
           onRecords: (): void => { this.onOpen(this.home === HOME_STAFF ? ROUTE_STAFF_ORDERS : ROUTE_REPAIR_ORDERS, null); }
         })
         this.deviceSection()
+        if (this.authenticated && this.home === HOME_STAFF && this.permissions.includes('member.profile.read_self')) {
+          WorkbenchSummary({ refreshVersion: this.refreshVersion, onOpen: this.onOpen, onSessionExpired: this.onSessionExpired })
+        }
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
           ForEach(this.entries(), (entry: ServiceEntry) => { this.functionCard(entry); }, (entry: ServiceEntry) => entry.title)
         }.width('100%')

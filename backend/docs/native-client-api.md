@@ -234,3 +234,11 @@ corepack pnpm accounts:prepare
 业务接口已分文档接入：客户报修（#37，`/api/v1/repair-orders`）、
 工作人员处理与维修备案（#38，[说明](native-repairs-api.md)）、知识问答（#39，[说明](knowledge-ai.md)）；
 各页面在收到会话失效错误码时回调统一登出、回到登录页。真机与模拟器上的整体链路仍未验证（无设备）。
+
+## Issue #61 个人中心扩展
+
+- [个人资料](personal-profile-api.md)：独立客户档案、成员昵称/技能、授权成员目录。
+- [收藏与消息](customer-community-api.md)：客户公开内容收藏/报修通知、原成员备案收藏与通知。
+- [独立备案与工作摘要](personal-records-api.md)：机主字段/电话权限、本人列表、评论/回复/@成员、内部已审核备案库；保留既有课设提交条件和 Web/Native 通道。
+
+以上为功能分支交付，共享部署由技术主线安排；具体模拟器/真机限制见各批验收记录。

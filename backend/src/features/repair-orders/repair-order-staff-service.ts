@@ -92,10 +92,7 @@ export const repairOrderStaffService = {
     const note = normalizeNote(input.note);
     const order = await repairOrderRepository.findByIdForStaff(id);
     if (!order || order.deletedAt) throw new AppError("REPAIR_ORDER_NOT_FOUND", "报修单不存在");
-    if (
-      order.assigneeMemberProfileId !== null &&
-      order.assigneeMemberProfileId !== member.id
-    )
+    if (order.assigneeMemberProfileId !== null && order.assigneeMemberProfileId !== member.id)
       throw new AppError(
         "REPAIR_ORDER_STATE_CONFLICT",
         "该报修单已被其他工作人员受理，请刷新后查看",
@@ -205,7 +202,8 @@ export const repairOrderStaffService = {
     const member = await repairRepository.findActiveMemberForUser(actor.userId);
     const order = await repairOrderRepository.findByIdForStaff(id);
     if (!order || order.deletedAt) throw new AppError("REPAIR_ORDER_NOT_FOUND", "报修单不存在");
-    if (order.status === "CANCELLED") return toStaffRepairOrderView(order, actor, member?.id ?? null);
+    if (order.status === "CANCELLED")
+      return toStaffRepairOrderView(order, actor, member?.id ?? null);
     if (order.status !== "SUBMITTED" && order.status !== "ACCEPTED")
       throw new AppError("REPAIR_ORDER_STATE_INVALID", `报修单不能从 ${order.status} 取消`);
     const now = new Date();
@@ -251,7 +249,11 @@ export const repairOrderStaffService = {
         include: repairDetailInclude,
       });
       if (linked && !linked.deletedAt && linked.memberProfileId === member.id)
-        return toRepairView(linked);
+        return toRepairView(linked, {
+          canViewOwnerPhone:
+            linked.memberProfile.userId === actor.userId ||
+            actor.permissions.includes("repair:review"),
+        });
       throw new AppError("REPAIR_ORDER_STATE_CONFLICT", "该报修单已关联维修备案");
     }
     if (order.assigneeMemberProfileId !== member.id)
@@ -284,10 +286,14 @@ export const repairOrderStaffService = {
       // 这里给出准确错误，下面的条件更新再做原子兜底。
       const fresh = await tx.repairOrder.findUnique({
         where: { id },
-        select: { status: true, assigneeMemberProfileId: true, repairRecordId: true, deletedAt: true },
+        select: {
+          status: true,
+          assigneeMemberProfileId: true,
+          repairRecordId: true,
+          deletedAt: true,
+        },
       });
-      if (!fresh || fresh.deletedAt)
-        throw new AppError("REPAIR_ORDER_NOT_FOUND", "报修单不存在");
+      if (!fresh || fresh.deletedAt) throw new AppError("REPAIR_ORDER_NOT_FOUND", "报修单不存在");
       if (fresh.repairRecordId)
         throw new AppError("REPAIR_ORDER_STATE_CONFLICT", "该报修单已关联维修备案");
       if (fresh.assigneeMemberProfileId !== member.id)
@@ -303,6 +309,8 @@ export const repairOrderStaffService = {
           createRequestKey: key,
           // 机型可从报修单预填；其余字段留空由工作人员填写（结果不预置成功值）。
           deviceModel: order.deviceModel,
+          ownerName: null,
+          ownerPhone: order.contactPhone,
           repairDate: null,
           durationMinutes: null,
           categoryId: null,
@@ -326,12 +334,19 @@ export const repairOrderStaffService = {
       });
       if (linked.count !== 1)
         throw new AppError("REPAIR_ORDER_STATE_CONFLICT", "报修单状态已变化，请刷新后重试");
-      await timeline(tx, recordId, actor.userId, "CREATED", { status: "DRAFT", source: "repair_order" }, now);
+      await timeline(
+        tx,
+        recordId,
+        actor.userId,
+        "CREATED",
+        { status: "DRAFT", source: "repair_order" },
+        now,
+      );
       return tx.repairRecord.findUniqueOrThrow({
         where: { id: recordId },
         include: repairDetailInclude,
       });
     });
-    return toRepairView(record);
+    return toRepairView(record, { canViewOwnerPhone: true });
   },
 };

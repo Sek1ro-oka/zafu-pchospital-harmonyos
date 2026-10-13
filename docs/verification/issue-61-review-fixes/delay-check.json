@@ -1,0 +1,249 @@
+{
+  "upstream": "本机13088真实后端",
+  "proxy": "本机13089，仅延迟响应，无替换业务数据",
+  "delayMs": 12000,
+  "checks": [
+    {
+      "path": "/api/v1/customer/profile",
+      "mode": "导航子页请求挂起时离开并重新进入",
+      "passed": true
+    },
+    {
+      "path": "/api/v1/customer/favorites",
+      "mode": "导航子页请求挂起时离开并重新进入",
+      "passed": true
+    },
+    {
+      "path": "/api/v1/customer/notifications",
+      "mode": "导航子页请求挂起时离开并重新进入",
+      "passed": true
+    },
+    {
+      "path": "/api/v1/customer/knowledge-cases/a76aea47-6878-4aff-ac43-b85104b5e7d5",
+      "mode": "导航子页请求挂起时离开并重新进入",
+      "passed": true
+    },
+    {
+      "path": "/api/v1/member/repairs",
+      "mode": "导航子页请求挂起时离开并重新进入",
+      "passed": true
+    },
+    {
+      "path": "/api/v1/member/dashboard",
+      "mode": "缓存标签切回后超时并重试",
+      "passed": true
+    }
+  ],
+  "events": [
+    {
+      "type": "request",
+      "path": "/api/v1/customer/profile",
+      "index": 1,
+      "delay": 12000,
+      "at": "2026-10-13T07:53:09.273Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/customer/profile",
+      "index": 2,
+      "delay": 0,
+      "at": "2026-10-13T07:53:11.756Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/customer/profile",
+      "index": 2,
+      "status": 200,
+      "delay": 0,
+      "at": "2026-10-13T07:53:11.769Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/customer/profile",
+      "index": 1,
+      "status": 200,
+      "delay": 12000,
+      "at": "2026-10-13T07:53:21.285Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/customer/favorites",
+      "index": 1,
+      "delay": 12000,
+      "at": "2026-10-13T07:53:40.081Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/customer/favorites",
+      "index": 2,
+      "delay": 0,
+      "at": "2026-10-13T07:53:42.518Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/customer/favorites",
+      "index": 2,
+      "status": 200,
+      "delay": 0,
+      "at": "2026-10-13T07:53:42.537Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/customer/notifications",
+      "index": 1,
+      "delay": 12000,
+      "at": "2026-10-13T07:53:45.771Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/customer/notifications",
+      "index": 2,
+      "delay": 0,
+      "at": "2026-10-13T07:53:48.133Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/customer/notifications",
+      "index": 2,
+      "status": 200,
+      "delay": 0,
+      "at": "2026-10-13T07:53:48.144Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/customer/favorites",
+      "index": 1,
+      "status": 200,
+      "delay": 12000,
+      "at": "2026-10-13T07:53:52.110Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/customer/notifications",
+      "index": 1,
+      "status": 200,
+      "delay": 12000,
+      "at": "2026-10-13T07:53:57.785Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/customer/knowledge-cases/a76aea47-6878-4aff-ac43-b85104b5e7d5",
+      "index": 1,
+      "delay": 12000,
+      "at": "2026-10-13T07:55:10.864Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/customer/knowledge-cases/a76aea47-6878-4aff-ac43-b85104b5e7d5",
+      "index": 2,
+      "delay": 0,
+      "at": "2026-10-13T07:55:13.174Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/customer/knowledge-cases/a76aea47-6878-4aff-ac43-b85104b5e7d5",
+      "index": 2,
+      "status": 200,
+      "delay": 0,
+      "at": "2026-10-13T07:55:13.187Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/customer/knowledge-cases/a76aea47-6878-4aff-ac43-b85104b5e7d5",
+      "index": 1,
+      "status": 200,
+      "delay": 12000,
+      "at": "2026-10-13T07:55:22.881Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/member/repairs",
+      "index": 1,
+      "delay": 12000,
+      "at": "2026-10-13T07:57:24.252Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/member/repairs",
+      "index": 2,
+      "delay": 0,
+      "at": "2026-10-13T07:57:26.606Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/member/repairs",
+      "index": 2,
+      "status": 200,
+      "delay": 0,
+      "at": "2026-10-13T07:57:26.620Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/member/repairs",
+      "index": 3,
+      "delay": 0,
+      "at": "2026-10-13T07:57:31.946Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/member/repairs",
+      "index": 3,
+      "status": 200,
+      "delay": 0,
+      "at": "2026-10-13T07:57:31.961Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/member/repairs",
+      "index": 1,
+      "status": 200,
+      "delay": 12000,
+      "at": "2026-10-13T07:57:36.282Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/member/repairs",
+      "index": 4,
+      "delay": 0,
+      "at": "2026-10-13T07:58:22.362Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/member/repairs",
+      "index": 4,
+      "status": 200,
+      "delay": 0,
+      "at": "2026-10-13T07:58:22.372Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/member/dashboard",
+      "index": 1,
+      "delay": 12000,
+      "at": "2026-10-13T07:58:23.903Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/member/dashboard",
+      "index": 1,
+      "status": 200,
+      "delay": 12000,
+      "at": "2026-10-13T07:58:35.925Z"
+    },
+    {
+      "type": "request",
+      "path": "/api/v1/member/dashboard",
+      "index": 2,
+      "delay": 0,
+      "at": "2026-10-13T07:59:44.435Z"
+    },
+    {
+      "type": "response",
+      "path": "/api/v1/member/dashboard",
+      "index": 2,
+      "status": 200,
+      "delay": 0,
+      "at": "2026-10-13T07:59:44.451Z"
+    }
+  ]
+}

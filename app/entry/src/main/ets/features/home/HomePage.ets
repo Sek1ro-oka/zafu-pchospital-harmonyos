@@ -21,6 +21,8 @@ import { AdminRepairReviewPage } from '../repair/AdminRepairReviewPage';
 import { StaffRecordParam, StaffOrderParam } from '../repair/StaffRepairContract';
 import { StaffRepairOrderDetailPage } from '../repair/StaffRepairOrderDetailPage';
 import { StaffRepairOrdersPage } from '../repair/StaffRepairOrdersPage';
+import { RepairRecordsPage, RecordListParam } from '../repair/RepairRecordsPage';
+import { ROUTE_REPAIR_RECORDS } from '../../core/ui/Routes';
 import { StaffRepairRecordPage } from '../repair/StaffRepairRecordPage';
 import { ServicePage } from '../service/ServicePage';
 import { HomeTab } from './HomeTab';
@@ -77,6 +79,8 @@ export struct HomePage {
   };
   @State pathStack: NavPathStack = new NavPathStack();
   @State currentTab: number = TAB_INDEX_HOME;
+  @State recordsRevision: number = 0;
+  @State workbenchRevision: number = 0;
   @State favoritesRevision: number = 0;
   @State messagesRevision: number = 0;
   @State publicCasesRevision: number = 0;
@@ -227,6 +231,11 @@ export struct HomePage {
           param: param as StaffOrderParam,
           onSessionExpired: (): void => { this.expireSession(); }
         });
+      } else if (name === ROUTE_REPAIR_RECORDS) {
+        RepairRecordsPage({ param: param as RecordListParam, refreshVersion: this.recordsRevision,
+          onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
       } else if (name === ROUTE_STAFF_RECORD) {
         StaffRepairRecordPage({
           param: param as StaffRecordParam,
@@ -270,6 +279,8 @@ export struct HomePage {
     }
     .title(name === ROUTE_LOGIN ? '登录' : routeTitle(name))
     .onShown(() => {
+      this.workbenchRevision += 1;
+      if (name === ROUTE_REPAIR_RECORDS) this.recordsRevision += 1;
       if (name === ROUTE_FAVORITES) this.favoritesRevision += 1;
       if (name === ROUTE_MESSAGES) this.messagesRevision += 1;
       if (name === ROUTE_PUBLIC_CASES) this.publicCasesRevision += 1;
@@ -343,6 +354,7 @@ export struct HomePage {
 
           TabContent() {
             ServicePage({
+              refreshVersion: this.workbenchRevision,
               onActivities: (): void => { this.selectNavigation(1); },
               home: this.home,
               permissions: this.permissions,
@@ -390,6 +402,7 @@ export struct HomePage {
         .onContentWillChange((_current: number, coming: number): boolean => this.canChangeTab(coming))
         .onChange((index: number) => {
           this.currentTab = index;
+          if (index === 2) this.workbenchRevision += 1;
         })
         .width('100%')
         .height('100%')
