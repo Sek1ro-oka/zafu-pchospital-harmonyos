@@ -101,6 +101,8 @@ export interface RepairRecordView {
   durationMinutes: number | null;
   category: RepairCategoryView | null;
   deviceModel: string | null;
+  ownerName?: string | null;
+  ownerPhone?: string | null;
   content: string | null;
   result: string | null;
   remark: string | null;
@@ -145,6 +147,9 @@ export interface RecordCreateResult {
  */
 export interface RepairRecordSaveRequest {
   version: number;
+  deviceModel: string | null;
+  ownerName: string | null;
+  ownerPhone: string | null;
   repairDate: string | null;
   durationMinutes: number | null;
   categoryId: string | null;
@@ -178,6 +183,9 @@ export interface RepairReviewBody {
 
 /** 保存草稿的字段集合（版本号单独传）。 */
 export interface RepairRecordFields {
+  deviceModel: string | null;
+  ownerName: string | null;
+  ownerPhone: string | null;
   repairDate: string | null;
   durationMinutes: number | null;
   categoryId: string | null;

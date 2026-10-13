@@ -43,6 +43,9 @@ export function repairListInput(
 }
 export function draftInput(body: Record<string, unknown>) {
   return {
+    deviceModel: nullableString(body.deviceModel),
+    ownerName: nullableString(body.ownerName),
+    ownerPhone: nullableString(body.ownerPhone),
     repairDate: nullableString(body.repairDate),
     durationMinutes: nullableNumber(body.durationMinutes),
     categoryId: nullableString(body.categoryId),

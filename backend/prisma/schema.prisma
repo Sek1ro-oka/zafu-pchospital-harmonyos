@@ -456,6 +456,8 @@ model RepairOrderEvent {
 }
 
 model RepairRecord {
+  ownerName String? @map("owner_name") @db.VarChar(40)
+  ownerPhone String? @map("owner_phone") @db.VarChar(32)
   id               String                @id @db.Char(36)
   memberProfileId  String                @map("member_profile_id") @db.Char(36)
   repairDate       DateTime?             @map("repair_date") @db.Date

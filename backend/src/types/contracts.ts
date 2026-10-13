@@ -551,6 +551,8 @@ export type RepairView = {
   category: RepairCategoryView | null;
   /** 机型（issue #68）：活动报名时填的选填字段，接待落单时带进记录；手工建单一般为 null。 */
   deviceModel: string | null;
+  ownerName?: string | null;
+  ownerPhone?: string | null;
   content: string | null;
   result: RepairResult | null;
   remark: string | null;
@@ -580,6 +582,9 @@ export type RepairDetailView = RepairView & {
   photoLimits: { maxBytes: number; maxFiles: number };
 };
 export type RepairDraftFields = {
+  deviceModel?: string | null;
+  ownerName?: string | null;
+  ownerPhone?: string | null;
   repairDate?: string | null;
   durationMinutes?: number | null;
   categoryId?: string | null;

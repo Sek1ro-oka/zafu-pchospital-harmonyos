@@ -1,3 +1,5 @@
+import { ROUTE_REPAIR_RECORDS } from '../../core/ui/Routes';
+import { RecordListParam } from '../repair/RepairRecordsPage';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ROUTE_CASE_LIBRARY, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
@@ -116,7 +118,7 @@ export struct ProfilePage {
     return [
       { title: '我的报修', icon: $r('app.media.ref_document'), note: '', route: ROUTE_REPAIR_ORDERS },
       { title: '维修记录', icon: $r('app.media.ref_grid'), note: '暂未接入', route: '' },
-      { title: '活动报名', icon: $r('app.media.ref_flag'), note: '暂未接入', route: '' },
+      { title: '我的报名', icon: $r('app.media.ref_flag'), note: '暂未接入', route: '' },
       { title: '收藏', icon: $r('app.media.ref_star'), note: '', route: ROUTE_FAVORITES },
       { title: '消息', icon: $r('app.media.ref_message'), note: '', route: ROUTE_MESSAGES },
       { title: '个人资料', icon: $r('app.media.ref_profile'), note: '', route: ROUTE_PERSONAL_PROFILE }
@@ -125,6 +127,9 @@ export struct ProfilePage {
 
   private staffEntries(): ProfileEntry[] {
     const entries: ProfileEntry[] = [
+      { title: '本人维修备案', icon: $r('app.media.ref_document'), note: '', route: ROUTE_REPAIR_RECORDS },
+      { title: '已审核备案库', icon: $r('app.media.ref_grid'), note: '', route: ROUTE_REPAIR_RECORDS },
+      { title: '我的报名', icon: $r('app.media.ref_flag'), note: '等待 #62 接口', route: '' },
       { title: '收藏', icon: $r('app.media.ref_star'), note: '', route: ROUTE_FAVORITES },
       { title: '个人资料', icon: $r('app.media.ref_profile'), note: '', route: ROUTE_PERSONAL_PROFILE },
       { title: '进入工作台', icon: $r('app.media.ref_document'), note: '', route: ROUTE_STAFF_ORDERS },
@@ -141,6 +146,9 @@ export struct ProfilePage {
   private openEntry(entry: ProfileEntry): void {
     if (entry.route === '') {
       this.getUIContext().getPromptAction().showToast({ message: `${entry.title}暂未接入` });
+    } else if (entry.route === ROUTE_REPAIR_RECORDS) {
+      const param: RecordListParam = { library: entry.title === '已审核备案库' };
+      this.onOpen(entry.route, param);
     } else {
       this.onOpen(entry.route, null);
     }

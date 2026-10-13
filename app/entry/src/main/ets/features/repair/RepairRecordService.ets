@@ -1,3 +1,4 @@
+import { util } from '@kit.ArkTS';
 import { ApiClient, ApiRequestError, MultipartFilePart } from '../../core/network/ApiClient';
 import { ApiConfig } from '../../core/network/ApiConfig';
 import { SessionStore } from '../../core/auth/SessionStore';
@@ -6,6 +7,7 @@ import {
   RepairCategoryView,
   RepairPhotoView,
   RepairRecordDetailView,
+  RepairRecordView,
   RepairRecordFields,
   RepairRecordSaveRequest,
 } from './StaffRepairContract';
@@ -32,6 +34,15 @@ async function ready(): Promise<string> {
  * 客户端只做乐观提示与错误映射。
  */
 export class RepairRecordService {
+  static async list(mine: boolean, page: number, filter: string): Promise<RepairRecordView[]> {
+    return ApiClient.get<RepairRecordView[]>(ApiConfig.getBaseUrl(), `${mine ? '/api/v1/member/repairs' : REPAIRS_PATH}?page=${page}&pageSize=20${mine ? '' : '&status=APPROVED'}${filter}`, await ready());
+  }
+  static async create(key: string): Promise<RecordCreateView> {
+    const headers: Record<string, string> = { 'Idempotency-Key': key };
+    return ApiClient.postWithHeaders<RecordCreateView>(ApiConfig.getBaseUrl(), REPAIRS_PATH, '{}', await ready(), headers);
+  }
+  static createKey(): string { return `native-record-${util.generateRandomUUID(true)}`; }
+
   static async detail(id: string): Promise<RepairRecordDetailView> {
     const token = await ready();
     return await ApiClient.get<RepairRecordDetailView>(
@@ -50,6 +61,9 @@ export class RepairRecordService {
     const token = await ready();
     const body: RepairRecordSaveRequest = {
       version: version,
+      deviceModel: fields.deviceModel,
+      ownerName: fields.ownerName,
+      ownerPhone: fields.ownerPhone,
       repairDate: fields.repairDate,
       durationMinutes: fields.durationMinutes,
       categoryId: fields.categoryId,
@@ -130,3 +144,5 @@ export class RepairRecordService {
     );
   }
 }
+
+export interface RecordCreateView { id: string; version: number; }

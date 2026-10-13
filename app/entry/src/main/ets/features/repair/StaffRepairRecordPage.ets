@@ -21,6 +21,7 @@ import {
 } from './StaffRepairContract';
 import { RepairRecordService } from './RepairRecordService';
 import { formatOrderTime } from './RepairOrderContract';
+import { RecordComments } from './RecordComments';
 import { CommunityService } from '../profile/CommunityService';
 
 /** 字段级错误：键与后端 fieldErrors 同名，服务端错误直接落到对应区域。 */
@@ -80,6 +81,9 @@ export struct StaffRepairRecordPage {
   @State deletingPhotoId: string = '';
   @State previewPhotoId: string = '';
   // ---- 可编辑字段（进入详情后从服务端值回填） ----
+  @State deviceModel: string = '';
+  @State ownerName: string = '';
+  @State ownerPhone: string = '';
   @State repairDate: string = '';
   @State durationText: string = '';
   @State categoryId: string = '';
@@ -147,8 +151,13 @@ export struct StaffRepairRecordPage {
     }
   }
 
+  aboutToDisappear(): void { this.generation += 1; }
+
   private applyRecord(record: RepairRecordDetailView): void {
     this.record = record;
+    this.deviceModel = record.deviceModel ?? '';
+    this.ownerName = record.ownerName ?? '';
+    this.ownerPhone = record.ownerPhone ?? '';
     this.repairDate = record.repairDate === null ? '' : record.repairDate;
     this.durationText = record.durationMinutes === null ? '' : `${record.durationMinutes}`;
     this.categoryId = record.category === null ? '' : record.category.id;
@@ -240,6 +249,9 @@ export struct StaffRepairRecordPage {
     const date = this.repairDate.trim();
     const duration = this.durationValue();
     return {
+      deviceModel: this.deviceModel.trim() || null,
+      ownerName: this.ownerName.trim() || null,
+      ownerPhone: this.ownerPhone.trim() || null,
       repairDate: date === '' ? null : date,
       durationMinutes: duration,
       categoryId: this.categoryId === '' ? null : this.categoryId,
@@ -672,27 +684,20 @@ export struct StaffRepairRecordPage {
       .alignItems(HorizontalAlign.Start)
 
       Column({ space: 6 }) {
-        this.fieldLabel('设备机型')
-        Row() {
-          Text(record.deviceModel === null || record.deviceModel === '' ? '未填写' : record.deviceModel)
-            .fontSize(15)
-            .fontColor($r('app.color.text_primary'))
-            .layoutWeight(1)
-            .textAlign(TextAlign.Start)
-        }
-        .width('100%')
-        .height(CONTROL_HEIGHT)
-        .padding({ left: 12, right: 12 })
-        .backgroundColor($r('app.color.field_bg'))
-        .borderRadius(CONTROL_RADIUS)
-        Text('机型取自报修单，备案内不可修改。')
-          .fontSize(12)
-          .fontColor($r('app.color.text_secondary'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
-      }
-      .width('100%')
-      .alignItems(HorizontalAlign.Start)
+        this.fieldLabel('设备机型（选填）')
+        TextInput({ text: this.deviceModel, placeholder: '设备机型，最多 60 字' }).maxLength(60)
+          .enabled(!this.isBusy()).onChange((value: string) => { this.deviceModel = value; this.clearFieldError('deviceModel'); })
+        this.errorLine('deviceModel')
+        this.fieldLabel('机主姓名（选填）')
+        TextInput({ text: this.ownerName, placeholder: '实际机主姓名，最多 40 字' }).maxLength(40)
+          .enabled(!this.isBusy()).onChange((value: string) => { this.ownerName = value; this.clearFieldError('ownerName'); })
+        this.errorLine('ownerName')
+        this.fieldLabel('机主电话（选填）')
+        TextInput({ text: this.ownerPhone, placeholder: '支持手机或座机，最多 32 字符' }).maxLength(32)
+          .enabled(!this.isBusy()).onChange((value: string) => { this.ownerPhone = value; this.clearFieldError('ownerPhone'); })
+        this.errorLine('ownerPhone')
+        Text('电话仅作者与审核人员可见；填写机主不会改变备案作者。').fontSize(12).fontColor('#747A7F')
+      }.width('100%').alignItems(HorizontalAlign.Start)
 
       Column({ space: 6 }) {
         this.fieldLabel('维修内容')
@@ -821,6 +826,9 @@ export struct StaffRepairRecordPage {
       this.infoRow('维修日期', record.repairDate === null ? '未填写' : record.repairDate)
       this.infoRow('故障分类', record.category === null ? '未分类' : record.category.name)
       this.infoRow('设备机型', record.deviceModel === null ? '未填写' : record.deviceModel)
+      this.infoRow('备案作者', record.member.name)
+      this.infoRow('机主姓名', record.ownerName || '未填写')
+      this.infoRow('机主电话', record.ownerPhone || '未填写或无查看权限')
       this.infoRow('维修内容', record.content === null ? '未填写' : record.content)
       this.infoRow('维修结果', repairResultLabel(record.result))
       this.infoRow('维修耗时', record.durationMinutes === null ? '未填写' : `${record.durationMinutes} 分钟`)
@@ -1048,6 +1056,7 @@ export struct StaffRepairRecordPage {
                   })
                 }
               }
+              RecordComments({ recordId: this.record.id, onSessionExpired: this.onSessionExpired })
             }
           }
           .width('100%')

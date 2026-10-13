@@ -1,0 +1,127 @@
+{
+  "base": "http://127.0.0.1:13088",
+  "fixture": "本机合成备案/测试账号；成员B采用临时会话夹具，不是密码登录验证",
+  "checks": [
+    {
+      "name": "健康与数据库可达",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "登录 100001",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "登录 100061",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "登录 100002",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "登录 100003",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "本人列表忽略伪造 memberId",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "作者读取机主电话",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "机主与作者保持分离",
+      "passed": true
+    },
+    {
+      "name": "其他成员可读已审核备案但无电话",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "审核人员可读电话",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "客户A原始备案越权拒绝",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "客户A成员列表越权拒绝",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "客户A成员摘要越权拒绝",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "客户B原始备案越权拒绝",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "客户B成员列表越权拒绝",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "客户B成员摘要越权拒绝",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "其他成员不能修改",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "已审核库筛选且不带电话",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "App发送评论/回复实际持久化",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "App显式@正确成员通知",
+      "passed": true
+    },
+    {
+      "name": "本人正式汇总和近期记录",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "学期未配置不伪造0",
+      "passed": true
+    },
+    {
+      "name": "照片鉴权二进制实际读取",
+      "passed": true,
+      "status": 200
+    },
+    {
+      "name": "客户照片越权拒绝",
+      "passed": true,
+      "status": 403
+    },
+    {
+      "name": "独立备案无虚构关联报修",
+      "passed": true
+    }
+  ]
+}

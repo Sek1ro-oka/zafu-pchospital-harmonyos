@@ -43,7 +43,12 @@ export const repairAdminService: RepairAdminServiceContract = {
     const before = await repairRepository.getById(recordId);
     const changed =
       before.isDifficult !== input.isDifficult || before.isTypical !== input.isTypical;
-    if (!changed) return toRepairView(before);
+    if (!changed)
+      return toRepairView(before, {
+        canViewOwnerPhone:
+          before.memberProfile.userId === actor.userId ||
+          actor.permissions.includes("repair:review"),
+      });
     const now = new Date();
     const updated = await inSerializableTransaction(async (tx) => {
       await tx.repairRecord.update({
@@ -78,7 +83,11 @@ export const repairAdminService: RepairAdminServiceContract = {
     } else if (!before.isTypical && input.isTypical) {
       scheduleTypicalProcessing(recordId);
     }
-    return toRepairView(updated);
+    return toRepairView(updated, {
+      canViewOwnerPhone:
+        updated.memberProfile.userId === actor.userId ||
+        actor.permissions.includes("repair:review"),
+    });
   },
 
   async updateRecord(recordId, input, actor) {
@@ -140,7 +149,11 @@ export const repairAdminService: RepairAdminServiceContract = {
     if (materialHashOf(materialOf(before)) !== materialHashOf(materialOf(updated))) {
       await invalidateRecordSources(recordId, "管理端修改了备案内容");
     }
-    return toRepairView(updated);
+    return toRepairView(updated, {
+      canViewOwnerPhone:
+        updated.memberProfile.userId === actor.userId ||
+        actor.permissions.includes("repair:review"),
+    });
   },
 
   /**

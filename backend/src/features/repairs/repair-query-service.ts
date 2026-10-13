@@ -43,7 +43,16 @@ export const repairQueryService: RepairQueryServiceContract = {
         take: input.pageSize,
       }),
     ]);
-    return { items: rows.map(toRepairView), pagination: paginationMeta(input, total) };
+    return {
+      items: rows.map((row) =>
+        toRepairView(row, {
+          canViewOwnerPhone:
+            row.memberProfile.userId === actor.userId ||
+            actor.permissions.includes("repair:review"),
+        }),
+      ),
+      pagination: paginationMeta(input, total),
+    };
   },
   async getById(recordId, actor) {
     const record = await repairRepository.getById(recordId);
