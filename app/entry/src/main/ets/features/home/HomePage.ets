@@ -10,7 +10,6 @@ import { LoginPage } from '../auth/LoginPage';
 import { RegisterCustomerPage } from '../auth/RegisterCustomerPage';
 import { RegisterStaffPage } from '../auth/RegisterStaffPage';
 import { PasswordChangePage } from '../auth/PasswordChangePage';
-import { needsPasswordChange } from '../../core/auth/AuthMessages';
 import { PublicGuidesPage } from '../knowledge/PublicGuidesPage';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { NavPusher, GuideFocusParam, RepairOrderFocusParam, routeTitle, ROUTE_SERVICE, ROUTE_PUBLIC_GUIDES, ROUTE_CASE_DETAIL, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_KNOWLEDGE_SOURCE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_ORDER_DETAIL, ROUTE_STAFF_RECORD, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
@@ -99,7 +98,7 @@ export struct HomePage {
       // 平台无障碍查询不可用时仍用原生导航，不阻止页面展示。
     }
     // 启动恢复会话后发现是强制改密账号：进主页的同时引导到改密页（不清续接目标）。
-    if (this.authenticated && needsPasswordChange(this.mustChangePassword)) {
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword)) {
       this.openPasswordChange(true);
     }
   }
@@ -135,6 +134,24 @@ export struct HomePage {
   @State publicCaseRevision: number = 0;
   private tabController: TabsController = new TabsController();
   private pusher: NavPusher = new NavPusher();
+
+  /**
+   * 当前身份是否属于「强制改密账号」。
+   *
+   * 契约：`mustChangePassword = true` 的账号只能访问 session / logout / 原生改密 / Web 改密，
+   * 其余业务接口一律 `403 PASSWORD_CHANGE_REQUIRED`。因此这里在进主页 / 切 tab / 开路由时
+   * 都先把它送到改密页，而不是等用户点进业务页撞到 403 再解释。
+   *
+   * 为什么刻意不做成跨文件共用函数（与 `core/auth/AuthMessages` 里的同名纯函数并存）：
+   * 1. 它只是 `mustChangePassword` 的直传，没有复用价值，抽出去只会给 HomePage 多一条外部依赖。
+   * 2. `backend/tests/unit/guest-login-app.test.ts` 用「源码拼接 + eval」的方式加载本文件，
+   *    只带 `LoginIntent.ets` 一个依赖文件，不解析 import；新增任何跨文件 import 都会让
+   *    eval 环境缺符号而直接抛 ReferenceError。
+   * 3. 全仓目前只有本页这一个调用方。
+   */
+  private needsPasswordChange(mustChangePassword: boolean): boolean {
+    return mustChangePassword;
+  }
 
   /** 会话失效的统一出口：清空导航栈再回登录页，避免栈底残留子页。 */
   private async expireSession(): Promise<void> {
@@ -190,11 +207,11 @@ export struct HomePage {
     const intent = this.loginIntent;
     this.onLoggedIn(identity);
     this.dismissLoginStack();
-    if (needsPasswordChange(identity.mustChangePassword)) {
+    if (this.needsPasswordChange(identity.mustChangePassword)) {
       this.openPasswordChange(true);
       return;
     }
-    this.resumeIntent(intent);
+    this.resumeIntent(intent, identity);
   }
 
   /**
@@ -215,8 +232,14 @@ export struct HomePage {
     }
   }
 
-  /** 按 intent 恢复游客原本想做的操作（tab 或路由二选一，互斥）。 */
-  private resumeIntent(intent: LoginIntent): void {
+  /**
+   * 按 intent 恢复游客原本想做的操作（tab 或路由二选一，互斥）。
+   *
+   * `identity` 由调用方直接传入（登录 / 注册 / 改密刚拿到的服务端身份），
+   * 不再回头读 `SessionService.current()`：那一读既冗余（同一个身份对象刚刚才交上来），
+   * 也让本文件多一条跨文件依赖。身份由服务端认定，这里只读不改写。
+   */
+  private resumeIntent(intent: LoginIntent, identity: SessionIdentity | null): void {
     this.loginIntent = new LoginIntent();
     if (intent.tab >= 0) {
       this.admittedTab = intent.tab;
@@ -225,11 +248,9 @@ export struct HomePage {
       return;
     }
     if (intent.route !== '') {
-      // routeAfterLogin 只读 identity.home；内存身份由登录/注册流程刚写入，理论上不会为空。
-      // 兜底用只读的 fallback 身份，不篡改任何真实身份字段。
-      const current: SessionIdentity | null = SessionService.current();
-      const identity: SessionIdentity = current === null ? new LoginFallbackIdentity() : current;
-      this.pathStack.pushPathByName(routeAfterLogin(intent.route, identity), intent.param);
+      // routeAfterLogin 只读 identity.home；兜底用只读的 fallback 身份，不篡改任何真实身份字段。
+      const current: SessionIdentity = identity === null ? new LoginFallbackIdentity() : identity;
+      this.pathStack.pushPathByName(routeAfterLogin(intent.route, current), intent.param);
     }
   }
 
@@ -241,7 +262,7 @@ export struct HomePage {
       this.onLoggedIn(identity);
     }
     this.dismissLoginStack();
-    this.resumeIntent(this.loginIntent);
+    this.resumeIntent(this.loginIntent, identity);
   }
 
   /** 进入原生改密页；forced = 强制改密账号（不允许跳过，返回键拦截）。 */
@@ -256,7 +277,7 @@ export struct HomePage {
     // 强制改密账号：契约规定只能访问 session / logout / 原生改密 / Web 改密，
     // 其余业务路由一律不放进栈（否则用户点进去只会看到 403 PASSWORD_CHANGE_REQUIRED）。
     // 公开维修指南对游客也开放，属于公共浏览，不拦。
-    if (this.authenticated && needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES) {
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES) {
       this.openPasswordChange(true);
       return;
     }
@@ -459,7 +480,7 @@ export struct HomePage {
     if (this.sessionTransition && index !== TAB_INDEX_HOME) return false;
     // 强制改密账号：只留在首页 tab，其余 tab 都是业务数据（契约边界），
     // 反复引导到改密页而不是让用户切过去看一片 403。
-    if (this.authenticated && needsPasswordChange(this.mustChangePassword) && index !== TAB_INDEX_HOME) {
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && index !== TAB_INDEX_HOME) {
       this.openPasswordChange(true);
       return false;
     }
@@ -480,7 +501,7 @@ export struct HomePage {
 
   private selectNavigation(index: number): void {
     if (this.sessionTransition) return;
-    if (this.authenticated && needsPasswordChange(this.mustChangePassword) && index !== TAB_INDEX_HOME) {
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && index !== TAB_INDEX_HOME) {
       this.openPasswordChange(true);
       return;
     }
