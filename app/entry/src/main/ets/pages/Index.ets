@@ -109,6 +109,7 @@ struct Index {
       HomePage({
         authenticated: this.authenticated,
         onLoggedIn: (identity: SessionIdentity): void => { this.applyIdentity(identity); },
+        onProfileSaved: (name: string): void => { this.displayName = name; },
         displayName: this.displayName,
         roleText: this.roleText,
         home: this.home,

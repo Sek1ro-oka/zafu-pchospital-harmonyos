@@ -1,0 +1,55 @@
+{
+  "backend": "http://127.0.0.1:13086",
+  "database": "pchospital_exp_issue61_1013",
+  "date": "2026-10-13T02:20:55.807Z",
+  "results": [
+    {
+      "name": "客户A登录",
+      "result": "PASS"
+    },
+    {
+      "name": "客户B真实账号",
+      "result": "PASS"
+    },
+    {
+      "name": "A真实提交报修",
+      "result": "PASS"
+    },
+    {
+      "name": "A保存资料",
+      "result": "PASS"
+    },
+    {
+      "name": "历史报修联系快照保留",
+      "result": "PASS"
+    },
+    {
+      "name": "B不能通过query读A电话",
+      "result": "PASS"
+    },
+    {
+      "name": "B不能传userId修改A",
+      "result": "PASS"
+    },
+    {
+      "name": "B不能读取A报修",
+      "result": "PASS"
+    },
+    {
+      "name": "客户不能读成员资料",
+      "result": "PASS"
+    },
+    {
+      "name": "旧版本冲突",
+      "result": "PASS"
+    },
+    {
+      "name": "成员本人昵称",
+      "result": "PASS"
+    },
+    {
+      "name": "成员不得读客户档案",
+      "result": "PASS"
+    }
+  ]
+}
