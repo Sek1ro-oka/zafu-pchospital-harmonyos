@@ -105,6 +105,7 @@ function homeShell(): BackShell {
 
 /** `SessionService` 是普通 export class（无 build()），整份源码直接 eval。 */
 interface SessionSvc {
+  login(qq: string, password: string, rememberMe?: boolean): Promise<unknown>;
   changePassword(request: object): Promise<unknown>;
   current(): unknown;
 }
@@ -145,6 +146,7 @@ function changePage(service: Record<string, unknown>): ChangePage {
 
 interface RegisterPage {
   busy: boolean;
+  rememberMe: boolean;
   onBusyChange: (busy: boolean) => void;
   onRegistered: (identity: unknown) => void;
   qq: string;
@@ -331,3 +333,71 @@ for (const name of ["RegisterCustomerPage", "RegisterStaffPage"] as const) {
     assert.deepEqual(reported, [true, false]);
   });
 }
+
+test("注册页默认勾选保持登录（清单第 7 项：App 默认保持登录，用户可关闭）", () => {
+  for (const name of ["RegisterCustomerPage", "RegisterStaffPage"] as const) {
+    const page = registerPage(name, {});
+    // 构造即读默认值：清单要求 App 默认保持登录（30 天），用户仍可关闭降为 24 小时。
+    assert.equal(page.rememberMe, true, `${name} 的保持登录开关应默认勾选`);
+  }
+});
+
+test("登录页保持登录默认勾选（清单第 7 项）：源码守卫", () => {
+  // LoginPage 带健康检测等依赖，不单独搭 eval 壳；用源码守卫盯住默认值，
+  // 与注册页的行为测试合起来覆盖「登录 / 注册三处都默认保持登录」。
+  const source = readFileSync(`${ETS}/features/auth/LoginPage.ets`, "utf8");
+  assert.match(
+    source,
+    /@State rememberMe: boolean = true;/,
+    "登录页 rememberMe 应默认 true（App 默认保持登录，用户可关闭）"
+  );
+});
+
+test("登录令牌本地保存失败：撤销刚建立的服务端会话，绝不展示已登录（注册共用同一收尾）", async () => {
+  let revoked = "";
+  const service = sessionService({
+    ApiConfig: { getBaseUrl: () => "https://x" },
+    SessionStore: {
+      readToken: async () => "",
+      writeToken: async () => false, // 本地保存失败
+      clearToken: async () => {},
+    },
+    ApiClient: {
+      post: async (_url: string, path: string, _body: string, token: string) => {
+        if (path.includes("/native/login")) {
+          return {
+            userId: "u1", displayName: null, roles: [], permissions: [],
+            memberProfileId: null, memberStatus: null, mustChangePassword: false,
+            home: "CUSTOMER", token: "fresh-token", expiresAt: "2026-01-01T00:00:00.000Z",
+          };
+        }
+        if (path.includes("/logout")) {
+          revoked = token;
+          return { loggedOut: true };
+        }
+        throw new ApiRequestError("UNEXPECTED_RESPONSE", path, 0, "");
+      },
+    },
+    ApiRequestError,
+    isSessionExpiredCode: () => false,
+    hilog: {
+      warn() {},
+      error() {},
+      info() {},
+      debug() {},
+    },
+  });
+  await assert.rejects(
+    () => service.login("12345678", "secret1"),
+    (error: unknown) => {
+      assert.ok(error instanceof ApiRequestError);
+      assert.equal(error.code, "LOCAL_STORAGE_ERROR");
+      return true;
+    }
+  );
+  // adoptSession 是登录 / 注册共用的收尾：保存失败时用**刚拿到的**令牌撤销服务端会话
+  // （登录没有旧令牌，撤销的正是这次新建立的会话，不留「本地没存成、服务端却活着」的悬空会话），
+  // 并把内存身份置空 —— 界面因此不会展示「已登录 / 已注册成功」。
+  assert.equal(revoked, "fresh-token");
+  assert.equal(service.current(), null);
+});
