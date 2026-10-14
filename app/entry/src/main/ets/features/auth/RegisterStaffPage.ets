@@ -52,7 +52,8 @@ export struct RegisterStaffPage {
   @State className: string = '';
   @State password: string = '';
   @State passwordConfirmation: string = '';
-  @State rememberMe: boolean = false;
+  /** 默认勾选保持登录（清单第 7 项「App 默认保持登录并允许用户关闭」）；可关闭降为 24 小时。 */
+  @State rememberMe: boolean = true;
   @State busy: boolean = false;
   @State errorText: string = '';
   @State failed: boolean = false;
