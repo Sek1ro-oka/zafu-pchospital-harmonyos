@@ -22,7 +22,7 @@ import {
 export struct LabeledInput {
   @Prop label: string = '';
   @Prop placeholder: string = '';
-  /** 受控文本：由调用方用 `$$` 双向绑定到自己的 @State。 */
+  /** 受控文本：调用方单向传入当前值，并通过 onChange 回写自己的 @State。 */
   text: string = '';
   /** 输入类型：密码 / 数字等，默认普通文本。 */
   inputType: InputType = InputType.Normal;
@@ -67,8 +67,9 @@ export struct LabeledInput {
 /**
  * 保持登录开关（rememberMe）。
  *
- * 缺省不勾选 = 普通档位（24 小时），勾选 = 30 天 —— 与登录 / 注册 / 改密
- * 三处完全一致（契约：`false` / 缺省都是 24 小时，只有显式 `true` 才是 30 天）。
+ * 契约：`false` / 缺省都是普通档位（24 小时），只有显式 `true` 才是保持登录（30 天）——
+ * 登录 / 注册 / 改密三处的提交语义一致。本组件 `@Prop isOn` 缺省 `false` 只是独立调用兜底；
+ * 三个页面各自用 `@State rememberMe` 决定初始勾选（清单第 7 项：App 默认保持登录，可关闭）。
  * 说明文案按勾选状态切换，让用户在提交前就知道这次会话能撑多久。
  *
  * 注意：这里用普通 `@Prop` + 回调而不是 `@Link`。父组件多是 `@State`，

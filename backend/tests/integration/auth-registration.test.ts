@@ -7,6 +7,7 @@ import { POST as registerCustomer } from "../../src/app/api/v1/auth/register/cus
 import { POST as registerStaff } from "../../src/app/api/v1/auth/register/staff/route";
 import { GET as nativeSession } from "../../src/app/api/v1/auth/native/session/route";
 import { POST as nativeLogout } from "../../src/app/api/v1/auth/native/logout/route";
+import { POST as nativeLogin } from "../../src/app/api/v1/auth/native/login/route";
 import { AppError } from "../../src/lib/api/errors";
 import { resetRateLimitsForTests } from "../../src/lib/api/rate-limit";
 import { SESSION_COOKIE_NAME } from "../../src/lib/auth/request";
@@ -36,6 +37,7 @@ const dbTest = enabled ? test : test.skip;
 
 const CUSTOMER_URL = "http://localhost/api/v1/auth/register/customer";
 const STAFF_URL = "http://localhost/api/v1/auth/register/staff";
+const NATIVE_LOGIN_URL = "http://localhost/api/v1/auth/native/login";
 const NATIVE = { "x-client-type": "native" };
 const QQ_PREFIX = "9200";
 const ADMIN_ID = "92000000-0000-4000-8000-000000000001";
@@ -837,4 +839,29 @@ dbTest("注册即登录：会话在服务端可查，退出后令牌立即失效
   );
   assert.equal(afterLogout.status, 401);
   assert.equal(errorCodeOf(afterLogout.json), "AUTH_SESSION_INVALID");
+});
+
+dbTest("新客户注册后用同一凭据登录：服务端返回客户身份（注册→登录串联）", async () => {
+  /*
+   * 验收 1：上面的「注册即登录」用例只复用注册时下发的令牌，从未真正走一遍登录接口。
+   * 这里补上完整链路——注册一个全新客户后，用同一 QQ + 密码调用原生登录接口，
+   * 证明注册落库的凭据确实持久化可用：真实登录返回服务端认定的客户身份
+   * （home = CUSTOMER、roles = []），且 userId 与注册账号一致，而不只是注册时签发的令牌。
+   */
+  const qq = nextQq();
+  const registered = await rawCall(registerCustomer, CUSTOMER_URL, {
+    headers: headers(NATIVE),
+    body: customerBody(qq),
+  });
+  assert.equal(registered.status, 201, JSON.stringify(registered.json));
+
+  const login = await rawCall(nativeLogin, NATIVE_LOGIN_URL, {
+    headers: headers(NATIVE),
+    body: { qq, password: PASSWORD },
+  });
+  assert.equal(login.status, 200, JSON.stringify(login.json));
+  const data = dataOf(login.json);
+  assert.equal(data.home, "CUSTOMER");
+  assert.deepEqual(data.roles, []);
+  assert.equal(data.userId, await userIdForQq(qq));
 });

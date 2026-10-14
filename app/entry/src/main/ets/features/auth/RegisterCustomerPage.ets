@@ -49,7 +49,8 @@ export struct RegisterCustomerPage {
   @State qq: string = '';
   @State password: string = '';
   @State passwordConfirmation: string = '';
-  @State rememberMe: boolean = false;
+  /** 默认勾选保持登录（清单第 7 项「App 默认保持登录并允许用户关闭」）；可关闭降为 24 小时。 */
+  @State rememberMe: boolean = true;
   @State busy: boolean = false;
   @State errorText: string = '';
   @State failed: boolean = false;
@@ -165,7 +166,7 @@ export struct RegisterCustomerPage {
           LabeledInput({
             label: 'QQ 号',
             placeholder: '5–11 位数字',
-            text: $$this.qq,
+            text: this.qq,
             inputType: InputType.Number,
             maxLength: 11,
             disabled: this.busy,
@@ -175,7 +176,7 @@ export struct RegisterCustomerPage {
           LabeledInput({
             label: '密码',
             placeholder: '至少 6 位',
-            text: $$this.password,
+            text: this.password,
             inputType: InputType.Password,
             disabled: this.busy,
             errorText: this.fieldError('password'),
@@ -184,7 +185,7 @@ export struct RegisterCustomerPage {
           LabeledInput({
             label: '确认密码',
             placeholder: '再输入一次密码',
-            text: $$this.passwordConfirmation,
+            text: this.passwordConfirmation,
             inputType: InputType.Password,
             disabled: this.busy,
             errorText: this.fieldError('passwordConfirmation'),
