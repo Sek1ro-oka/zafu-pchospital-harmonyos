@@ -215,7 +215,7 @@ export struct PasswordChangePage {
           LabeledInput({
             label: '当前密码',
             placeholder: '当前登录密码',
-            text: $$this.currentPassword,
+            text: this.currentPassword,
             inputType: InputType.Password,
             disabled: this.busy,
             onChange: (value: string): void => { this.currentPassword = value; }
@@ -223,7 +223,7 @@ export struct PasswordChangePage {
           LabeledInput({
             label: '新密码',
             placeholder: '至少 6 位',
-            text: $$this.newPassword,
+            text: this.newPassword,
             inputType: InputType.Password,
             disabled: this.busy,
             errorText: this.fieldError('newPassword'),
@@ -232,7 +232,7 @@ export struct PasswordChangePage {
           LabeledInput({
             label: '确认新密码',
             placeholder: '再输入一次新密码',
-            text: $$this.newPasswordConfirmation,
+            text: this.newPasswordConfirmation,
             inputType: InputType.Password,
             disabled: this.busy,
             errorText: this.fieldError('newPasswordConfirmation'),

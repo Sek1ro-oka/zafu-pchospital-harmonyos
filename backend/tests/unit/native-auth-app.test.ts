@@ -401,3 +401,18 @@ test("登录令牌本地保存失败：撤销刚建立的服务端会话，绝�
   assert.equal(revoked, "fresh-token");
   assert.equal(service.current(), null);
 });
+
+test("注册/改密页不把 $$ 双向绑定传进自定义组件（模拟器 ReferenceError 回归守卫）", () => {
+  // `$$this.x` 只对框架组件属性（如 TextInput({ text: $$this.x })）有效；把它作为参数传给
+  // 自定义组件 LabeledInput 时编译器不展开宏，运行时留下字面量 $$this，渲染即抛
+  // ReferenceError: $$this is not defined（模拟器 jscrash 实测：打开注册页进程崩溃）。
+  // 这三页必须用单向 text: this.x + onChange 回写，故源码里不应再出现 $$this.。
+  for (const name of ["RegisterCustomerPage", "RegisterStaffPage", "PasswordChangePage"] as const) {
+    const source = readFileSync(`${ETS}/features/auth/${name}.ets`, "utf8");
+    assert.doesNotMatch(
+      source,
+      /\$\$this\./,
+      `${name} 不应使用 $$ 双向绑定（传给 LabeledInput 会在渲染时崩溃）`
+    );
+  }
+});

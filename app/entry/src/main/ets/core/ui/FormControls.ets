@@ -22,7 +22,7 @@ import {
 export struct LabeledInput {
   @Prop label: string = '';
   @Prop placeholder: string = '';
-  /** 受控文本：由调用方用 `$$` 双向绑定到自己的 @State。 */
+  /** 受控文本：调用方单向传入当前值，并通过 onChange 回写自己的 @State。 */
   text: string = '';
   /** 输入类型：密码 / 数字等，默认普通文本。 */
   inputType: InputType = InputType.Normal;
