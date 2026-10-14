@@ -1,3 +1,4 @@
+import { DetailHeader, DetailNotice, DetailEmptyOrders, DETAIL_BACKGROUND } from '../../core/ui/ReferenceDetail';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ROUTE_STAFF_ORDER_DETAIL } from '../../core/ui/Routes';
 import { CARD_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
@@ -33,6 +34,7 @@ const SCOPE_TABS: ScopeTab[] = [
  */
 @Component
 export struct StaffRepairOrdersPage {
+  onBack: () => void = () => {};
   pathStack: NavPathStack = new NavPathStack();
   onSessionExpired: () => void = () => {
   };
@@ -151,16 +153,12 @@ export struct StaffRepairOrdersPage {
 
   @Builder
   scopeTab(tab: ScopeTab) {
-    Text(tab.label)
-      .fontSize(14)
-      .fontWeight(this.scope === tab.scope ? FontWeight.Medium : FontWeight.Normal)
-      .fontColor(this.scope === tab.scope ? Color.White : $r('app.color.text_primary'))
-      .padding({ left: 14, right: 14, top: 7, bottom: 7 })
-      .backgroundColor(this.scope === tab.scope ? $r('app.color.brand') : $r('app.color.surface'))
-      .borderRadius(16)
-      .onClick(() => {
-        this.switchScope(tab.scope);
-      })
+    Column({ space: 7 }) {
+      Text(tab.label).fontSize(17).fontColor(this.scope === tab.scope ? '#0764E9' : '#666D72')
+        .fontWeight(this.scope === tab.scope ? FontWeight.Medium : FontWeight.Normal)
+      Rect().width(30).height(2).fill(this.scope === tab.scope ? '#0764E9' : Color.Transparent).borderRadius(1)
+    }.height(46).justifyContent(FlexAlign.End).padding({ left: 12, right: 12 })
+      .onClick(() => { this.switchScope(tab.scope); })
   }
 
   @Builder
@@ -271,76 +269,35 @@ export struct StaffRepairOrdersPage {
   }
 
   build() {
-    Column({ space: 14 }) {
-      Row({ space: 12 }) {
-        Text('报修工作台')
-          .fontSize(26)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Start)
-        Text('刷新')
-          .fontSize(14)
-          .fontColor($r('app.color.brand'))
-          .onClick(() => {
-            this.load();
-          })
-      }
-      .width('100%')
-
-      Row({ space: 8 }) {
-        ForEach(SCOPE_TABS, (tab: ScopeTab) => {
-          this.scopeTab(tab);
-        }, (tab: ScopeTab) => tab.scope)
-      }
-      .width('100%')
-
-      Scroll() {
-        Column({ space: 14 }) {
-          if (this.state === STATE_LOADING) {
-            this.loadingView();
-          } else if (this.state === STATE_ERROR) {
-            this.errorView();
-          } else if (this.state === STATE_EMPTY) {
-            this.emptyView();
-          } else {
-            ForEach(this.orders, (order: StaffRepairOrderView) => {
-              this.orderCard(order);
-            }, (order: StaffRepairOrderView) => order.id)
-
-            if (this.loadMoreErrorText !== '') {
-              Text(this.loadMoreErrorText)
-                .fontSize(13)
-                .fontColor($r('app.color.danger'))
-                .width('100%')
-                .textAlign(TextAlign.Center)
+    Column({ space: 0 }) {
+      DetailHeader({ title: '报修工作台', onBack: this.onBack, refresh: true,
+        onRefresh: (): void => { this.load(); } })
+      Row() {
+        ForEach(SCOPE_TABS, (tab: ScopeTab) => { this.scopeTab(tab); }, (tab: ScopeTab) => tab.scope)
+      }.width('100%').height(56).padding({ left: 16, right: 16 })
+      Column() {
+        DetailNotice({ text: '待受理为公共队列，受理后由负责人员处理。报修进度与维修备案审核分别记录。' })
+      }.width('100%').padding({ left: 18, right: 18, top: 14, bottom: 14 })
+      if (this.state === STATE_EMPTY) {
+        Column() { DetailEmptyOrders({ text: this.scope === 'mine' ? '您还没有负责的报修单' : '暂无报修单' }) }
+          .width('100%').layoutWeight(1)
+      } else {
+        Scroll() {
+          Column({ space: 16 }) {
+            if (this.state === STATE_LOADING) { this.loadingView() }
+            else if (this.state === STATE_ERROR) { this.errorView() }
+            else {
+              ForEach(this.orders, (order: StaffRepairOrderView) => { this.orderCard(order); }, (order: StaffRepairOrderView) => order.id)
+              if (this.loadMoreErrorText !== '') { Text(this.loadMoreErrorText).fontSize(13).fontColor($r('app.color.danger')) }
+              if (this.hasMore) {
+                Button(this.loadingMore ? '加载中…' : '加载更多').width('100%').height(42).fontSize(14)
+                  .backgroundColor(Color.White).fontColor('#0755FF').enabled(!this.loadingMore)
+                  .onClick(() => { this.loadMore(); })
+              }
             }
-
-            if (this.hasMore) {
-              Button(this.loadingMore ? '加载中…' : '加载更多')
-                .width('100%')
-                .height(42)
-                .fontSize(14)
-                .backgroundColor($r('app.color.surface'))
-                .fontColor($r('app.color.brand'))
-                .enabled(!this.loadingMore)
-                .onClick(() => {
-                  this.loadMore();
-                })
-            }
-          }
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
+          }.width('100%').padding({ left: 18, right: 18, bottom: 18 }).alignItems(HorizontalAlign.Start)
+        }.width('100%').layoutWeight(1).scrollBar(BarState.Off).align(Alignment.Top)
       }
-      .layoutWeight(1)
-      .scrollBar(BarState.Auto)
-      .align(Alignment.Top)
-    }
-    .width('100%')
-    .height('100%')
-    .padding(PAGE_PADDING)
-    .alignItems(HorizontalAlign.Start)
-    .backgroundColor($r('app.color.start_window_background'))
+    }.width('100%').height('100%').backgroundColor(DETAIL_BACKGROUND)
   }
 }

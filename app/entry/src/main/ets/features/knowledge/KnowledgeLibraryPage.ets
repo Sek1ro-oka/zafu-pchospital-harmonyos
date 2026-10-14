@@ -3,7 +3,7 @@ import { ApiClient, ApiRequestError, isSessionExpiredCode } from '../../core/net
 import { ApiConfig } from '../../core/network/ApiConfig';
 import { GuideFocusParam, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_CASE_LIBRARY, ROUTE_CASE_DETAIL } from '../../core/ui/Routes';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
-import { ReferenceBanner, ReferenceSearch, ReferenceShortcut, REFERENCE_BACKGROUND } from '../../core/ui/ReferencePage';
+import { DetailHeader, DETAIL_BACKGROUND } from '../../core/ui/ReferenceDetail';
 import { CaseDetailParam, CaseListItem, CaseListQuery } from './KnowledgeCaseContract';
 import { KnowledgeCaseService } from './KnowledgeCaseService';
 import { guideCategory } from './GuideCategory';
@@ -20,6 +20,9 @@ export struct KnowledgeLibraryPage {
   @Prop @Watch('authChanged') permissions: string[] = [];
   onOpen: (route: string, param: Object | null) => void = () => {};
   onSessionExpired: () => void = () => {};
+  onBack: () => void = () => {};
+  @State expanded: string = '';
+  @State searchOpen: boolean = false;
   @State query: string = '';
   @State category: string = '全部指南';
   @State guides: GuideItem[] = [];
@@ -81,14 +84,14 @@ export struct KnowledgeLibraryPage {
 
   private categories(): CategoryItem[] {
     return [
-      { title: '开机故障', icon: $r('app.media.ref_boot') },
-      { title: '系统软件', icon: $r('app.media.ref_system') },
-      { title: '网络', icon: $r('app.media.ref_network') },
-      { title: '磁盘', icon: $r('app.media.ref_disk') },
-      { title: '散热', icon: $r('app.media.ref_cooling') },
-      { title: '硬件外设', icon: $r('app.media.ref_repair') },
-      { title: '使用技巧', icon: $r('app.media.ref_shield') },
-      { title: '全部指南', icon: $r('app.media.ref_grid') }
+      { title: '开机故障', icon: $r('app.media.detail_power') },
+      { title: '系统软件', icon: $r('app.media.detail_system') },
+      { title: '网络', icon: $r('app.media.detail_network') },
+      { title: '磁盘', icon: $r('app.media.detail_disk') },
+      { title: '散热', icon: $r('app.media.detail_cooling') },
+      { title: '硬件外设', icon: $r('app.media.detail_device') },
+      { title: '使用技巧', icon: $r('app.media.detail_book') },
+      { title: '全部指南', icon: $r('app.media.detail_grid') }
     ];
   }
 
@@ -160,39 +163,68 @@ export struct KnowledgeLibraryPage {
     }
   }
 
-  build() {
-    Scroll() {
-      Column({ space: 14 }) {
-        Text('知识').fontSize(28).fontWeight(FontWeight.Bold).width('100%').height(50).align(Alignment.Start)
-        ReferenceSearch({ text: $query, placeholder: '搜索维修指南与案例标题' })
-        ReferenceBanner({
-          title: '电脑出问题，从这里查起', subtitle: '维修指南 · 故障排查 · 经验积累',
-          image: $r('app.media.ref_laptop_hero'), tall: true
+  @Builder
+  categoryRow(item: CategoryItem) {
+    Column({ space: 0 }) {
+      Button({ type: ButtonType.Normal }) {
+        Row({ space: 16 }) {
+          Image(item.icon).width(23).height(26).objectFit(ImageFit.Contain)
+          Text(item.title).fontSize(18).fontWeight(FontWeight.Medium).fontColor('#14191D').layoutWeight(1)
+          Image($r('app.media.detail_chevron')).width(22).height(22)
+            .rotate({ angle: this.expanded === item.title ? 180 : 0 })
+        }.width('100%').padding({ left: 17, right: 17 })
+      }.width('100%').height(57).backgroundColor(Color.White).borderRadius(22)
+        .accessibilityText(item.title).onClick(() => {
+          this.expanded = this.expanded === item.title ? '' : item.title;
+          this.category = item.title;
         })
-        Flex({ wrap: FlexWrap.Wrap }) {
-          ForEach(this.categories(), (item: CategoryItem) => {
-            Column({ space: 0 }) {
-              ReferenceShortcut({ title: item.title, icon: item.icon, itemWidth: '100%',
-                onSelect: (): void => { this.category = item.title; } })
-              if (this.category === item.title) { Rect().width(18).height(3).fill('#167AF8').borderRadius(2) }
-            }.width('25%').height(86)
-          }, (item: CategoryItem) => item.title)
-        }.width('100%').margin({ top: 2, bottom: 8 })
-        Row() {
-          Text(this.category === '全部指南' ? '维修指南' : this.category).fontSize(20).fontWeight(FontWeight.Bold).layoutWeight(1)
-          Text('刷新 ›').fontSize(13).fontColor('#76828B').onClick(() => { this.loadGuides(); this.authChanged(); })
-        }.width('100%')
-        if (this.loading) {
-          LoadingPanel({ text: '正在加载公开指南…' })
-        } else if (this.errorText !== '') {
-          ErrorPanel({ message: this.errorText, onRetry: (): void => { this.loadGuides(); } })
-        } else if (this.visibleGuides().length === 0) {
-          Text('暂无匹配的指南').fontSize(14).fontColor('#75828B').width('100%').padding(20).backgroundColor(Color.White).borderRadius(18)
-        } else {
-          ForEach(this.visibleGuides(), (guide: GuideItem) => { this.guideCard(guide); }, (guide: GuideItem) => guide.id)
-        }
-        this.casesSection()
-      }.width('100%').padding({ left: 16, right: 16, bottom: 90 }).alignItems(HorizontalAlign.Start)
-    }.width('100%').height('100%').scrollBar(BarState.Off).align(Alignment.Top).backgroundColor(REFERENCE_BACKGROUND)
+      if (this.expanded === item.title) {
+        Column({ space: 10 }) {
+          if (this.loading) { LoadingPanel({ text: '正在加载公开指南…' }) }
+          else if (this.errorText !== '') {
+            ErrorPanel({ message: this.errorText, onRetry: (): void => { this.loadGuides(); } })
+          } else if (this.visibleGuides().length === 0) {
+            Text('暂无匹配的指南').fontSize(14).fontColor('#7A858D').padding(16)
+          } else {
+            ForEach(this.visibleGuides(), (guide: GuideItem) => { this.guideCard(guide); }, (guide: GuideItem) => guide.id)
+          }
+        }.width('100%').padding({ top: 10 })
+      }
+    }.width('100%')
+  }
+
+  build() {
+    Column() {
+      DetailHeader({ title: '知识与帮助', onBack: this.onBack, refresh: true,
+        onRefresh: (): void => { this.loadGuides(); this.authChanged(); } })
+      Scroll() {
+        Column({ space: 0 }) {
+          Column() {
+            Image($r('app.media.detail_diagnosis')).width(41).height(49)
+            Button('AI 故障问诊').width(170).height(41).fontSize(18).fontWeight(FontWeight.Medium)
+              .backgroundColor('#0755FF').fontColor(Color.White).borderRadius(25).margin({ top: 66 })
+              .onClick(() => { this.onOpen(ROUTE_KNOWLEDGE, null); })
+          }.width('100%').height(316).padding({ top: 116 }).alignItems(HorizontalAlign.Center)
+          Row({ space: 8 }) {
+            Text('?').fontSize(13).fontWeight(FontWeight.Bold).fontColor(Color.White)
+              .width(17).height(17).textAlign(TextAlign.Center).backgroundColor('#6A7074').borderRadius(9)
+            Text('获取帮助').fontSize(16).fontWeight(FontWeight.Medium).fontColor('#626B71').layoutWeight(1)
+            Button({ type: ButtonType.Circle }) {
+              Image($r('app.media.home_search')).width(19).height(19)
+            }.width(28).height(28).backgroundColor(Color.Transparent).accessibilityText('搜索指南')
+              .onClick(() => { this.searchOpen = !this.searchOpen; })
+          }.width('100%').margin({ bottom: 12 })
+          if (this.searchOpen) {
+            TextInput({ text: this.query, placeholder: '搜索维修指南标题' }).height(44).fontSize(16)
+              .backgroundColor(Color.White).borderRadius(22).margin({ bottom: 12 })
+              .onChange((value: string) => { this.query = value; this.expanded = '全部指南'; this.category = '全部指南'; })
+          }
+          Column({ space: 14 }) {
+            ForEach(this.categories(), (item: CategoryItem) => { this.categoryRow(item); }, (item: CategoryItem) => item.title)
+            this.casesSection()
+          }.width('100%')
+        }.width('100%').padding({ left: 18, right: 18, bottom: 96 }).alignItems(HorizontalAlign.Start)
+      }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
+    }.width('100%').height('100%').backgroundColor(DETAIL_BACKGROUND)
   }
 }
