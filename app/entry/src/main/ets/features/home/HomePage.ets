@@ -3,9 +3,13 @@ import { curves } from '@kit.ArkUI';
 import { ActivityPage } from '../activity/ActivityPage';
 import { KnowledgeLibraryPage } from '../knowledge/KnowledgeLibraryPage';
 import { TAB_SLIDE_DURATION } from '../../core/ui/ReferencePage';
-import { SessionIdentity } from '../../core/auth/AuthContract';
+import { SessionIdentity, HOME_CUSTOMER, PasswordChangeData } from '../../core/auth/AuthContract';
 import { LoginIntent, routeAfterLogin } from '../../core/auth/LoginIntent';
+import { SessionService } from '../../core/auth/SessionService';
 import { LoginPage } from '../auth/LoginPage';
+import { RegisterCustomerPage } from '../auth/RegisterCustomerPage';
+import { RegisterStaffPage } from '../auth/RegisterStaffPage';
+import { PasswordChangePage } from '../auth/PasswordChangePage';
 import { PublicGuidesPage } from '../knowledge/PublicGuidesPage';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { NavPusher, GuideFocusParam, RepairOrderFocusParam, routeTitle, ROUTE_SERVICE, ROUTE_PUBLIC_GUIDES, ROUTE_CASE_DETAIL, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_KNOWLEDGE_SOURCE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_ORDER_DETAIL, ROUTE_STAFF_RECORD, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
@@ -41,6 +45,35 @@ import { PublicCaseParam } from '../profile/CommunityContract';
 /** 五个真实根页面；AI 对话仍是离开即销毁的导航子页。 */
 const TAB_INDEX_HOME: number = 0;
 const ROUTE_LOGIN: string = 'login';
+const ROUTE_REGISTER_CUSTOMER: string = 'register-customer';
+const ROUTE_REGISTER_STAFF: string = 'staff-register';
+const ROUTE_PASSWORD_CHANGE: string = 'password-change';
+
+/**
+ * 登录 / 注册 / 改密整条流程的页面名（Issue #60 第三批）。
+ *
+ * 游客触达需要登录的能力时先压登录页，需要注册时再从登录页压注册页，
+ * 强制改密账号则被压到改密页 —— 成功后要一次把这些页面都弹掉，
+ * 否则栈底会残留一个登录页，用户每次返回都会再看到它。
+ */
+const AUTH_ROUTES: string[] = [ROUTE_LOGIN, ROUTE_REGISTER_CUSTOMER, ROUTE_REGISTER_STAFF, ROUTE_PASSWORD_CHANGE];
+
+/**
+ * `routeAfterLogin` 的兜底身份：只在内存身份缺失（理论上不会发生）时使用。
+ * **不伪造角色、不缓存任何真实身份** —— 续接的语义只取决于「客户入口还是
+ * 工作人员入口」，而这个值在登录成功后必然已由服务端身份给出；
+ * 这里是类型兜底，不是业务数据。
+ */
+class LoginFallbackIdentity implements SessionIdentity {
+  userId: string = '';
+  displayName: string | null = null;
+  roles: string[] = [];
+  permissions: string[] = [];
+  memberProfileId: string | null = null;
+  memberStatus: string | null = null;
+  mustChangePassword: boolean = false;
+  home: string = HOME_CUSTOMER;
+}
 
 @Component
 export struct HomePage {
@@ -49,8 +82,11 @@ export struct HomePage {
   onProfileSaved: (name: string) => void = () => {};
   private loginIntent: LoginIntent = new LoginIntent();
   private loginBusy: boolean = false;
+  private registerBusy: boolean = false;
   private expiring: boolean = false;
   @State sessionTransition: boolean = false;
+  /** 改密页是否处于「强制改密」模式：true 时禁用返回跳过（契约：必须先改密）。 */
+  @State passwordChangeForced: boolean = false;
   private admittedTab: number = -1;
   @State reduceMotion: boolean = false;
   private motionChanged: (enabled: boolean) => void = (enabled: boolean): void => { this.reduceMotion = enabled; };
@@ -62,6 +98,10 @@ export struct HomePage {
     } catch (_) {
       // 平台无障碍查询不可用时仍用原生导航，不阻止页面展示。
     }
+    // 启动恢复会话后发现是强制改密账号：进主页的同时引导到改密页（不清续接目标）。
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword)) {
+      this.openPasswordChange(true);
+    }
   }
 
   aboutToDisappear(): void {
@@ -72,6 +112,14 @@ export struct HomePage {
   @Prop roleText: string = '';
   @Prop home: string = '';
   @Prop permissions: string[] = [];
+  /**
+   * 强制改密账号标记（Issue #60 第三批）。
+   *
+   * 契约：`mustChangePassword = true` 的账号只能访问 session / logout / 原生改密 / Web 改密，
+   * 其余业务接口一律 `403 PASSWORD_CHANGE_REQUIRED`。因此这里在**进主页时**就把它
+   * 引导到改密页，而不是等用户点进业务页撞到 403 再解释。
+   */
+  @Prop mustChangePassword: boolean = false;
   onLogout: () => Promise<void> = async () => {
   };
   /** 子页面发现会话失效时，通知根页面回登录页。 */
@@ -87,6 +135,24 @@ export struct HomePage {
   @State publicCaseRevision: number = 0;
   private tabController: TabsController = new TabsController();
   private pusher: NavPusher = new NavPusher();
+
+  /**
+   * 当前身份是否属于「强制改密账号」。
+   *
+   * 契约：`mustChangePassword = true` 的账号只能访问 session / logout / 原生改密 / Web 改密，
+   * 其余业务接口一律 `403 PASSWORD_CHANGE_REQUIRED`。因此这里在进主页 / 切 tab / 开路由时
+   * 都先把它送到改密页，而不是等用户点进业务页撞到 403 再解释。
+   *
+   * 为什么刻意不做成跨文件共用函数（与 `core/auth/AuthMessages` 里的同名纯函数并存）：
+   * 1. 它只是 `mustChangePassword` 的直传，没有复用价值，抽出去只会给 HomePage 多一条外部依赖。
+   * 2. `backend/tests/unit/guest-login-app.test.ts` 用「源码拼接 + eval」的方式加载本文件，
+   *    只带 `LoginIntent.ets` 一个依赖文件，不解析 import；新增任何跨文件 import 都会让
+   *    eval 环境缺符号而直接抛 ReferenceError。
+   * 3. 全仓目前只有本页这一个调用方。
+   */
+  private needsPasswordChange(mustChangePassword: boolean): boolean {
+    return mustChangePassword;
+  }
 
   /** 会话失效的统一出口：清空导航栈再回登录页，避免栈底残留子页。 */
   private async expireSession(): Promise<void> {
@@ -107,27 +173,115 @@ export struct HomePage {
     this.pathStack.pushPathByName(ROUTE_LOGIN, null);
   }
 
+  /**
+   * 进入注册页（登录页的「注册账号」/「工作人员注册（需邀请码）」）。
+   *
+   * **保留续接目标**：loginIntent 不清空，注册成功 / 取消返回登录页后仍能续接原操作。
+   */
+  private openRegister(route: string): void {
+    if (this.pathStack.getAllPathName().includes(route)) return;
+    this.pathStack.pushPathByName(route, null);
+  }
+
   private cancelLogin(): void {
     this.loginIntent = new LoginIntent();
     this.pathStack.pop();
   }
 
+  /** 取消注册：回到登录页而不是直接回游客首页，保持「登录 → 注册 → 登录」的回路。 */
+  private cancelRegister(): void {
+    if (this.pathStack.getAllPathName().includes(ROUTE_LOGIN)) {
+      this.pathStack.pop();
+      return;
+    }
+    this.requestLogin(new LoginIntent());
+  }
+
+  /**
+   * 登录 / 注册成功后的续接（Issue #60 第三批）。
+   *
+   * 先应用身份，再按 intent 恢复原操作；**强制改密账号例外** ——
+   * 契约规定它只能访问 session / logout / 改密，因此先送改密页，
+   * 改密成功后由 onPasswordChanged 再走同一套续接（intent 不清空）。
+   */
   private completeLogin(identity: SessionIdentity): void {
     const intent = this.loginIntent;
-    this.loginIntent = new LoginIntent();
     this.onLoggedIn(identity);
-    this.pathStack.pop();
+    this.dismissLoginStack();
+    if (this.needsPasswordChange(identity.mustChangePassword)) {
+      this.openPasswordChange(true);
+      return;
+    }
+    this.resumeIntent(intent, identity);
+  }
+
+  /**
+   * 收起登录 / 注册 / 改密整条流程：从栈顶逐个弹掉这些页面，回到 tab 根。
+   *
+   * 为什么不能只 pop 一次：从登录页进注册页时栈是 [根, 登录, 注册]，
+   * 只弹一次会把用户留在登录页上，之后每次返回都会再次看到登录页。
+   * 带步数上限兜底，避免异常栈结构导致死循环。
+   */
+  private dismissLoginStack(): void {
+    for (let step: number = 0; step < 8; step += 1) {
+      const names: string[] = this.pathStack.getAllPathName();
+      const top: string = names.length > 0 ? names[names.length - 1] : '';
+      if (!AUTH_ROUTES.includes(top)) {
+        return;
+      }
+      this.pathStack.pop();
+    }
+  }
+
+  /**
+   * 按 intent 恢复游客原本想做的操作（tab 或路由二选一，互斥）。
+   *
+   * `identity` 由调用方直接传入（登录 / 注册 / 改密刚拿到的服务端身份），
+   * 不再回头读 `SessionService.current()`：那一读既冗余（同一个身份对象刚刚才交上来），
+   * 也让本文件多一条跨文件依赖。身份由服务端认定，这里只读不改写。
+   */
+  private resumeIntent(intent: LoginIntent, identity: SessionIdentity | null): void {
+    this.loginIntent = new LoginIntent();
     if (intent.tab >= 0) {
       this.admittedTab = intent.tab;
       this.currentTab = intent.tab;
       this.tabController.changeIndex(intent.tab);
-    } else if (intent.route !== '') {
-      this.pathStack.pushPathByName(routeAfterLogin(intent.route, identity), intent.param);
+      return;
     }
+    if (intent.route !== '') {
+      // routeAfterLogin 只读 identity.home；兜底用只读的 fallback 身份，不篡改任何真实身份字段。
+      const current: SessionIdentity = identity === null ? new LoginFallbackIdentity() : identity;
+      this.pathStack.pushPathByName(routeAfterLogin(intent.route, current), intent.param);
+    }
+  }
+
+  /** 改密成功（新令牌已由 SessionService 保存）：刷新身份并续接原操作。 */
+  private onPasswordChanged(): void {
+    // mustChangePassword 已由 SessionService.changePassword 置 false，这里只把最新身份交回上层。
+    const identity: SessionIdentity | null = SessionService.current();
+    if (identity !== null) {
+      this.onLoggedIn(identity);
+    }
+    this.dismissLoginStack();
+    this.resumeIntent(this.loginIntent, identity);
+  }
+
+  /** 进入原生改密页；forced = 强制改密账号（不允许跳过，返回键拦截）。 */
+  private openPasswordChange(forced: boolean): void {
+    if (this.pathStack.getAllPathName().includes(ROUTE_PASSWORD_CHANGE)) return;
+    this.passwordChangeForced = forced;
+    this.pathStack.pushPathByName(ROUTE_PASSWORD_CHANGE, null);
   }
 
   private openRoute(route: string, param: Object | null): void {
     if (this.sessionTransition) return;
+    // 强制改密账号：契约规定只能访问 session / logout / 原生改密 / Web 改密，
+    // 其余业务路由一律不放进栈（否则用户点进去只会看到 403 PASSWORD_CHANGE_REQUIRED）。
+    // 公开维修指南对游客也开放，属于公共浏览，不拦。
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES) {
+      this.openPasswordChange(true);
+      return;
+    }
     if (!this.authenticated && route !== ROUTE_PUBLIC_GUIDES) {
       const intent = new LoginIntent();
       intent.route = route;
@@ -155,6 +309,25 @@ export struct HomePage {
     }
   }
 
+  /**
+   * 系统返回键是否需要被拦截（true = 消费掉这次返回，页面不离开）。
+   *
+   * 为什么拦：认证类**写请求进行中**（登录 / 注册）时离开本页，迟到的响应仍会把令牌与
+   * 内存身份写成这个已被放弃的账号，而界面已经在登录另一个账号 ——
+   * 后续请求就用了错误身份（账号串用）。拦下返回键是代价最小的做法：
+   * 页面还在，迟到的响应写的正是它自己。
+   * 强制改密则是另一条理由：契约规定必须先改密才能访问业务接口，不允许用返回键跳过。
+   *
+   * 为什么抽成方法而不是直接写在 `onBackPressed` 里：`onBackPressed` 位于 `@Builder`
+   * 内，后端 `guest-login-app.test.ts` 的「源码切片 + eval」不覆盖它，抽出来才能被回归测到。
+   */
+  private interceptBack(name: string): boolean {
+    if (name === ROUTE_LOGIN) return this.loginBusy;
+    if (name === ROUTE_REGISTER_CUSTOMER || name === ROUTE_REGISTER_STAFF) return this.registerBusy;
+    if (name === ROUTE_PASSWORD_CHANGE) return this.passwordChangeForced;
+    return false;
+  }
+
   @Builder
   destination(name: string, param: object) {
     NavDestination() {
@@ -162,7 +335,30 @@ export struct HomePage {
         LoginPage({
           onLoggedIn: (identity: SessionIdentity): void => { this.completeLogin(identity); },
           onCancel: (): void => { this.cancelLogin(); },
-          onBusyChange: (busy: boolean): void => { this.loginBusy = busy; }
+          onBusyChange: (busy: boolean): void => { this.loginBusy = busy; },
+          onRegisterCustomer: (): void => { this.openRegister(ROUTE_REGISTER_CUSTOMER); },
+          onRegisterStaff: (): void => { this.openRegister(ROUTE_REGISTER_STAFF); }
+        });
+      } else if (name === ROUTE_REGISTER_CUSTOMER) {
+        RegisterCustomerPage({
+          onRegistered: (identity: SessionIdentity): void => { this.completeLogin(identity); },
+          onCancel: (): void => { this.cancelRegister(); },
+          onBusyChange: (busy: boolean): void => { this.registerBusy = busy; },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_REGISTER_STAFF) {
+        RegisterStaffPage({
+          onRegistered: (identity: SessionIdentity): void => { this.completeLogin(identity); },
+          onCancel: (): void => { this.cancelRegister(); },
+          onBusyChange: (busy: boolean): void => { this.registerBusy = busy; },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_PASSWORD_CHANGE) {
+        PasswordChangePage({
+          forced: this.passwordChangeForced,
+          onChanged: (_data: PasswordChangeData): void => { this.onPasswordChanged(); },
+          onCancel: (): void => { this.cancelLogin(); },
+          onSessionExpired: (): void => { this.expireSession(); }
         });
       } else if (name === ROUTE_FAVORITES) {
         FavoritesPage({ home: this.home, refreshVersion: this.favoritesRevision,
@@ -287,8 +483,10 @@ export struct HomePage {
       if (name === ROUTE_PUBLIC_CASE_DETAIL) this.publicCaseRevision += 1;
     })
     .onBackPressed((): boolean => {
-      if (name === ROUTE_LOGIN) {
-        if (this.loginBusy) return true;
+      // 认证写请求进行中 / 强制改密未完成：拦下返回，避免迟到响应把会话写成另一个账号。
+      if (this.interceptBack(name)) return true;
+      if (name === ROUTE_LOGIN || name === ROUTE_PASSWORD_CHANGE) {
+        // 放弃登录 / 改密即作废续接意图；注册路由刻意不清，注册页取消后要回登录页续接原操作。
         this.loginIntent = new LoginIntent();
       }
       return false;
@@ -299,6 +497,12 @@ export struct HomePage {
   /** 同时拦截底栏、手势和控制器切换；拒绝切换后取消登录保持原 tab。 */
   private canChangeTab(index: number): boolean {
     if (this.sessionTransition && index !== TAB_INDEX_HOME) return false;
+    // 强制改密账号：只留在首页 tab，其余 tab 都是业务数据（契约边界），
+    // 反复引导到改密页而不是让用户切过去看一片 403。
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && index !== TAB_INDEX_HOME) {
+      this.openPasswordChange(true);
+      return false;
+    }
     if (index === 4 && !this.authenticated) {
       // 登录成功的单次通行，覆盖父组件 Prop 尚未刷新的一帧；不携带业务权限。
       if (this.admittedTab === index) {
@@ -316,6 +520,10 @@ export struct HomePage {
 
   private selectNavigation(index: number): void {
     if (this.sessionTransition) return;
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && index !== TAB_INDEX_HOME) {
+      this.openPasswordChange(true);
+      return;
+    }
     if (index === 4 && !this.authenticated) {
       const intent = new LoginIntent();
       intent.tab = 4;

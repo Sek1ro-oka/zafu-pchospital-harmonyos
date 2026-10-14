@@ -18,6 +18,10 @@ import {
   hashPassword,
   verifyPassword,
 } from "../../src/lib/security/secrets";
+import {
+  SESSION_LIFETIME_KEEP_MS,
+  SESSION_LIFETIME_SHORT_MS,
+} from "../../src/features/auth/session-lifetime";
 import { integrationTestsEnabled } from "./db-guard";
 import { callRoute, sameOriginHeaders } from "./http-harness";
 
@@ -250,6 +254,76 @@ dbTest("客户注册（Web）：同源下发 Cookie，响应体不含令牌", as
   assert.equal(typeof data.userId, "string");
   assert.equal(data.mustChangePassword, false);
   assert.match(responseHeaders.get("set-cookie") ?? "", new RegExp(`${SESSION_COOKIE_NAME}=`));
+});
+
+/*
+ * rememberMe 档位（Issue #60 第二批）：客户自主注册是 App 上最常用的注册路径，
+ * 必须与登录 / 邀请码注册同一套档位规则。
+ *
+ * 断言的落点是**服务端会话行**（`auth_sessions.remember_me` 与 `expires_at` 偏移），
+ * 不是响应里的 `expiresAt` 字符串 —— 只有库里落对了，续期与改密轮换才可能继承对。
+ */
+dbTest("客户注册 rememberMe=true：会话按 30 天发放，档位显式落库", async () => {
+  const qq = nextQq();
+  const { status, json } = await rawCall(registerCustomer, CUSTOMER_URL, {
+    headers: headers(NATIVE),
+    body: customerBody(qq, { rememberMe: true }),
+  });
+  assert.equal(status, 201, JSON.stringify(json));
+  const userId = (await userIdForQq(qq))!;
+  const session = await getDb().authSession.findFirstOrThrow({
+    where: { userId, revokedAt: null },
+  });
+  assert.equal(session.rememberMe, true, "保持登录档位必须显式落库（不得留 NULL）");
+  const actual = session.expiresAt.getTime() - session.createdAt.getTime();
+  assert.ok(
+    Math.abs(actual - SESSION_LIFETIME_KEEP_MS) < 2_000,
+    `期望约 ${SESSION_LIFETIME_KEEP_MS}ms（30 天），实际 ${actual}ms`,
+  );
+});
+
+dbTest("客户注册 rememberMe 缺省与 false：会话按 24 小时发放，档位显式落库", async () => {
+  for (const rememberMe of [undefined, false] as const) {
+    const qq = nextQq();
+    const { status, json } = await rawCall(registerCustomer, CUSTOMER_URL, {
+      headers: headers(NATIVE),
+      body: customerBody(qq, rememberMe === undefined ? {} : { rememberMe }),
+    });
+    assert.equal(status, 201, JSON.stringify(json));
+    const userId = (await userIdForQq(qq))!;
+    const session = await getDb().authSession.findFirstOrThrow({
+      where: { userId, revokedAt: null },
+    });
+    assert.equal(
+      session.rememberMe,
+      false,
+      `rememberMe=${rememberMe} 应按普通档位落库（不得留 NULL）`,
+    );
+    const actual = session.expiresAt.getTime() - session.createdAt.getTime();
+    assert.ok(
+      Math.abs(actual - SESSION_LIFETIME_SHORT_MS) < 2_000,
+      `期望约 ${SESSION_LIFETIME_SHORT_MS}ms（24 小时），实际 ${actual}ms`,
+    );
+  }
+});
+
+dbTest("客户注册：rememberMe 非布尔值按缺省处理，不猜客户端意图", async () => {
+  const qq = nextQq();
+  const { status, json } = await rawCall(registerCustomer, CUSTOMER_URL, {
+    headers: headers(NATIVE),
+    body: customerBody(qq, { rememberMe: "true" }),
+  });
+  assert.equal(status, 201, JSON.stringify(json));
+  const userId = (await userIdForQq(qq))!;
+  const session = await getDb().authSession.findFirstOrThrow({
+    where: { userId, revokedAt: null },
+  });
+  assert.equal(session.rememberMe, false, "字符串 \"true\" 不得被当成勾选保持登录");
+  const actual = session.expiresAt.getTime() - session.createdAt.getTime();
+  assert.ok(
+    Math.abs(actual - SESSION_LIFETIME_SHORT_MS) < 2_000,
+    `期望约 ${SESSION_LIFETIME_SHORT_MS}ms（24 小时），实际 ${actual}ms`,
+  );
 });
 
 dbTest("客户注册：重复 QQ 返回 ACCOUNT_IDENTITY_TAKEN，既有账号与口令不被改写", async () => {

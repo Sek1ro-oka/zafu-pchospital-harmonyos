@@ -3,6 +3,18 @@ export const ROUTE_PERSONAL_PROFILE: string = 'personal-profile';
 export const ROUTE_MEMBER_DIRECTORY: string = 'member-directory';
 export const ROUTE_FAVORITES: string = 'favorites';
 export const ROUTE_MESSAGES: string = 'messages';
+
+/**
+ * 客户自主注册（Issue #60 App 侧第三批）。
+ * 与 ROUTE_STAFF_REGISTER 是两个语义完全不同的入口，命名与标题都要区分清楚。
+ */
+export const ROUTE_REGISTER_CUSTOMER: string = 'register-customer';
+
+/** 邀请码注册工作人员（Issue #60 App 侧第三批）：必须带有效邀请码，成功产生 MEMBER + 成员档案。 */
+export const ROUTE_STAFF_REGISTER: string = 'staff-register';
+
+/** 原生修改密码（Issue #60 App 侧第三批）：普通改密与首次/强制改密共用这一个入口。 */
+export const ROUTE_PASSWORD_CHANGE: string = 'password-change';
 export const ROUTE_PUBLIC_CASES: string = 'public-cases';
 export const ROUTE_PUBLIC_CASE_DETAIL: string = 'public-case-detail';
 export interface GuideFocusParam { guideId: string; }
@@ -41,6 +53,9 @@ export const ROUTE_CASE_DETAIL: string = 'knowledge-case-detail';
  */
 export function routeTitle(name: string): string {
   if (name === ROUTE_FAVORITES) return '我的收藏';
+  if (name === ROUTE_REGISTER_CUSTOMER) return '注册账号';
+  if (name === ROUTE_STAFF_REGISTER) return '工作人员注册（需邀请码）';
+  if (name === ROUTE_PASSWORD_CHANGE) return '修改密码';
   if (name === ROUTE_MESSAGES) return '站内消息';
   if (name === ROUTE_PUBLIC_CASES) return '公开 AI 案例';
   if (name === ROUTE_PUBLIC_CASE_DETAIL) return '公开案例详情';

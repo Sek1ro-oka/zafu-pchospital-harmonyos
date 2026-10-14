@@ -23,10 +23,13 @@ import type {
   RoleCode,
   SessionPrincipal,
 } from "@/types/contracts";
+import {
+  SESSION_LIFETIME_KEEP_MS,
+  SESSION_TOUCH_INTERVAL_MS,
+  legacySessionLifetime,
+  sessionLifetimeFor,
+} from "@/features/auth/session-lifetime";
 
-const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1_000;
-const SESSION_RENEW_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
-const SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1_000;
 const THROTTLE_WINDOW_MS = 15 * 60 * 1_000;
 const THROTTLE_BLOCK_MS = 15 * 60 * 1_000;
 const THROTTLE_MAX_FAILURES = 5;
@@ -75,7 +78,13 @@ export class AuthService {
     }
 
     await getDb().loginThrottle.deleteMany({ where: { keyDigest } });
-    return this.openSession(identity.userId, principal, context, "auth.login.succeeded");
+    return this.openSession(
+      identity.userId,
+      principal,
+      context,
+      "auth.login.succeeded",
+      input.rememberMe,
+    );
   }
 
   /**
@@ -93,20 +102,24 @@ export class AuthService {
    *
    * 读身份也必须走同一个 `tx`：账号是同一事务里刚写的，事务外的 `getDb()` 快照
    * 看不到它（读不到会误判成 `ACCOUNT_DISABLED`）。
+   *
+   * `rememberMe` 由注册请求体显式传入（客户自助注册与邀请码注册都支持）：
+   * `true` 30 天、省略 / `false` 24 小时，与登录完全同一套档位规则。
    */
   async openSessionWith(
     tx: Prisma.TransactionClient,
     userId: string,
     context: PublicRequestContext,
     auditAction: string,
+    rememberMe?: boolean,
   ): Promise<AuthSessionResult> {
     const principal = await this.readPrincipal(userId, tx);
     const token = generateSessionToken();
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS);
+    const expiresAt = new Date(now.getTime() + sessionLifetimeFor(rememberMe));
     const sessionId = randomUUID();
     await tx.authSession.create({
-      data: sessionRowData(sessionId, userId, token, now, expiresAt, context),
+      data: sessionRowData(sessionId, userId, token, now, expiresAt, context, rememberMe),
     });
     await appendAuditLog(tx, {
       actor: context,
@@ -125,14 +138,15 @@ export class AuthService {
     principal: SessionPrincipal,
     context: PublicRequestContext,
     auditAction: string,
+    rememberMe?: boolean,
   ): Promise<AuthSessionResult> {
     const token = generateSessionToken();
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS);
+    const expiresAt = new Date(now.getTime() + sessionLifetimeFor(rememberMe));
     const sessionId = randomUUID();
     await inSerializableTransaction(async (tx) => {
       await tx.authSession.create({
-        data: sessionRowData(sessionId, userId, token, now, expiresAt, context),
+        data: sessionRowData(sessionId, userId, token, now, expiresAt, context, rememberMe),
       });
       await appendAuditLog(tx, {
         actor: context,
@@ -163,18 +177,18 @@ export class AuthService {
       throw new AppError("AUTH_SESSION_EXPIRED", "登录已过期，请重新登录");
     }
     const principal = await this.readPrincipal(session.userId);
-    const update: { lastSeenAt?: Date; expiresAt?: Date } = {};
+    // 会话到期时间对齐 Web 参照实现：发放时按**固定档位**（24 小时 / 30 天）算定，
+    // authenticate 只记录活跃（`lastSeenAt`），**绝不延长 `expiresAt`**。否则持续访问的
+    // 原生 Bearer 会话会被无限滑动续期而永不过期，30 天档位也会失去意义。
+    const update: { lastSeenAt?: Date } = {};
     if (now.getTime() - session.lastSeenAt.getTime() >= SESSION_TOUCH_INTERVAL_MS)
       update.lastSeenAt = now;
-    if (session.expiresAt.getTime() - now.getTime() <= SESSION_RENEW_WINDOW_MS) {
-      update.expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS);
-    }
     if (Object.keys(update).length)
       await getDb().authSession.update({ where: { id: session.id }, data: update });
     return {
       ...principal,
       sessionId: session.id,
-      expiresAt: (update.expiresAt ?? session.expiresAt).toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
     };
   }
 
@@ -224,7 +238,11 @@ export class AuthService {
     const passwordHash = await hashPassword(input.newPassword);
     const newToken = generateSessionToken();
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + SESSION_LIFETIME_MS);
+    // 轮换后新会话的档位：请求体显式给了就按它；**省略时沿用当前会话自己的档位**
+    // （存量会话按 30 天回退）。绝不能「没提交 rememberMe 就把 24 小时账号续成 30 天」。
+    const expiresAt = new Date(
+      now.getTime() + (await this.rotationLifetime(input, current.sessionId)),
+    );
     const sessionId = randomUUID();
     await inSerializableTransaction(async (tx) => {
       await tx.passwordCredential.update({
@@ -243,6 +261,8 @@ export class AuthService {
           createdAt: now,
           lastSeenAt: now,
           expiresAt,
+          rememberMe:
+            expiresAt.getTime() - now.getTime() === SESSION_LIFETIME_KEEP_MS,
         },
       });
       await appendAuditLog(tx, {
@@ -316,6 +336,34 @@ export class AuthService {
           : null,
       mustChangePassword: user.passwordCredential?.mustChangePassword ?? true,
     };
+  }
+
+  /**
+   * 改密轮换后新会话的有效期（毫秒）。
+   *
+   * 三档语义与登录一致，但默认值不同：**省略 `rememberMe` 时读当前会话的档位**，
+   * 而不是默认 24 小时。理由是改密是「顺手做的一次安全操作」，用户不该因为它
+   * 丢掉原本的保持登录选择；反过来也不该因为一次改密就自动获得 30 天。
+   *
+   * 关键区分「会话行不存在」与「`rememberMe` 确为 NULL」两种情况（PR #69 审查 P2）：
+   *   - 行不存在（读不到这条会话）→ 保守按 `false`（24 小时）；
+   *   - 行存在但 `rememberMe` 为 NULL（PR #65 前的存量会话）→ 原样交给
+   *     `legacySessionLifetime` 回退到 30 天，**绝不能塌成 `false` 降成 24 小时**。
+   * 用 `session ? session.rememberMe : false` 而不是 `session?.rememberMe ?? false`：
+   * 后者的 `??` 会把「行存在但值为 NULL」也一起吃掉，正是那条降级 bug。
+   *
+   * 注意 `authenticate` 只回身份、不回 `rememberMe`，所以这里按 `sessionId` 单独读一次。
+   */
+  private async rotationLifetime(
+    input: ChangePasswordInput,
+    sessionId: string,
+  ): Promise<number> {
+    if (input.rememberMe !== undefined) return sessionLifetimeFor(input.rememberMe);
+    const session = await getDb().authSession.findUnique({
+      where: { id: sessionId },
+      select: { rememberMe: true },
+    });
+    return legacySessionLifetime(session ? session.rememberMe : false);
   }
 }
 
@@ -422,6 +470,11 @@ async function auditAuth(
  *
  * IP / UA 摘要用的是 `(userId, 值)` 双元素 HMAC：和登录节流键同源，既能在审计里关联到
  * 同一个用户，又不会把原始 IP 落库。摘要与令牌本身一样只进数据库，明文只回客户端。
+ *
+ * `rememberMe` 在这里显式落库（`true` / `false` 二选一，**不写 NULL**）：
+ * NULL 只属于 PR #65 之前创建的存量会话，是「迁移前旧档位」的标记
+ * （见 `session-lifetime.ts` 的兼容说明）。登录与注册两条路径都经过本函数，
+ * 所以新会话的档位不可能漏写。
  */
 function sessionRowData(
   sessionId: string,
@@ -430,6 +483,7 @@ function sessionRowData(
   now: Date,
   expiresAt: Date,
   context: PublicRequestContext,
+  rememberMe?: boolean,
 ): Prisma.AuthSessionUncheckedCreateInput {
   return {
     id: sessionId,
@@ -438,6 +492,7 @@ function sessionRowData(
     createdAt: now,
     lastSeenAt: now,
     expiresAt,
+    rememberMe: rememberMe === true,
     ipDigest: context.ipAddress ? digestLoginThrottleKey(userId, context.ipAddress) : undefined,
     userAgentDigest: context.userAgent
       ? digestLoginThrottleKey(userId, context.userAgent)

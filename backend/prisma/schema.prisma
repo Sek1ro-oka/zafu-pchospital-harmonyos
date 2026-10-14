@@ -101,6 +101,11 @@ model AuthSession {
   revokedAt       DateTime? @map("revoked_at") @db.DateTime(3)
   ipDigest        Bytes?    @map("ip_digest") @db.Binary(32)
   userAgentDigest Bytes?    @map("user_agent_digest") @db.Binary(32)
+  // rememberMe（Issue #60）：本会话在发放时选定的有效期档位。
+  // 可空是**向后兼容的关键**：PR #65 之前创建的存量会话这一列为 NULL，
+  // 表示「迁移前的旧会话」，一律回退到原来的 30 天行为（见 `sessionLifetimeFor`）。
+  // 新会话一律显式写入 true（30 天）或 false（24 小时），NULL 只属于历史数据。
+  rememberMe      Boolean?  @map("remember_me")
   user            User      @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@index([userId, revokedAt, expiresAt], map: "auth_sessions_user_revoked_expires_idx")

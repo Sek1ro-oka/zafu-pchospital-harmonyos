@@ -18,7 +18,11 @@ export async function POST(request: Request) {
     assertNativeClient(request);
     const body = (await request.json()) as Record<string, unknown>;
     const result = await authService.login(
-      { qq: String(body.qq ?? ""), password: String(body.password ?? "") },
+      {
+        qq: String(body.qq ?? ""),
+        password: String(body.password ?? ""),
+        rememberMe: body.rememberMe === true,
+      },
       requestContext(request, requestId),
     );
     return apiSuccess(
