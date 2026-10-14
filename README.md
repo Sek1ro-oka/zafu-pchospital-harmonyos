@@ -4,6 +4,8 @@
 
 ## 页面映射与参考图
 
+新增子页面参考见 [PR #70 的 11 张图片索引与三个推荐映射](docs/reference/my-huawei/README.md#三个优先推荐映射)：账号资料 → 我的/个人资料，订单空态 → 报修列表，检测与帮助 → 知识分类与 AI 问诊入口。此处是后续视觉改造建议，原五页基线如下。
+
 **以下为 2026-10-12 确认的页面开发基线。** 开发每一页前先打开该行参考图片，再阅读 [开发方案中的页面映射与交互要求](docs/development-plan.md#页面映射与交互要求)。五张图参考布局、层级和材质，内容改为电脑医院业务，不照搬购物或社交功能。
 
 | 截图 | 我的华为页面 / 参考图片 | 电脑医院页面 | 开发时按此改造 |
@@ -72,7 +74,7 @@ app/                     HarmonyOS 原生工程，DevEco 打开此目录
   entry/src/main/ets/    core 会话/网络/导航/主题，features 业务模块
 backend/                 Next.js API、Prisma 模型/迁移/seed 和测试
 docs/development-plan.md 功能范围与已核实业务基础
-docs/reference/my-huawei/ 五张参考截图
+docs/reference/my-huawei/ 16 张参考截图与页面映射索引
 AGENTS.md                项目开发规则
 ```
 
