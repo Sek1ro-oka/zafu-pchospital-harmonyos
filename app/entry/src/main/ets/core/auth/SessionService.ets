@@ -163,7 +163,8 @@ export class SessionService {
    * 成功即**轮换令牌**：旧令牌已失效（服务端吊销该账号所有未吊销会话），
    * 因此这里把响应体里的新令牌覆盖写回本地存储 —— 同别名 OVERWRITE，
    * 之后所有请求自然带上新令牌。若本地保存失败，同样按登录的
-   * `LOCAL_STORAGE_ERROR` 语义处理：调 logout 清理服务端会话，不展示「已改密成功」。
+   * `LOCAL_STORAGE_ERROR` 语义处理：调 logout 撤销**刚拿到的新会话**（不能用旧令牌，
+   * 服务端已把它吊销），不展示「已改密成功」。
    *
    * 强制改密账号（`mustChangePassword = true`）也能调这个入口（服务端对该入口放行），
    * 这就是强制改密账号唯一的自救通道。
@@ -188,7 +189,10 @@ export class SessionService {
     const persisted = await SessionStore.writeToken(data.token);
     if (!persisted) {
       try {
-        await ApiClient.post<LogoutData>(baseUrl, LOGOUT_PATH, '', token);
+        // 撤销必须用**新**令牌 data.token：改密时服务端已吊销该账号所有旧会话，
+        // 旧令牌在服务端早已是死的，拿它调 logout 是空操作，
+        // 结果就是「本地没保存成、服务端却留下一个活着的新会话」。
+        await ApiClient.post<LogoutData>(baseUrl, LOGOUT_PATH, '', data.token);
       } catch (error) {
         hilog.warn(DOMAIN, TAG, '%{public}s', '新令牌保存失败，服务端撤销也未成功');
       }

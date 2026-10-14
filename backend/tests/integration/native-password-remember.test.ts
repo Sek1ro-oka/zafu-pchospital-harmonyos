@@ -512,6 +512,39 @@ dbTest("rememberMe：30 天档位在 24 小时处仍然有效（两档确实不�
   );
 });
 
+dbTest("固定到期：24 小时会话到期前的正常请求不延长 expiresAt（不再滑动续期）", async () => {
+  await resetCustomerPassword();
+  const login = await loginAs(CUSTOMER_QQ, PASSWORD);
+  assert.equal(login.status, 200, JSON.stringify(login.json));
+  const token = String(dataOf(login.json).token);
+  const row = await sessionRowFor(token);
+  assert.equal(row.rememberMe, false, "缺省 rememberMe → 普通 24 小时档位");
+
+  // 确定时间：把到期时刻压到「剩 1 小时」。这正落在旧实现的 7 天续期窗口内——
+  // 修复前 authenticate 会把它重写成 now+24h，于是持续访问的原生 Bearer 会话永不过期；
+  // 修复后必须原样保留（对齐 Web 的固定到期）。
+  const oneHourLater = new Date(Date.now() + 60 * 60 * 1000);
+  await getDb().authSession.update({
+    where: { id: row.id },
+    data: { expiresAt: oneHourLater },
+  });
+
+  // 到期前的一次正常请求：只应记录活跃，绝不改动到期时间。
+  const principal = await authService.authenticate(token);
+  assert.equal(principal.userId, CUSTOMER_ID);
+
+  const after = await sessionRowFor(token);
+  const remaining = after.expiresAt.getTime() - Date.now();
+  assert.ok(
+    Math.abs(remaining - 60 * 60 * 1000) < 2_000,
+    `固定到期：应仍剩约 1 小时，实际剩 ${remaining}ms（不得被滑动续期到 24 小时）`,
+  );
+  assert.ok(
+    Math.abs(after.expiresAt.getTime() - oneHourLater.getTime()) < 2_000,
+    "expiresAt 必须与写入值一致，authenticate 不得改动它",
+  );
+});
+
 dbTest("改密轮换保留选择：保持登录账号改密后仍是 30 天", async () => {
   await resetCustomerPassword();
   const login = await loginAs(CUSTOMER_QQ, PASSWORD, true);
@@ -578,14 +611,16 @@ dbTest("改密轮换可显式改档：请求体 rememberMe 生效", async () => 
 });
 
 // ---------------------------------------------------------------------------
-// 5. 存量会话兼容：remember_me 为 NULL → 原 30 天行为，不失效
+// 5. 存量会话兼容：remember_me 为 NULL → 固定到期不滑动续期，改密轮换仍回退 30 天
 // ---------------------------------------------------------------------------
 
-dbTest("存量会话（remember_me 为 NULL）回退到 30 天，不因迁移失效", async () => {
+dbTest("存量会话（remember_me 为 NULL）固定到期：既不滑动续期，也不提前失效", async () => {
   const db = getDb();
   const now = new Date();
   const token = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
-  // 直接造一条 PR #65 之前形态的会话：rememberMe 为 NULL，expiresAt 按旧规则 = now + 30 天。
+  // 直接造一条 PR #65 之前形态的会话：rememberMe 为 NULL（存量档位标记），
+  // expiresAt 用确定偏移 now + 10 天，便于验证 authenticate 后它原样不动。
+  const expiresAt = new Date(now.getTime() + 10 * DAY_MS);
   await db.authSession.create({
     data: {
       id: randomUUID(),
@@ -593,35 +628,67 @@ dbTest("存量会话（remember_me 为 NULL）回退到 30 天，不因迁移失
       tokenDigest: digestSessionToken(token),
       createdAt: now,
       lastSeenAt: now,
-      expiresAt: new Date(now.getTime() + SESSION_LIFETIME_KEEP_MS),
+      expiresAt,
       rememberMe: null,
     },
   });
 
+  // 存量会话同样走固定到期：authenticate 后必须仍然有效（不因迁移提前失效），
+  // 且库里 expiresAt 原样不动（不再滑动续期）。
   const principal = await authService.authenticate(token);
-  assert.equal(principal.userId, CUSTOMER_ID, "存量会话必须仍然可用");
+  assert.equal(principal.userId, CUSTOMER_ID, "存量会话必须仍然可用（不因迁移提前失效）");
 
-  // 压到「刚过 24 小时」：若把 NULL 当普通档位，这条会话此刻已经失效。
-  await db.authSession.update({
-    where: { tokenDigest: digestSessionToken(token) },
-    data: { expiresAt: new Date(Date.now() + DAY_MS) },
-  });
-  const stillValid = await authService.authenticate(token);
-  assert.equal(stillValid.userId, CUSTOMER_ID, "存量会话在 24 小时之后仍须可用（回退 30 天）");
-
-  // 续期沿用 30 天：把 expiresAt 压到续期窗口内，验证续期后的偏移量。
-  await db.authSession.update({
-    where: { tokenDigest: digestSessionToken(token) },
-    data: { expiresAt: new Date(Date.now() + 60_000) },
-  });
-  const renewed = await authService.authenticate(token);
-  const renewedRow = await sessionRowFor(token);
-  const actual = renewedRow.expiresAt.getTime() - Date.now();
+  const row = await sessionRowFor(token);
   assert.ok(
-    Math.abs(actual - SESSION_LIFETIME_KEEP_MS) < 5_000,
-    `续期期望约 30 天，实际 ${actual}ms`,
+    Math.abs(row.expiresAt.getTime() - expiresAt.getTime()) < 2_000,
+    `存量会话应固定到期，期望 ${expiresAt.toISOString()}，实际 ${row.expiresAt.toISOString()}`,
   );
-  assert.equal(renewed.sessionId, renewedRow.id);
+  assert.equal(principal.sessionId, row.id);
+});
+
+dbTest("存量会话（NULL）改密省略档位：轮换后仍是 30 天，不降成 24 小时", async () => {
+  await resetCustomerPassword();
+  const db = getDb();
+  const now = new Date();
+  const token = randomUUID().replace(/-/g, "") + randomUUID().replace(/-/g, "");
+  // 造一条 PR #65 之前形态的存量会话：rememberMe 为 NULL（旧档位标记）。
+  await db.authSession.create({
+    data: {
+      id: randomUUID(),
+      userId: CUSTOMER_ID,
+      tokenDigest: digestSessionToken(token),
+      createdAt: now,
+      lastSeenAt: now,
+      expiresAt: new Date(now.getTime() + 10 * DAY_MS),
+      rememberMe: null,
+    },
+  });
+
+  // 用这把存量会话的令牌改密，**省略 rememberMe**：轮换后必须沿用原档位
+  // （NULL → 回退 30 天），而不是把「行存在但值为 NULL」塌成 false → 24 小时
+  // （正是审查 P2 真库复现的降级 bug）。
+  const changed = await nativeCall(nativeChangePassword, NATIVE_CHANGE_URL, {
+    headers: bearer(token),
+    body: {
+      currentPassword: PASSWORD,
+      newPassword: NEW_PASSWORD,
+      newPasswordConfirmation: NEW_PASSWORD,
+    },
+  });
+  assert.equal(changed.status, 200, JSON.stringify(changed.json));
+  const data = dataOf(changed.json);
+  const newToken = String(data.token);
+
+  const row = await sessionRowFor(newToken);
+  // 轮换出的新会话显式落布尔档位：NULL 存量回退到 30 天 → 新行应为 true。
+  assert.equal(row.rememberMe, true, "存量 NULL 会话改密后应回退到保持登录档位");
+  const actual = row.expiresAt.getTime() - row.createdAt.getTime();
+  assert.ok(
+    Math.abs(actual - SESSION_LIFETIME_KEEP_MS) < 2_000,
+    `期望约 ${SESSION_LIFETIME_KEEP_MS}ms（30 天），实际 ${actual}ms（不得降成 24 小时）`,
+  );
+  // 响应体里的 expiresAt 与新行一致（都约等于 now + 30 天）。
+  assert.equal(data.expiresAt, row.expiresAt.toISOString());
 });
 
 // ---------------------------------------------------------------------------

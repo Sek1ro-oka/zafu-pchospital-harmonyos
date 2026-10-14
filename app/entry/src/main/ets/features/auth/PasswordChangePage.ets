@@ -139,6 +139,14 @@ export struct PasswordChangePage {
           this.onSessionExpired();
           return;
         }
+        // `LOCAL_STORAGE_ERROR`：密码**已经改成功**、新令牌只是本地没存下（SessionService 已撤销
+        // 新会话并清空本地令牌）。此时停在原页让用户「原样重试」是错的 —— 当前口令已失效、
+        // 也没有会话可用。它不在 isSessionExpiredCode 里（那是服务端会话失效码），
+        // 所以必须显式分支，交给上层导回登录页，这才是唯一正确的终态。
+        if (error.code === 'LOCAL_STORAGE_ERROR') {
+          this.onSessionExpired();
+          return;
+        }
         if (error.code === 'VALIDATION_FAILED') {
           this.fieldErrors = this.readServerFieldErrors(error);
         }
@@ -154,13 +162,29 @@ export struct PasswordChangePage {
     }
   }
 
+  /**
+   * 档位单选：只在**选中**时写回。
+   *
+   * Radio 的 `onChange` 会带 `isChecked`，切换单选时旧项也会触发一次 `onChange(false)`（取消选中）；
+   * 若不看这个参数就把 `value` 写回，旧档位会被「取消选中」事件重新选中，
+   * 最终档位取决于两个回调的先后顺序（不确定）。
+   *
+   * 抽成普通方法而不是写在 @Builder 的内联箭头里：@Builder 不被后端 eval 回归覆盖，
+   * 抽出来才能测到这条竞态。
+   */
+  private selectLifetime(value: string, isChecked: boolean): void {
+    if (isChecked) {
+      this.lifetime = value;
+    }
+  }
+
   @Builder
   lifetimeRow(value: string, label: string) {
     Row({ space: GAP_SM }) {
       Radio({ value: value, group: 'password-lifetime' })
         .checked(this.lifetime === value)
         .enabled(!this.busy)
-        .onChange((): void => { this.lifetime = value; })
+        .onChange((isChecked: boolean): void => { this.selectLifetime(value, isChecked); })
       Text(label)
         .fontSize(FONT_NOTE)
         .fontColor($r('app.color.text_primary'))

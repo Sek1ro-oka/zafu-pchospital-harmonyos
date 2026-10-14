@@ -266,7 +266,8 @@ test("P2：AuthService 提供事务内发会话能力，登录路径保持自建
 // 档位判定集中在 `session-lifetime.ts`，这里锁住三件事：
 //   1) 两个档位的毫秒数真实不同（不是同一个常量换个名字）；
 //   2) NULL（存量会话）回退到 30 天，否则一次迁移会把存量用户集体登出；
-//   3) `authenticate` 续期与改密轮换**都**按会话自己的档位算，不会静默升降级。
+//   3) `authenticate` **固定到期、不滑动续期**（只记录活跃），改密轮换按会话自己的
+//      档位算，都不静默升降级。
 // ---------------------------------------------------------------------------
 
 import {
@@ -295,20 +296,25 @@ test("rememberMe：存量会话（NULL）回退到原 30 天行为，不因迁�
   assert.equal(legacySessionLifetime(false), SESSION_LIFETIME_SHORT_MS);
 });
 
-test("rememberMe：续期按会话自己的档位，不把 24 小时账号升成 30 天", () => {
-  // 源码守卫：续期路径必须读 `session.rememberMe`，而不是写死一个常量。
-  // 写死的后果正是「一次续期就把用户的选择改了」，且没有任何界面提示。
+test("authenticate 固定到期：只记录 lastSeenAt，绝不延长 expiresAt（对齐 Web）", () => {
+  // 源码守卫：新会话到期时间在发放时按固定档位算定，authenticate **不做滑动续期**。
+  // 旧实现在「距到期 <= 续期窗口（7 天）」时把 expiresAt 重写成 now+档位，而普通会话
+  // 只有 24h（< 7d 窗口），于是每次请求都被延长——持续访问的原生 Bearer 会话永不过期，
+  // 与只 touch lastSeenAt 的 Web 参照实现分道扬镳。这条守住「续期块确实被移除」。
   const source = readSource(join("features", "auth", "auth-service.ts"));
   const authenticate = source.slice(
     source.indexOf("async authenticate("),
     source.indexOf("async logout("),
   );
-  assert.match(authenticate, /legacySessionLifetime\(session\.rememberMe\)/);
+  // 绝不再重写到期时间，也不再引用已删除的续期窗口常量。
+  assert.doesNotMatch(authenticate, /update\.expiresAt/, "authenticate 不得延长 expiresAt");
   assert.doesNotMatch(
     authenticate,
-    /SESSION_LIFETIME_MS/,
-    "不得再引用已删除的写死 30 天常量",
+    /SESSION_RENEW_WINDOW_MS/,
+    "滑动续期窗口已删除，authenticate 不得再引用",
   );
+  // 活跃触达保留：仍然按 SESSION_TOUCH_INTERVAL_MS 更新 lastSeenAt。
+  assert.match(authenticate, /update\.lastSeenAt = now/);
 });
 
 test("rememberMe：改密轮换保留原档位，缺省不升档", () => {

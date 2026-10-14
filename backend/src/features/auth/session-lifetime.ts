@@ -1,9 +1,12 @@
 /**
  * 会话有效期档位（Issue #60 rememberMe 同步 Web 行为）。
  *
- * 为什么单独一个文件：这条规则同时被 `AuthService`（登录 / 注册 / 改密轮换 / 续期）
+ * 为什么单独一个文件：这条规则同时被 `AuthService`（登录 / 注册 / 改密轮换）
  * 与测试夹具读取，分头写常量的下场是「文档说 24 小时、代码里某条路径还是 30 天」。
  * 这里只有一个 `sessionLifetimeFor`，所有路径都走它。
+ *
+ * 会话到期时间在发放时一次算定（固定档位），authenticate 只记录活跃、**不做滑动续期**
+ * —— 对齐 Web 参照实现，因此这里不再保留任何续期窗口常量。
  */
 
 /** 普通档位：24 小时。Web rememberMe 未勾选时的会话有效期。 */
@@ -20,9 +23,6 @@ export const SESSION_LIFETIME_KEEP_MS = 30 * 24 * 60 * 60 * 1_000;
  * 因此 NULL 明确回退到 `SESSION_LIFETIME_KEEP_MS`。
  */
 export const SESSION_LIFETIME_LEGACY_MS = SESSION_LIFETIME_KEEP_MS;
-
-/** 临近到期自动续期的窗口：7 天。与档位无关，两个档位共用同一条续期规则。 */
-export const SESSION_RENEW_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
 
 /** 触达写入间隔：5 分钟内只更新一次 `lastSeenAt`，避免每次请求都写库。 */
 export const SESSION_TOUCH_INTERVAL_MS = 5 * 60 * 1_000;

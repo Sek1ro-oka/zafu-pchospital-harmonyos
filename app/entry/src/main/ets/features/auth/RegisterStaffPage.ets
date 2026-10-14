@@ -37,6 +37,12 @@ import { LabeledInput, RememberMeSwitch, SubmitButton } from '../../core/ui/Form
 export struct RegisterStaffPage {
   onRegistered: (identity: SessionIdentity) => void = () => {};
   onCancel: () => void = () => {};
+  /**
+   * 上报「注册写请求进行中」给上层（HomePage 据此拦截系统返回键）。
+   * 上层必须知道这个时刻：注册请求已发出但用户按返回离开后，迟到的成功响应
+   * 仍会保存令牌并写全局身份，而界面已经在登录别的账号 —— 变成账号串用。
+   */
+  onBusyChange: (busy: boolean) => void = () => {};
   onSessionExpired: () => void = () => {};
   @State code: string = '';
   @State realName: string = '';
@@ -116,6 +122,7 @@ export struct RegisterStaffPage {
       return;
     }
     this.busy = true;
+    this.onBusyChange(true);
     const generation: number = this.generation;
     try {
       // 显式声明类型：ArkTS 不允许未加标注的对象字面量（arkts-no-untyped-obj-literals）。
@@ -160,6 +167,10 @@ export struct RegisterStaffPage {
       if (generation === this.generation) {
         this.busy = false;
       }
+      // 对父级的上报刻意**无条件**：注册成功后本页会被 pop，aboutToDisappear 已递增 generation，
+      // 上面受 generation 保护的 this.busy = false 会被跳过；但父级的 registerBusy 必须复位，
+      // 否则下一个注册页（乃至下一次进入本页）的返回键会被永久错误拦截。
+      this.onBusyChange(false);
     }
   }
 

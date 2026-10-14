@@ -25,7 +25,6 @@ import type {
 } from "@/types/contracts";
 import {
   SESSION_LIFETIME_KEEP_MS,
-  SESSION_RENEW_WINDOW_MS,
   SESSION_TOUCH_INTERVAL_MS,
   legacySessionLifetime,
   sessionLifetimeFor,
@@ -178,20 +177,18 @@ export class AuthService {
       throw new AppError("AUTH_SESSION_EXPIRED", "登录已过期，请重新登录");
     }
     const principal = await this.readPrincipal(session.userId);
-    const update: { lastSeenAt?: Date; expiresAt?: Date } = {};
+    // 会话到期时间对齐 Web 参照实现：发放时按**固定档位**（24 小时 / 30 天）算定，
+    // authenticate 只记录活跃（`lastSeenAt`），**绝不延长 `expiresAt`**。否则持续访问的
+    // 原生 Bearer 会话会被无限滑动续期而永不过期，30 天档位也会失去意义。
+    const update: { lastSeenAt?: Date } = {};
     if (now.getTime() - session.lastSeenAt.getTime() >= SESSION_TOUCH_INTERVAL_MS)
       update.lastSeenAt = now;
-    if (session.expiresAt.getTime() - now.getTime() <= SESSION_RENEW_WINDOW_MS) {
-      // 续期沿用**这条会话自己的档位**：存量会话（rememberMe 为 NULL）继续按 30 天，
-      // 绝不在续期时把用户从 24 小时静默升到 30 天，也不会反向缩短。
-      update.expiresAt = new Date(now.getTime() + legacySessionLifetime(session.rememberMe));
-    }
     if (Object.keys(update).length)
       await getDb().authSession.update({ where: { id: session.id }, data: update });
     return {
       ...principal,
       sessionId: session.id,
-      expiresAt: (update.expiresAt ?? session.expiresAt).toISOString(),
+      expiresAt: session.expiresAt.toISOString(),
     };
   }
 
@@ -347,10 +344,15 @@ export class AuthService {
    * 三档语义与登录一致，但默认值不同：**省略 `rememberMe` 时读当前会话的档位**，
    * 而不是默认 24 小时。理由是改密是「顺手做的一次安全操作」，用户不该因为它
    * 丢掉原本的保持登录选择；反过来也不该因为一次改密就自动获得 30 天。
-   * 存量会话（`remember_me` 为 NULL）继续回退到 30 天。
    *
-   * 注意 `authenticate` 只回身份，不回 `rememberMe`，所以这里按 `sessionId`
-   * 单独读一次会话行 —— 就在同一把旧令牌上读，读不到时按最保守的 24 小时处理。
+   * 关键区分「会话行不存在」与「`rememberMe` 确为 NULL」两种情况（PR #69 审查 P2）：
+   *   - 行不存在（读不到这条会话）→ 保守按 `false`（24 小时）；
+   *   - 行存在但 `rememberMe` 为 NULL（PR #65 前的存量会话）→ 原样交给
+   *     `legacySessionLifetime` 回退到 30 天，**绝不能塌成 `false` 降成 24 小时**。
+   * 用 `session ? session.rememberMe : false` 而不是 `session?.rememberMe ?? false`：
+   * 后者的 `??` 会把「行存在但值为 NULL」也一起吃掉，正是那条降级 bug。
+   *
+   * 注意 `authenticate` 只回身份、不回 `rememberMe`，所以这里按 `sessionId` 单独读一次。
    */
   private async rotationLifetime(
     input: ChangePasswordInput,
@@ -361,7 +363,7 @@ export class AuthService {
       where: { id: sessionId },
       select: { rememberMe: true },
     });
-    return legacySessionLifetime(session?.rememberMe ?? false);
+    return legacySessionLifetime(session ? session.rememberMe : false);
   }
 }
 

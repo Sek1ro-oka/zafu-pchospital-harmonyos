@@ -82,6 +82,7 @@ export struct HomePage {
   onProfileSaved: (name: string) => void = () => {};
   private loginIntent: LoginIntent = new LoginIntent();
   private loginBusy: boolean = false;
+  private registerBusy: boolean = false;
   private expiring: boolean = false;
   @State sessionTransition: boolean = false;
   /** 改密页是否处于「强制改密」模式：true 时禁用返回跳过（契约：必须先改密）。 */
@@ -308,6 +309,25 @@ export struct HomePage {
     }
   }
 
+  /**
+   * 系统返回键是否需要被拦截（true = 消费掉这次返回，页面不离开）。
+   *
+   * 为什么拦：认证类**写请求进行中**（登录 / 注册）时离开本页，迟到的响应仍会把令牌与
+   * 内存身份写成这个已被放弃的账号，而界面已经在登录另一个账号 ——
+   * 后续请求就用了错误身份（账号串用）。拦下返回键是代价最小的做法：
+   * 页面还在，迟到的响应写的正是它自己。
+   * 强制改密则是另一条理由：契约规定必须先改密才能访问业务接口，不允许用返回键跳过。
+   *
+   * 为什么抽成方法而不是直接写在 `onBackPressed` 里：`onBackPressed` 位于 `@Builder`
+   * 内，后端 `guest-login-app.test.ts` 的「源码切片 + eval」不覆盖它，抽出来才能被回归测到。
+   */
+  private interceptBack(name: string): boolean {
+    if (name === ROUTE_LOGIN) return this.loginBusy;
+    if (name === ROUTE_REGISTER_CUSTOMER || name === ROUTE_REGISTER_STAFF) return this.registerBusy;
+    if (name === ROUTE_PASSWORD_CHANGE) return this.passwordChangeForced;
+    return false;
+  }
+
   @Builder
   destination(name: string, param: object) {
     NavDestination() {
@@ -323,12 +343,14 @@ export struct HomePage {
         RegisterCustomerPage({
           onRegistered: (identity: SessionIdentity): void => { this.completeLogin(identity); },
           onCancel: (): void => { this.cancelRegister(); },
+          onBusyChange: (busy: boolean): void => { this.registerBusy = busy; },
           onSessionExpired: (): void => { this.expireSession(); }
         });
       } else if (name === ROUTE_REGISTER_STAFF) {
         RegisterStaffPage({
           onRegistered: (identity: SessionIdentity): void => { this.completeLogin(identity); },
           onCancel: (): void => { this.cancelRegister(); },
+          onBusyChange: (busy: boolean): void => { this.registerBusy = busy; },
           onSessionExpired: (): void => { this.expireSession(); }
         });
       } else if (name === ROUTE_PASSWORD_CHANGE) {
@@ -461,13 +483,10 @@ export struct HomePage {
       if (name === ROUTE_PUBLIC_CASE_DETAIL) this.publicCaseRevision += 1;
     })
     .onBackPressed((): boolean => {
-      if (name === ROUTE_LOGIN) {
-        if (this.loginBusy) return true;
-        this.loginIntent = new LoginIntent();
-      }
-      if (name === ROUTE_PASSWORD_CHANGE) {
-        // 强制改密账号不能跳过：返回键拦截（契约：必须先改密才能访问业务接口）。
-        if (this.passwordChangeForced) return true;
+      // 认证写请求进行中 / 强制改密未完成：拦下返回，避免迟到响应把会话写成另一个账号。
+      if (this.interceptBack(name)) return true;
+      if (name === ROUTE_LOGIN || name === ROUTE_PASSWORD_CHANGE) {
+        // 放弃登录 / 改密即作废续接意图；注册路由刻意不清，注册页取消后要回登录页续接原操作。
         this.loginIntent = new LoginIntent();
       }
       return false;
