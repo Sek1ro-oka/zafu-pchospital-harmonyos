@@ -17,7 +17,7 @@ export struct ActivityIssueSelector {
 }
 @Component
 export struct ActivityFacts {
-  detail: ActivityDetail | null = null;
+  @Prop detail: ActivityDetail | null = null;
   build() {
     Column({ space: 10 }) {
       if (this.detail !== null) {
@@ -29,5 +29,34 @@ export struct ActivityFacts {
       Text(`名额 ${this.detail.registeredCount} / ${this.detail.capacity} · 剩余 ${this.detail.remaining}`).fontSize(14).width('100%')
       }
     }.padding(18).backgroundColor(Color.White).borderRadius(20).width('100%')
+  }
+}
+
+/** Primitive props keep async status changes observable; no cached DTO snapshots. */
+@Component
+export struct ActivityInfoRow {
+  @Prop label: string = '';
+  @Prop value: string = '';
+  build() {
+    Row({ space: 18 }) {
+      Text(this.label).fontSize(14).fontColor('#8A8178').width(64)
+      Text(this.value).fontSize(15).lineHeight(23).fontColor('#302A25').layoutWeight(1)
+    }.width('100%').alignItems(VerticalAlign.Top)
+  }
+}
+@Component
+export struct RegistrationStageCard {
+  @Prop label: string = '';
+  @Prop time: string = '';
+  @Prop reached: boolean = false;
+  build() {
+    Column({ space: 9 }) {
+      Text(this.reached ? '✓' : '—').fontSize(20).fontWeight(FontWeight.Bold)
+        .fontColor(this.reached ? '#B76024' : '#B9AFA5').width(32).height(32).textAlign(TextAlign.Center)
+        .backgroundColor(this.reached ? '#FFE2BD' : '#EEEAE5').borderRadius(16)
+      Text(this.label).fontSize(14).fontWeight(FontWeight.Medium).fontColor(this.reached ? '#704222' : '#958B82')
+      Text(this.time).fontSize(11).lineHeight(17).fontColor('#8A7B6F').textAlign(TextAlign.Center).width('100%')
+    }.width('100%').constraintSize({ minHeight: 126 }).padding({ left: 6, right: 6, top: 14, bottom: 14 })
+      .backgroundColor(this.reached ? '#FFF2DF' : '#F7F5F2').borderRadius(16)
   }
 }
