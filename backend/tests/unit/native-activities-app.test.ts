@@ -167,3 +167,145 @@ test("报名失败保留填写与同意选择，重复点击只发一次", async
   assert.equal(page.consentAccepted, true);
   assert.equal(page.busy, false);
 });
+
+interface AdminPage {
+  param: { activityId: string };
+  selectedId: string;
+  name: string;
+  phone: string;
+  issueType: string;
+  loading: boolean;
+  busy: boolean;
+  items: unknown[];
+  errorText: string;
+  save(): Promise<void>;
+  remove(id: string): Promise<void>;
+  retry(): Promise<void>;
+  load(): Promise<void>;
+  aboutToDisappear(): void;
+  select(item: object): void;
+  getUIContext: () => object;
+}
+function adminPage(services: Record<string, unknown>, session: () => object | null): AdminPage {
+  const page = component<AdminPage>("ActivityRegistrationAdminPage", services, session);
+  page.param = { activityId: "activity" };
+  page.selectedId = "A";
+  page.name = "unsaved A";
+  page.issueType = "OTHER";
+  page.getUIContext = () => ({
+    getPromptAction: () => ({ showDialog: async () => ({ index: 1 }) }),
+  });
+  return page;
+}
+test("R01 编辑 A 删除 B 失败，重试仍只删除 B，保留 A 未保存输入", async () => {
+  const identity = {},
+    deleted: string[] = [],
+    saved: unknown[] = [];
+  let calls = 0;
+  const page = adminPage(
+    {
+      adminRegistrations: async () => [{ id: "A" }],
+      saveRegistration: async (...args: unknown[]) => saved.push(args),
+      deleteRegistration: async (_a: string, id: string) => {
+        deleted.push(id);
+        if (++calls === 1) throw Error("offline");
+      },
+    },
+    () => identity,
+  );
+  await page.remove("B");
+  await page.retry();
+  assert.equal(deleted.join(","), "B,B");
+  assert.equal(saved.length, 0);
+  assert.equal(page.name, "unsaved A");
+  assert.equal(page.selectedId, "A");
+});
+test("R02 保存重试使用原目标和提交快照，与当前表单保存分开", async () => {
+  const identity = {},
+    saved: { id: string; name: string }[] = [];
+  let calls = 0;
+  const page = adminPage(
+    {
+      adminRegistrations: async () => [],
+      saveRegistration: async (_a: string, id: string, input: { name: string }) => {
+        saved.push({ id, name: input.name });
+        if (++calls === 1) throw Error("offline");
+      },
+    },
+    () => identity,
+  );
+  await page.save();
+  page.select({ id: "B", name: "current B", issueType: "CLEAN_ONLY" });
+  await page.retry();
+  await page.save();
+  assert.equal(
+    JSON.stringify(saved),
+    JSON.stringify([
+      { id: "A", name: "unsaved A" },
+      { id: "A", name: "unsaved A" },
+      { id: "B", name: "current B" },
+    ]),
+  );
+});
+for (const kind of ["save", "delete"])
+  test("R03 " + kind + " 成功但刷新失败，重试只读取", async () => {
+    const identity = {};
+    let writes = 0,
+      reads = 0;
+    const page = adminPage(
+      {
+        saveRegistration: async () => {
+          writes++;
+        },
+        deleteRegistration: async () => {
+          writes++;
+        },
+        adminRegistrations: async () => {
+          if (++reads === 1) throw Error("offline");
+          return [];
+        },
+      },
+      () => identity,
+    );
+    if (kind === "save") await page.save();
+    else await page.remove("B");
+    await page.retry();
+    assert.equal(writes, 1);
+    assert.equal(reads, 2);
+  });
+test("R04 失败后切账号/离开不重放旧提交；迟到结果不覆盖新页面", async () => {
+  let identity: object = { id: "A" };
+  let writes = 0;
+  const page = adminPage(
+    {
+      saveRegistration: async () => {
+        writes++;
+        throw Error("offline");
+      },
+      adminRegistrations: async () => [{ id: "new-account" }],
+    },
+    () => identity,
+  );
+  await page.save();
+  identity = { id: "B" };
+  await page.retry();
+  assert.equal(writes, 1);
+  assert.equal(page.selectedId, "");
+  page.selectedId = "B";
+  await page.save();
+  page.aboutToDisappear();
+  await page.retry();
+  assert.equal(writes, 2);
+  const pending = deferred<object>();
+  const later = adminPage(
+    { saveRegistration: () => pending.promise, adminRegistrations: async () => [{ id: "latest" }] },
+    () => identity,
+  );
+  const old = later.save();
+  later.aboutToDisappear();
+  await later.load();
+  pending.resolve({});
+  await old;
+  assert.equal((later.items[0] as { id: string }).id, "latest");
+  assert.equal(later.busy, false);
+});

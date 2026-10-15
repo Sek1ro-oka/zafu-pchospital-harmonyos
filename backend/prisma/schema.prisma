@@ -716,6 +716,8 @@ model RepairActivityAttendance {
   activityId      String         @map("activity_id") @db.Char(36)
   memberProfileId String         @map("member_profile_id") @db.Char(36)
   checkedInAt     DateTime       @map("checked_in_at") @db.DateTime(3)
+  cancelledAt     DateTime?      @map("cancelled_at") @db.DateTime(3)
+  businessStartedAt DateTime?    @map("business_started_at") @db.DateTime(3)
   activity        RepairActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
   memberProfile   MemberProfile  @relation(fields: [memberProfileId], references: [id], onDelete: Restrict)
 

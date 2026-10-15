@@ -1,3 +1,5 @@
+import { SessionIdentity } from '../../core/auth/AuthContract';
+import { SessionService } from '../../core/auth/SessionService';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { LabeledInput } from '../../core/ui/FormControls';
 import { LoadingPanel, ErrorPanel } from '../../core/ui/StatePanel';
@@ -20,44 +22,68 @@ export struct ActivityRegistrationAdminPage {
   @State busy: boolean = false;
   @State errorText: string = '';
   private guard: ActivityRequestGuard = new ActivityRequestGuard();
+  private retryKind: string = '';
+  private retryId: string = '';
+  private retryInput: AdminRegistrationUpdate | null = null;
+  private retryActivityId: string = '';
+  private retryIdentity: SessionIdentity | null = null;
   aboutToAppear(): void { this.load(); }
-  aboutToDisappear(): void { this.guard.invalidate(); this.loading = false; this.busy = false; }
-  private refresh(): void { this.guard.invalidate(); this.loading = false; this.busy = false; this.load(); }
+  aboutToDisappear(): void { this.guard.invalidate(); this.loading = false; this.busy = false; this.retryKind = ''; }
+  private refresh(): void { this.guard.invalidate(); this.loading = false; this.busy = false; this.retryKind = ''; this.load(); }
   private fail(error: Object): void {
     if (error instanceof ApiRequestError && isSessionExpiredCode(error.code)) { this.onSessionExpired(); return; }
     this.errorText = error instanceof ApiRequestError ? error.message : '报名读取或操作失败，请重试';
   }
   private async load(): Promise<void> {
     if (this.loading || this.busy) return;
-    const ticket = this.guard.begin(); this.loading = true; this.errorText = ''; this.items = []; this.selectedId = '';
+    const ticket = this.guard.begin(); this.loading = true; this.errorText = ''; this.retryKind = '';
     try { const items = await ActivityService.adminRegistrations(this.param.activityId); if (this.guard.current(ticket)) this.items = items; }
-    catch (error) { if (this.guard.current(ticket)) this.fail(error); }
-    finally { if (this.guard.current(ticket)) this.loading = false; }
+    catch (error) {
+      if (this.guard.current(ticket)) { this.retryKind = 'load'; this.retryIdentity = SessionService.current(); this.fail(error); }
+    } finally { if (this.guard.current(ticket)) this.loading = false; }
   }
   private select(item: AdminRegistration): void {
+    if (this.busy || this.loading) return;
     this.selectedId = item.id; this.name = item.name; this.phone = ''; this.issueType = item.issueType;
   }
   private async save(): Promise<void> {
-    if (this.busy || this.loading || this.selectedId === '') return;
-    const ticket = this.guard.begin(); this.busy = true; this.errorText = '';
+    if (this.selectedId === '') return;
     const input: AdminRegistrationUpdate = { name: this.name, issueType: this.issueType,
       phone: this.phone.trim() === '' ? undefined : this.phone };
-    try { await ActivityService.saveRegistration(this.param.activityId, this.selectedId, input);
-      if (!this.guard.current(ticket)) return; this.busy = false; await this.load();
-    } catch (error) { if (this.guard.current(ticket)) this.fail(error); }
-    finally { if (this.guard.current(ticket)) this.busy = false; }
+    await this.write('save', this.param.activityId, this.selectedId, input);
   }
-  private async remove(id: string): Promise<void> {
+  private async remove(id: string): Promise<void> { await this.write('delete', this.param.activityId, id, null); }
+  private async retry(): Promise<void> {
     if (this.busy || this.loading) return;
-    const ticket = this.guard.begin(); this.busy = true; this.errorText = '';
+    if (this.retryIdentity !== SessionService.current()) {
+      this.retryKind = ''; this.selectedId = ''; this.name = ''; this.phone = ''; this.items = []; await this.load(); return;
+    }
+    if (this.retryKind === 'load') { await this.load(); return; }
+    if (this.retryKind === 'save' || this.retryKind === 'delete') {
+      await this.write(this.retryKind, this.retryActivityId, this.retryId, this.retryInput);
+    }
+  }
+  private async write(kind: string, activityId: string, id: string, input: AdminRegistrationUpdate | null): Promise<void> {
+    if (this.busy || this.loading) return;
+    const ticket = this.guard.begin(); this.busy = true; this.errorText = ''; this.retryKind = '';
     try {
-      const answer = await this.getUIContext().getPromptAction().showDialog({ title: '删除本条报名？', message: '删除后将不再占用有效名额，请确认本次管理操作。',
-        buttons: [{ text: '返回', color: '#69747C' }, { text: '确认删除', color: '#D23F3F' }] });
+      if (kind === 'delete') {
+        const answer = await this.getUIContext().getPromptAction().showDialog({ title: '删除本条报名？', message: '删除后将不再占用有效名额，请确认本次管理操作。',
+          buttons: [{ text: '返回', color: '#69747C' }, { text: '确认删除', color: '#D23F3F' }] });
+        if (!this.guard.current(ticket) || answer.index !== 1) return;
+        await ActivityService.deleteRegistration(activityId, id);
+      } else if (input !== null) { await ActivityService.saveRegistration(activityId, id, input); }
       if (!this.guard.current(ticket)) return;
-      if (answer.index === 1) { await ActivityService.deleteRegistration(this.param.activityId, id); if (!this.guard.current(ticket)) return; }
-      this.busy = false; await this.load();
-    } catch (error) { if (this.guard.current(ticket)) this.fail(error); }
-    finally { if (this.guard.current(ticket)) this.busy = false; }
+      if (this.selectedId === id) this.selectedId = '';
+      this.busy = false;
+      // A successful write followed by a failed refresh must only retry the read.
+      await this.load();
+    } catch (error) {
+      if (this.guard.current(ticket)) {
+        this.retryKind = kind; this.retryId = id; this.retryInput = input;
+        this.retryActivityId = activityId; this.retryIdentity = SessionService.current(); this.fail(error);
+      }
+    } finally { if (this.guard.current(ticket)) this.busy = false; }
   }
   private visible(): AdminRegistration[] {
     return this.items.filter((item: AdminRegistration) => item.name.includes(this.query.trim()) || item.phoneMasked.includes(this.query.trim()));
@@ -67,7 +93,8 @@ export struct ActivityRegistrationAdminPage {
       Button('刷新报名').enabled(!this.loading && !this.busy).onClick(() => { this.load(); })
       TextInput({ text: this.query, placeholder: '搜索姓名或电话尾号' }).onChange((value: string) => { this.query = value; })
       if (this.loading) { LoadingPanel({ text: '正在读取活动报名…' }) }
-      if (this.errorText !== '') { ErrorPanel({ message: this.errorText, onRetry: (): void => { if (this.selectedId === '') this.load(); else this.save(); } }) }
+      if (this.errorText !== '' && this.retryKind === 'save') { Text('重试将提交上次保存的内容；提交当前编辑内容请点保存修改。').fontSize(13).width('100%') }
+      if (this.errorText !== '') { ErrorPanel({ message: this.errorText, onRetry: (): void => { this.retry(); } }) }
       List({ space: 12 }) {
         ForEach(this.visible(), (item: AdminRegistration) => {
           ListItem() {

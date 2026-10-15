@@ -77,6 +77,8 @@ export type StaffBoardView = {
   activity: StaffActivityListItem;
   attended: boolean;
   attendanceCheckedInAt: string | null;
+  canCancelAttendance: boolean;
+  attendanceCancelBlockedReason: string | null;
   /** 左侧：可签到（REGISTERED） */
   eligible: StaffRegistrationView[];
   /** 右侧：排队（CHECKED_IN，按 checkedInAt ASC） */
@@ -152,18 +154,54 @@ async function requireStaffOpen(tx: Prisma.TransactionClient, activityId: string
 }
 
 async function requireAttendance(
+  tx: Prisma.TransactionClient,
   activityId: string,
   memberProfileId: string,
-): Promise<{ id: string; checkedInAt: Date }> {
-  const attendance = await getDb().repairActivityAttendance.findUnique({
+) {
+  const attendance = await tx.repairActivityAttendance.findUnique({
     where: {
       activityId_memberProfileId: { activityId, memberProfileId },
     },
   });
-  if (!attendance) {
+  if (!attendance || attendance.cancelledAt) {
     throw new AppError("ACTIVITY_ATTENDANCE_REQUIRED", "请先完成本场出勤后再操作");
   }
   return attendance;
+}
+
+/** Includes soft-deleted registrations and successful legacy writes; reads never count. */
+async function processingStartedAt(
+  db: Prisma.TransactionClient,
+  activityId: string,
+  memberProfileId: string,
+  userId: string,
+  recordedAt: Date | null,
+): Promise<Date | null> {
+  if (recordedAt) return recordedAt;
+  const events = await db.$queryRaw<{ happenedAt: Date }[]>`
+    SELECT a.created_at AS happenedAt FROM audit_logs a
+    LEFT JOIN repair_activity_registrations r
+      ON a.target_type = 'RepairActivityRegistration' AND a.target_id = r.id
+    WHERE a.actor_user_id = ${userId} AND a.actor_type = 'USER' AND a.result = 'SUCCESS'
+      AND ((a.target_type = 'RepairActivity' AND a.target_id = ${activityId}
+            AND a.action = 'repair_activity.registrations_checked_in')
+        OR (r.activity_id = ${activityId} AND a.action IN
+            ('repair_activity.registration_withdrawn', 'repair_activity.registration_served',
+             'repair_activity.registration_issue_type_updated')))
+    ORDER BY a.created_at ASC LIMIT 1`;
+  if (events[0]) return events[0].happenedAt;
+  const served = await db.repairActivityRegistration.findFirst({
+    where: { activityId, servedByMemberProfileId: memberProfileId, servedAt: { not: null } },
+    orderBy: { servedAt: "asc" },
+    select: { servedAt: true },
+  });
+  return served?.servedAt ?? null;
+}
+async function recordProcessing(tx: Prisma.TransactionClient, attendanceId: string, now: Date) {
+  await tx.repairActivityAttendance.updateMany({
+    where: { id: attendanceId, businessStartedAt: null },
+    data: { businessStartedAt: now },
+  });
 }
 
 async function countEffective(activityId: string): Promise<number> {
@@ -296,7 +334,7 @@ export const repairActivityStaffService = {
         _count: { _all: true },
       }),
       getDb().repairActivityAttendance.findMany({
-        where: { activityId: { in: ids }, memberProfileId: member.id },
+        where: { activityId: { in: ids }, memberProfileId: member.id, cancelledAt: null },
         select: { activityId: true },
       }),
     ]);
@@ -321,29 +359,86 @@ export const repairActivityStaffService = {
           activityId_memberProfileId: { activityId, memberProfileId: member.id },
         },
       });
-      if (existing) {
+      if (existing && !existing.cancelledAt) {
         return { attended: true, checkedInAt: existing.checkedInAt.toISOString() };
       }
       const now = new Date();
-      const created = await tx.repairActivityAttendance.create({
-        data: {
-          id: randomUUID(),
-          activityId,
-          memberProfileId: member.id,
-          checkedInAt: now,
-        },
-      });
+      const created = existing
+        ? await tx.repairActivityAttendance.update({
+            where: { id: existing.id },
+            data: { cancelledAt: null, checkedInAt: now },
+          })
+        : await tx.repairActivityAttendance.create({
+            data: {
+              id: randomUUID(),
+              activityId,
+              memberProfileId: member.id,
+              checkedInAt: now,
+            },
+          });
       await appendAuditLog(tx, {
         actor,
         actorType: "USER",
         actorUserId: actor.userId,
-        action: "repair_activity.attendance_marked",
+        action: existing
+          ? "repair_activity.attendance_restored"
+          : "repair_activity.attendance_marked",
         targetType: "RepairActivityAttendance",
         targetId: created.id,
         result: "SUCCESS",
         after: { activityId, memberProfileId: member.id },
       });
       return { attended: true, checkedInAt: created.checkedInAt.toISOString() };
+    });
+  },
+
+  async cancelAttendance(activityId: string, actor: AuthorizedActor): Promise<{ attended: false }> {
+    const member = await requireStaffMember(actor);
+    return inSerializableTransaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM repair_activities WHERE id = ${activityId} FOR UPDATE`;
+      const activity = await tx.repairActivity.findFirst({
+        where: { id: activityId, deletedAt: null },
+      });
+      if (!activity) throw new AppError("ACTIVITY_NOT_FOUND", "活动不存在");
+      const attendance = await tx.repairActivityAttendance.findUnique({
+        where: { activityId_memberProfileId: { activityId, memberProfileId: member.id } },
+      });
+      if (!attendance || attendance.cancelledAt) return { attended: false };
+      if (
+        await processingStartedAt(
+          tx,
+          activityId,
+          member.id,
+          actor.userId!,
+          attendance.businessStartedAt,
+        )
+      )
+        throw new AppError(
+          "ACTIVITY_ATTENDANCE_CANCEL_BLOCKED",
+          "本场已有现场处理记录，不能取消出勤",
+        );
+      const now = new Date();
+      await tx.repairActivityAttendance.update({
+        where: { id: attendance.id },
+        data: { cancelledAt: now },
+      });
+      await appendAuditLog(tx, {
+        actor,
+        actorType: "USER",
+        actorUserId: actor.userId,
+        action: "repair_activity.attendance_cancelled",
+        targetType: "RepairActivityAttendance",
+        targetId: attendance.id,
+        result: "SUCCESS",
+        before: { attended: true },
+        after: {
+          activityId,
+          memberProfileId: member.id,
+          attended: false,
+          cancelledAt: now.toISOString(),
+        },
+      });
+      return { attended: false };
     });
   },
 
@@ -403,10 +498,23 @@ export const repairActivityStaffService = {
             : null,
       }));
 
+    const attended = Boolean(attendance && !attendance.cancelledAt);
+    const processed =
+      attended && attendance
+        ? await processingStartedAt(
+            getDb(),
+            activityId,
+            member.id,
+            actor.userId!,
+            attendance.businessStartedAt,
+          )
+        : null;
     return {
-      activity: toListItem(activity, registeredCount, Boolean(attendance), now),
-      attended: Boolean(attendance),
-      attendanceCheckedInAt: attendance?.checkedInAt.toISOString() ?? null,
+      activity: toListItem(activity, registeredCount, attended, now),
+      attended,
+      attendanceCheckedInAt: attended ? attendance!.checkedInAt.toISOString() : null,
+      canCancelAttendance: attended && !processed,
+      attendanceCancelBlockedReason: attended && processed ? "已进行现场处理，不能取消出勤" : null,
       eligible,
       queue,
       served,
@@ -422,7 +530,6 @@ export const repairActivityStaffService = {
   ): Promise<{ checkedIn: StaffRegistrationView[] }> {
     const member = await requireStaffMember(actor);
     await loadActivityOrThrow(activityId);
-    await requireAttendance(activityId, member.id);
 
     const uniqueIds = [...new Set(registrationIds.map((id) => id.trim()).filter(Boolean))];
     if (uniqueIds.length === 0) {
@@ -442,6 +549,7 @@ export const repairActivityStaffService = {
 
     return inSerializableTransaction(async (tx) => {
       await requireStaffOpen(tx, activityId);
+      const attendance = await requireAttendance(tx, activityId, member.id);
       const now = new Date();
       const checkedIn: StaffRegistrationView[] = [];
 
@@ -505,6 +613,7 @@ export const repairActivityStaffService = {
           memberProfileId: member.id,
         },
       });
+      await recordProcessing(tx, attendance.id, now);
       return { checkedIn };
     });
   },
@@ -516,13 +625,13 @@ export const repairActivityStaffService = {
   ): Promise<StaffRegistrationView> {
     const member = await requireStaffMember(actor);
     await loadActivityOrThrow(activityId);
-    await requireAttendance(activityId, member.id);
     if (!registrationId.trim()) {
       throw new AppError("VALIDATION_FAILED", "报名 ID 无效");
     }
 
     return inSerializableTransaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM repair_activities WHERE id = ${activityId} FOR UPDATE`;
+      const attendance = await requireAttendance(tx, activityId, member.id);
       const reg = await tx.repairActivityRegistration.findFirst({
         where: { id: registrationId, activityId, deletedAt: null },
       });
@@ -550,6 +659,7 @@ export const repairActivityStaffService = {
         before: { status: "CHECKED_IN" },
         after: { status: "REGISTERED", memberProfileId: member.id },
       });
+      await recordProcessing(tx, attendance.id, new Date());
       return toStaffReg(updated);
     });
   },
@@ -561,7 +671,6 @@ export const repairActivityStaffService = {
   ): Promise<ServeResultView> {
     const member = await requireStaffMember(actor);
     await loadActivityOrThrow(activityId);
-    await requireAttendance(activityId, member.id);
     if (!registrationId.trim()) {
       throw new AppError("VALIDATION_FAILED", "报名 ID 无效");
     }
@@ -570,6 +679,7 @@ export const repairActivityStaffService = {
       // Serialize a member across activities as well as registrations within this activity.
       await tx.$queryRaw`SELECT id FROM member_profiles WHERE id = ${member.id} FOR UPDATE`;
       const activity = await requireStaffOpen(tx, activityId);
+      const attendance = await requireAttendance(tx, activityId, member.id);
       const reg = await tx.repairActivityRegistration.findFirst({
         where: { id: registrationId, activityId, deletedAt: null },
       });
@@ -652,6 +762,7 @@ export const repairActivityStaffService = {
         },
       });
 
+      await recordProcessing(tx, attendance.id, now);
       return {
         registration: toStaffReg(updated),
         repairRecordId,

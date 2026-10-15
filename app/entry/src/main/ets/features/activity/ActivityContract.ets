@@ -27,12 +27,13 @@ export interface ServedRegistration extends StaffRegistration { recordStatus: st
 export interface PendingServeDraft { repairRecordId: string; ownerName: string; activityTitle: string; }
 export interface ActivityBoard {
   activity: StaffActivity; attended: boolean; attendanceCheckedInAt: string | null;
+  canCancelAttendance: boolean; attendanceCancelBlockedReason: string | null;
   eligible: StaffRegistration[]; queue: StaffRegistration[]; served: ServedRegistration[];
   pendingServeDraft: PendingServeDraft | null;
 }
 export interface ServeResult { registration: StaffRegistration; repairRecordId: string; }
 export interface PhoneResult { phone: string; }
-export interface AttendanceResult { attended: boolean; checkedInAt: string; }
+export interface AttendanceResult { attended: boolean; checkedInAt: string | null; }
 export interface CheckInUpdate { registrationId: string; issueType: string; }
 export interface CheckInInput { registrationIds: string[]; issueTypeUpdates: CheckInUpdate[]; }
 export interface RegistrationIdInput { registrationId: string; }

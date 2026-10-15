@@ -22,9 +22,10 @@ export struct ActivityBoardPage {
   @State loading: boolean = false;
   @State busy: boolean = false;
   @State errorText: string = '';
+  private retryCancellation: boolean = false;
   private guard: ActivityRequestGuard = new ActivityRequestGuard();
   aboutToAppear(): void { this.load(); }
-  aboutToDisappear(): void { this.guard.invalidate(); this.loading = false; this.busy = false; this.phoneText = ''; this.phoneId = ''; }
+  aboutToDisappear(): void { this.guard.invalidate(); this.loading = false; this.busy = false; this.phoneText = ''; this.phoneId = ''; this.retryCancellation = false; }
   private refresh(): void { this.guard.invalidate(); this.loading = false; this.busy = false; this.load(); }
   private fail(error: Object): void {
     if (error instanceof ApiRequestError && isSessionExpiredCode(error.code)) { this.onSessionExpired(); return; }
@@ -32,7 +33,7 @@ export struct ActivityBoardPage {
   }
   private async load(): Promise<void> {
     if (this.loading || this.busy) return;
-    const ticket = this.guard.begin(); this.loading = true; this.errorText = ''; this.board = null;
+    const ticket = this.guard.begin(); this.loading = true; this.errorText = ''; this.retryCancellation = false;
     this.phoneId = ''; this.phoneText = ''; this.selectedId = '';
     try { const board = await ActivityService.board(this.param.activityId); if (this.guard.current(ticket)) this.board = board; }
     catch (error) { if (this.guard.current(ticket)) this.fail(error); }
@@ -44,10 +45,17 @@ export struct ActivityBoardPage {
   }
   private async action(kind: string, id: string = ''): Promise<void> {
     if (this.busy || this.loading) return;
-    const ticket = this.guard.begin(); this.busy = true; this.errorText = '';
+    const ticket = this.guard.begin(); this.busy = true; this.errorText = ''; this.retryCancellation = false;
     try {
       if (kind === 'attendance') await ActivityService.attend(this.param.activityId);
-      else if (kind === 'check-in') {
+      else if (kind === 'cancel-attendance') {
+        const answer = await this.getUIContext().getPromptAction().showDialog({ title: '取消本场出勤？',
+          message: '只取消你本人的出勤，不影响客户报名、排队或已有备案。未进行现场处理时才能取消。',
+          buttons: [{ text: '返回', color: '#69747C' }, { text: '确认取消出勤', color: '#D23F3F' }] });
+        if (!this.guard.current(ticket)) return;
+        if (answer.index !== 1) return;
+        await ActivityService.cancelAttendance(this.param.activityId);
+      } else if (kind === 'check-in') {
         const input: CheckInInput = { registrationIds: [id], issueTypeUpdates: [{ registrationId: id, issueType: this.selectedIssueType }] };
         await ActivityService.checkIn(this.param.activityId, input);
       } else if (kind === 'withdraw') {
@@ -69,6 +77,7 @@ export struct ActivityBoardPage {
       if (!this.guard.current(ticket)) return; this.busy = false; await this.load();
     } catch (error) {
       if (!this.guard.current(ticket)) return;
+      this.retryCancellation = kind === 'cancel-attendance';
       this.fail(error);
       if (error instanceof ApiRequestError && error.code === 'ACTIVITY_SERVE_DRAFT_PENDING') {
         this.busy = false; await this.load(); this.errorText = error.message;
@@ -120,13 +129,20 @@ export struct ActivityBoardPage {
       Button('刷新看板').enabled(!this.loading && !this.busy).onClick(() => { this.load(); })
       if (this.loading) { LoadingPanel({ text: '正在读取现场看板…' }) }
       if (this.busy) { LoadingPanel({ text: '正在处理…' }) }
-      if (this.errorText !== '') { ErrorPanel({ message: this.errorText, onRetry: (): void => { this.load(); } }) }
+      if (this.errorText !== '') { ErrorPanel({ message: this.errorText, onRetry: (): void => { if (this.retryCancellation) this.action('cancel-attendance'); else this.load(); } }) }
       if (this.board !== null) {
         Text(this.board.activity.title).fontSize(22).fontWeight(FontWeight.Bold).width('100%')
         if (!this.board.activity.canOperateStaff) { Text('报名截止后开放出勤、签到和接待').fontColor('#69747C').width('100%') }
         if (!this.board.attended) {
           Button('标记本场出勤').enabled(!this.busy && this.board.activity.canOperateStaff).onClick(() => { this.action('attendance'); })
-        } else { Text(`本场已出勤 · ${activityTime(this.board.attendanceCheckedInAt)}`).fontSize(13).width('100%') }
+         } else {
+          Text(`本场已出勤 · ${activityTime(this.board.attendanceCheckedInAt)}`).fontSize(13).width('100%')
+          if (this.board.canCancelAttendance) {
+            Button('取消本场出勤').enabled(!this.busy).onClick(() => { this.action('cancel-attendance'); })
+          } else if (this.board.attendanceCancelBlockedReason !== null) {
+            Text(this.board.attendanceCancelBlockedReason).fontSize(13).fontColor('#69747C').width('100%')
+          }
+        }
         if (this.board.pendingServeDraft !== null) {
           Button(`继续填写：${this.board.pendingServeDraft.ownerName}（${this.board.pendingServeDraft.activityTitle}）`)
             .width('100%').enabled(!this.busy).onClick(() => { if (this.board !== null && this.board.pendingServeDraft !== null) this.openRecord(this.board.pendingServeDraft.repairRecordId); })

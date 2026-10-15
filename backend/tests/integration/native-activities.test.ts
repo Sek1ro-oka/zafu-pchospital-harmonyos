@@ -11,7 +11,10 @@ import { POST as anonymous } from "../../src/app/api/v1/repair-activities/[id]/r
 import { POST as lookup } from "../../src/app/api/v1/repair-activities/[id]/registrations/lookup/route";
 import { POST as anonEdit } from "../../src/app/api/v1/repair-activities/[id]/registrations/[regId]/route";
 import { GET as detail } from "../../src/app/api/v1/repair-activities/[id]/route";
-import { POST as attendance } from "../../src/app/api/v1/member/repair-activities/[id]/attendance/route";
+import {
+  POST as attendance,
+  DELETE as cancelAttendance,
+} from "../../src/app/api/v1/member/repair-activities/[id]/attendance/route";
 import { POST as checkIn } from "../../src/app/api/v1/member/repair-activities/[id]/check-in/route";
 import { POST as withdraw } from "../../src/app/api/v1/member/repair-activities/[id]/withdraw/route";
 import { POST as serve } from "../../src/app/api/v1/member/repair-activities/[id]/serve/route";
@@ -653,6 +656,7 @@ dbTest("真实接待草稿仍保留课设备案提交门槛", async () => {
     { version: current.version },
   );
   assert.equal(submitted.status, 200);
+  assert.equal((await cancel(id)).code, "ACTIVITY_ATTENDANCE_CANCEL_BLOCKED");
   assert.equal(
     (await getDb().repairRecord.findUniqueOrThrow({ where: { id: recordId } })).status,
     "PENDING",
@@ -767,4 +771,204 @@ dbTest("停用分类映射时接待仍生成留空分类的草稿，纯管理员
       data: { isActive: true },
     });
   }
+});
+
+async function attendanceRow(id: string, member = memberIds[0]) {
+  return getDb().repairActivityAttendance.findUniqueOrThrow({
+    where: { activityId_memberProfileId: { activityId: id, memberProfileId: member } },
+  });
+}
+async function cancel(id: string, who = staff) {
+  return call(cancelAttendance, { id }, who, "DELETE");
+}
+
+dbTest("C01/C02 未处理出勤可取消/重标；重复调用不增加记录或变更审计", async () => {
+  const id = await activity();
+  await close(id);
+  assert.equal((await cancel(id)).status, 200);
+  await call(attendance, { id }, staff, "POST", {});
+  const original = await attendanceRow(id);
+  await call(attendance, { id }, staff, "POST", {});
+  assert.equal((await cancel(id)).status, 200);
+  assert.equal((await cancel(id)).data.attended, false);
+  const cancelled = await attendanceRow(id);
+  assert.ok(cancelled.cancelledAt);
+  const view = await call(board, { id }, staff, "GET");
+  assert.equal(view.data.attended, false);
+  assert.equal(view.data.attendanceCheckedInAt, null);
+  assert.equal(
+    await getDb().auditLog.count({
+      where: { targetId: original.id, action: "repair_activity.attendance_cancelled" },
+    }),
+    1,
+  );
+  await call(attendance, { id }, staff, "POST", {});
+  assert.equal((await attendanceRow(id)).id, original.id);
+  assert.equal((await attendanceRow(id)).cancelledAt, null);
+  assert.equal((await call(board, { id }, staff, "GET")).data.canCancelAttendance, true);
+});
+
+dbTest("C03/C04 签到再撤回、接待及提交都不能清除本场处理事实", async () => {
+  const id = await activity(),
+    reg = await register(id);
+  await ready(id, reg);
+  assert.ok((await attendanceRow(id)).businessStartedAt);
+  assert.equal((await cancel(id)).code, "ACTIVITY_ATTENDANCE_CANCEL_BLOCKED");
+  await call(withdraw, { id }, staff, "POST", { registrationId: reg });
+  assert.equal((await cancel(id)).status, 409);
+  await call(checkIn, { id }, staff, "POST", { registrationIds: [reg] });
+  const res = await call(serve, { id }, staff, "POST", { registrationId: reg });
+  assert.equal(res.status, 201);
+  assert.equal((await cancel(id)).status, 409);
+  assert.equal((await call(board, { id }, staff, "GET")).data.canCancelAttendance, false);
+  assert.equal(
+    (await getDb().repairActivityRegistration.findUniqueOrThrow({ where: { id: reg } }))
+      .repairRecordId,
+    res.data.repairRecordId,
+  );
+});
+
+dbTest("C04 本人仅撤回另一成员签到的队列也会永久阻止取消", async () => {
+  const id = await activity(),
+    reg = await register(id);
+  await ready(id, reg, staff2);
+  await call(attendance, { id }, staff, "POST", {});
+  assert.equal((await call(withdraw, { id }, staff, "POST", { registrationId: reg })).status, 200);
+  assert.equal((await cancel(id)).status, 409);
+});
+
+dbTest("C05 另一成员本场处理、本人其它场处理不误伤；电话读取仍可取消", async () => {
+  const id = await activity(),
+    reg = await register(id),
+    otherId = await activity(),
+    otherReg = await register(otherId);
+  await ready(id, reg, staff2);
+  await ready(otherId, otherReg, staff);
+  await call(attendance, { id }, staff, "POST", {});
+  assert.equal((await call(phone, { id, registrationId: reg }, staff, "GET")).status, 200);
+  assert.equal((await cancel(id)).status, 200);
+  assert.equal((await attendanceRow(id, memberIds[1])).cancelledAt, null);
+  assert.equal((await attendanceRow(otherId)).cancelledAt, null);
+  assert.equal((await call(phone, { id, registrationId: reg }, staff, "GET")).status, 200);
+  assert.equal(
+    (await call(checkIn, { id }, staff, "POST", { registrationIds: [reg] })).code,
+    "ACTIVITY_ATTENDANCE_REQUIRED",
+  );
+});
+
+dbTest("C06 多条签到中后条验证失败会回滚报名/业务标记/审计", async () => {
+  const id = await activity(),
+    reg = await register(id);
+  await close(id);
+  await call(attendance, { id }, staff, "POST", {});
+  const res = await call(checkIn, { id }, staff, "POST", { registrationIds: [reg, randomUUID()] });
+  assert.equal(res.status, 404);
+  assert.equal((await attendanceRow(id)).businessStartedAt, null);
+  assert.equal(
+    (await getDb().repairActivityRegistration.findUniqueOrThrow({ where: { id: reg } })).status,
+    "REGISTERED",
+  );
+  assert.equal((await cancel(id)).status, 200);
+});
+
+for (const kind of ["check-in", "serve", "withdraw"])
+  dbTest("C07 取消与" + kind + "并发只允许合法一方成功", async () => {
+    for (let iteration = 0; iteration < 3; iteration++) {
+      const id = await activity(),
+        reg = await register(id);
+      await close(id);
+      if (kind !== "check-in") await ready(id, reg, staff2);
+      await call(attendance, { id }, staff, "POST", {});
+      const op =
+        kind === "check-in"
+          ? () => call(checkIn, { id }, staff, "POST", { registrationIds: [reg] })
+          : () =>
+              call(kind === "serve" ? serve : withdraw, { id }, staff, "POST", {
+                registrationId: reg,
+              });
+      const [c, w] = await Promise.all(
+        iteration % 2 ? [op(), cancel(id)].map((p) => p).reverse() : [cancel(id), op()],
+      );
+      assert.equal(
+        [c.status, w.status].filter((x) => x >= 200 && x < 300).length,
+        1,
+        JSON.stringify([c, w]),
+      );
+      if (c.status === 200) {
+        assert.equal(w.code, "ACTIVITY_ATTENDANCE_REQUIRED");
+        assert.ok((await attendanceRow(id)).cancelledAt);
+      } else {
+        assert.equal(c.code, "ACTIVITY_ATTENDANCE_CANCEL_BLOCKED");
+        assert.equal((await attendanceRow(id)).cancelledAt, null);
+      }
+      // Keep later iterations independent of the legitimate pending-draft guard.
+      if (kind === "serve" && w.status === 201)
+        await getDb().repairRecord.update({
+          where: { id: w.data.repairRecordId as string },
+          data: { status: "PENDING" },
+        });
+    }
+  });
+
+dbTest("C08 旧出勤空标记仍识别已软删报名的签到撤回历史", async () => {
+  const id = await activity(),
+    reg = await register(id);
+  await ready(id, reg);
+  await call(withdraw, { id }, staff, "POST", { registrationId: reg });
+  await getDb().repairActivityAttendance.update({
+    where: { id: (await attendanceRow(id)).id },
+    data: { businessStartedAt: null },
+  });
+  await getDb().repairActivityRegistration.update({
+    where: { id: reg },
+    data: { deletedAt: new Date() },
+  });
+  assert.equal((await cancel(id)).code, "ACTIVITY_ATTENDANCE_CANCEL_BLOCKED");
+  // Legacy withdraw evidence also suffices without the batch check-in event.
+  await getDb().auditLog.deleteMany({
+    where: { targetId: id, action: "repair_activity.registrations_checked_in" },
+  });
+  assert.equal((await cancel(id)).status, 409);
+});
+
+dbTest("C09/C10 取消只定位本人，鉴权/Origin/native 与活动存在校验保持", async () => {
+  const id = await activity();
+  await close(id);
+  await call(attendance, { id }, staff, "POST", {});
+  await call(attendance, { id }, staff2, "POST", {});
+  for (const who of [{}, customer, admin]) assert.ok((await cancel(id, who)).status >= 400);
+  assert.equal(
+    (await call(cancelAttendance, { id }, { Authorization: staff.authorization }, "DELETE")).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call(
+        cancelAttendance,
+        { id },
+        {
+          Cookie: "pc_hospital_session=" + staff.authorization.slice(7),
+          Origin: "https://evil.example",
+        },
+        "DELETE",
+      )
+    ).status,
+    403,
+  );
+  assert.equal(
+    (
+      await call(cancelAttendance, { id }, staff, "DELETE", {
+        memberProfileId: memberIds[1],
+        userId: ids[3],
+      })
+    ).status,
+    200,
+  );
+  assert.equal((await attendanceRow(id, memberIds[1])).cancelledAt, null);
+  assert.equal((await cancel(randomUUID())).status, 404);
+  const cookie = {
+    Cookie: "pc_hospital_session=" + staff2.authorization.slice(7),
+    Origin: "http://localhost:13082",
+  };
+  assert.equal((await cancel(id, cookie)).status, 200);
 });

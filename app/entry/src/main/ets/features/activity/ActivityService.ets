@@ -52,6 +52,9 @@ export class ActivityService {
   static async attend(id: string): Promise<AttendanceResult> {
     return ApiClient.post<AttendanceResult>(ApiConfig.getBaseUrl(), `/api/v1/member/repair-activities/${encodeURIComponent(id)}/attendance`, '{}', await ActivityService.token());
   }
+  static async cancelAttendance(id: string): Promise<Object> {
+    return ApiClient.del<Object>(ApiConfig.getBaseUrl(), `/api/v1/member/repair-activities/${encodeURIComponent(id)}/attendance`, await ActivityService.token());
+  }
   static async checkIn(id: string, input: CheckInInput): Promise<Object> {
     return ApiClient.post<Object>(ApiConfig.getBaseUrl(), `/api/v1/member/repair-activities/${encodeURIComponent(id)}/check-in`, JSON.stringify(input), await ActivityService.token());
   }
