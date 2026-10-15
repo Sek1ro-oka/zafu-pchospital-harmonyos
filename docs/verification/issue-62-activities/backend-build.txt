@@ -5,7 +5,7 @@ $ node tools/ensure-doc-manifest.mjs && next build
      · cpus: 1
 
    Creating an optimized production build ...
- ✓ Compiled successfully in 15.1s
+ ✓ Compiled successfully in 20.9s
    Linting and checking validity of types ...
    Collecting page data ...
    Generating static pages (0/72) ...
@@ -182,7 +182,7 @@ Route (app)                                                                     
 ├ ƒ /member/repairs/new                                                         3.34 kB         108 kB
 ├ ○ /register/member                                                              443 B         102 kB
 ├ ○ /repair-activities                                                          5.59 kB         112 kB
-├ ƒ /repair-activities/[id]                                                     7.21 kB         113 kB
+├ ƒ /repair-activities/[id]                                                     7.22 kB         113 kB
 ├ ○ /robots.txt                                                                   443 B         102 kB
 └ ○ /sitemap.xml                                                                  443 B         102 kB
 + First Load JS shared by all                                                    102 kB

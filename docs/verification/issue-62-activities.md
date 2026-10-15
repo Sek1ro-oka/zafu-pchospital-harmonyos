@@ -2,9 +2,11 @@
 
 验证于 2026-10-14 至 2026-10-15，范围为客户账号报名、成员现场接待及管理员活动管理。本分支保留取消成员出勤的契约缺口，不建议关闭整个 #62。接口和 #63 路由交接见 [原生活动契约](../../backend/docs/native-activities-api.md)。
 
+发布前再次同步 main `2e2b14becb0a09d8ce6d7a1fac5637a7db3b3b6e`（#71/#72），使用普通 Merge 保留历史；解决 FormControls 与路由测试重叠，保留最新默认保持登录、改密强制标记复位及活动参数测试。常规 Git HTTPS 连接重置，改用 GitHub Git 数据 API 获取对象，逐个核对 SHA 并通过祖先完整性校验。合并后单测 521/521；其余最终检查与产物见下表。
+
 ## 基点与隔离环境
 
-- 开工 fetch 后将原工程 main 快进到 `9ac3226db7fea4d670d9ade394d88f591df55361`；保留原工程的 `app/oh-package-lock.json5` 改动及 `.preview/`。在独立英文路径检出建立 `feat/issue-62-activities`，没有覆盖用户工程。
+- 开工 fetch 后将原工程 main 快进到 `9ac3226db7fea4d670d9ade394d88f591df55361`；保留原工程的 `app/oh-package-lock.json5` 改动及 `.preview/`。在独立英文路径检出建立 `feat/issue-62-activities`，没有覆盖用户工程。发布前又将原工程 main 快进至 `2e2b14b`，上述两处用户文件状态仍保留。
 - 固定 Web 参照 `e78d057e5bad64c7a73d89f4bad425473156f625`，选择性同步签到调整、电话授权及接待草稿，未导入原 Web 数据。
 - 本机 Node 25.6.0、仓库锁定的 pnpm 12.4.1、原生 MySQL 9.6；独立实例 `127.0.0.1:3310`，开发库 `pchospital_exp_issue62` 与测试库 `pchospital_exp_issue62_test`，不同数据库账号。无 Docker、共享库清理或共享部署。
 - 本机生产模式 API `http://127.0.0.1:13082`，HDC 反向端口供模拟器访问；App 设置中显式保存此地址，源码默认共享地址保持。
@@ -19,10 +21,10 @@
 | Prisma         | `pnpm db:generate`、`pnpm db:migrate:deploy`、`pnpm db:migrate:test`                                                                                                                                                                                          | 生成成功；开发/测试库均应用 17 条迁移                                                                                                                                                                                                                           |
 | 历史升级       | 先应用 main 的 16 条迁移，插入匿名合成行，再应用本次迁移                                                                                                                                                                                                      | 旧列逐项相同；userId、旧条款时间/版本及地点保持 null；[结果](issue-62-activities/migration-check.json)                                                                                                                                                          |
 | lint           | `pnpm lint`                                                                                                                                                                                                                                                   | exit 0；[日志](issue-62-activities/lint.txt)                                                                                                                                                                                                                    |
-| 单测           | `pnpm test:unit`                                                                                                                                                                                                                                              | 513/513，0 skipped；[日志](issue-62-activities/unit-tests.txt)                                                                                                                                                                                                  |
+| 单测           | `pnpm test:unit`                                                                                                                                                                                                                                              | 521/521，0 skipped；[日志](issue-62-activities/unit-tests.txt)                                                                                                                                                                                                  |
 | 相关数据库回归 | `pnpm test:db tests/integration/native-activities.test.ts tests/integration/repair-activity-consent.test.ts tests/integration/repair-activity-device-model.test.ts tests/integration/personal-records.test.ts tests/integration/staff-repair-records.test.ts` | 44/44，0 skipped；[日志](issue-62-activities/database-tests.txt)；未运行全量 DB 测试                                                                                                                                                                            |
 | 后端生产构建   | `NEXT_TELEMETRY_DISABLED=1 pnpm build`                                                                                                                                                                                                                        | exit 0，含生产编译、类型检查和路由生成；[日志](issue-62-activities/backend-build.txt)                                                                                                                                                                           |
-| 额外 tsc       | `pnpm exec tsc --noEmit`                                                                                                                                                                                                                                      | 基点/功能分支各 45 个既有测试类型错误，按文件和错误码统计一致，无新增源码错误；[对比](issue-62-activities/tsc-comparison.json)、[基点](issue-62-activities/baseline-tsc.txt)、[功能分支](issue-62-activities/feature-tsc.txt)。此额外检查未通过，未扩大修复范围 |
+| 额外 tsc       | `pnpm exec tsc --noEmit`                                                                                                                                                                                                                                      | 开工基点/合并 main 前功能分支各 45 个既有测试类型错误，按文件和错误码统计一致，无新增源码错误；[对比](issue-62-activities/tsc-comparison.json)、[基点](issue-62-activities/baseline-tsc.txt)、[功能分支](issue-62-activities/feature-tsc.txt)。此额外检查未通过，未扩大修复范围 |
 | HAP            | DevEco `hvigorw.bat --mode module -p product=default assembleHap`                                                                                                                                                                                             | BUILD SUCCESSFUL；[日志](issue-62-activities/hap-build.txt)                                                                                                                                                                                                     |
 | 真实 HTTP      | 本机生产模式 API，四种身份逐次登录/退出                                                                                                                                                                                                                       | 12 项断言通过，含 A/B 隔离、直接越权、纯管理员拒绝、电话权限/缓存；[结果](issue-62-activities/api-check.json)                                                                                                                                                   |
 
@@ -34,7 +36,7 @@
 
 设备 `127.0.0.1:5555`，型号 emulator，API 26，x86_64，系统 `emulator 7.0.0.107(SP8DEVC00E999R4P11)`，1256×2760。使用 DevEco Studio 默认 SDK，实际安装并运行本次未签名 HAP，未以预览器模拟存储代替登录验收。
 
-产物：`app/entry/build/default/outputs/default/entry-default-unsigned.hap`，2,813,018 字节，SHA256 `4E9B35A3288DCEB72285A768FDD1D3E9AFAB17667FFAB273EAC4C94795BCBF35`。构建产物未提交到 Git；无实体手机、发布签名或共享部署。
+产物：`app/entry/build/default/outputs/default/entry-default-unsigned.hap`，2,813,264 字节，SHA256 `8361502DF715F855CA0152B03E562D3E2344D6A0054C6711DE50DD52C8CE2410`。构建产物未提交到 Git；无实体手机、发布签名或共享部署。上述截图/装机操作来自合并最新 main 前的 HAP（SHA256 `4E9B35A3288DCEB72285A768FDD1D3E9AFAB17667FFAB273EAC4C94795BCBF35`）；合并后最终 HAP 已重新构建，当前 `hdc list targets` 为 `[Empty]`，未对最终包重复装机，不将此前截图标作最终包截图。
 
 ## 任务书场景核对
 
@@ -68,7 +70,7 @@
 
 ## 发现的问题和限制
 
-实际注册页面复现基点的 `$$this is not defined` 崩溃，见 [原始故障片段](issue-62-activities/registration-crash-before-fix.txt)。自定义 LabeledInput 改为显式单向属性及回调更新，注册/改密各调用一致；重新构建安装后实际注册与强制改密续接通过，原生 TextInput 的双向绑定保持。
+实际注册页面复现开工基点的 `$$this is not defined` 崩溃，见 [原始故障片段](issue-62-activities/registration-crash-before-fix.txt)。自定义 LabeledInput 改为显式单向属性及回调更新，注册/改密各调用一致；重新构建安装后实际注册与强制改密续接通过，原生 TextInput 的双向绑定保持。发布前 main #71 同步修复了相同崩溃，合并时保留该修复，并将 text 标为 @Prop 以接收父组件状态更新。
 
 初次运行缺 Prisma 生成客户端/文档 manifest，先完成生成；集成断言按接口实际 200/201 和 `REPAIR_SUBMISSION_INCOMPLETE` 字段错误修正后重跑为 44/44。额外 tsc 的 45 个基线测试错误如上保留记录。
 

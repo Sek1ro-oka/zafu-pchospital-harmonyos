@@ -27,7 +27,7 @@
 
 ## 实际进度（2026-10-15）
 
-功能分支 `feat/issue-62-activities` 基于 main `9ac3226`，上述代码已实现待 PR 审查；513 项单测、44 项相关 DB 回归、lint、后端/HAP 构建通过，模拟器已操作客户、成员及管理员链路。系统相册为空，照片由真实本机 API 上传后在 App 展示并提交，系统选图上传与真机仍未验证。未部署共享后端，不关闭整个 #62。详见 [验证记录](../../verification/issue-62-activities.md)、[接口与 #63 路由交接](../../../backend/docs/native-activities-api.md)。
+功能分支 `feat/issue-62-activities` 基于 main `9ac3226`，上述代码已实现待 PR 审查；521 项单测、44 项相关 DB 回归、lint、后端/HAP 构建通过，模拟器已操作客户、成员及管理员链路。系统相册为空，照片由真实本机 API 上传后在 App 展示并提交，系统选图上传与真机仍未验证。未部署共享后端，不关闭整个 #62。详见 [验证记录](../../verification/issue-62-activities.md)、[接口与 #63 路由交接](../../../backend/docs/native-activities-api.md)。
 
 ## 必要验收
 
