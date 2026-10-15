@@ -1,0 +1,78 @@
+{
+  "environment": "isolated loopback development server; all people/activity synthetic",
+  "checkedAt": "2026-10-14T20:55:09.421562+08:00",
+  "checks": [
+    {
+      "name": "local health",
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    },
+    {
+      "name": "customer A count",
+      "actual": 1,
+      "expected": 1,
+      "passed": true
+    },
+    {
+      "name": "customer B has no claimed history",
+      "actual": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "name": "cross-account detail",
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "name": "cross-account update",
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "name": "pure admin staff denial",
+      "actual": "MEMBER_REQUIRED",
+      "expected": "MEMBER_REQUIRED",
+      "passed": true
+    },
+    {
+      "name": "staff phone without attendance",
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    },
+    {
+      "name": "phone value from snapshot",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "name": "phone cache",
+      "actual": "private, no-store",
+      "expected": "private, no-store",
+      "passed": true
+    },
+    {
+      "name": "customer phone denial",
+      "actual": 403,
+      "expected": 403,
+      "passed": true
+    },
+    {
+      "name": "admin close signup for staff simulation",
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    },
+    {
+      "name": "server derived closed state",
+      "actual": "CLOSED",
+      "expected": "CLOSED",
+      "passed": true
+    }
+  ]
+}

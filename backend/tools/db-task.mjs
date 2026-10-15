@@ -7,6 +7,16 @@ import { assertExperimentDatabase } from "./db-target.mjs";
 if (existsSync(".env")) loadEnvFile(".env");
 
 const mode = process.argv[2];
+const testFiles = process.argv.slice(3);
+if (
+  testFiles.length &&
+  (mode !== "test" ||
+    testFiles.some(
+      (file) => !/^tests\/integration\/[\w-]+\.test\.ts$/.test(file) || !existsSync(file),
+    ))
+) {
+  throw new Error("Only existing tests/integration/*.test.ts files may be selected");
+}
 if (
   !["migrate-dev", "migrate", "migrate-test", "seed", "seed-test", "reset-test", "test"].includes(
     mode,
@@ -34,7 +44,11 @@ const args =
         ? ["prisma/seed.ts"]
         : mode === "reset-test"
           ? ["migrate", "reset", "--force"]
-          : ["--test", "--test-concurrency=1", "tests/integration/**/*.test.ts"];
+          : [
+              "--test",
+              "--test-concurrency=1",
+              ...(testFiles.length ? testFiles : ["tests/integration/**/*.test.ts"]),
+            ];
 const result = spawnSync(process.execPath, [cli, ...args], {
   stdio: "inherit",
   env: mode === "test" ? { ...process.env, RUN_DB_TESTS: "1" } : process.env,

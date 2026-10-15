@@ -151,8 +151,8 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       setMessage(result.message);
       return;
     }
-    setToast(copy.serveSuccess);
     await load();
+    window.location.assign(`/member/repairs/${result.data.repairRecordId}/edit`);
   }
 
   function toggle(id: string) {
@@ -226,6 +226,14 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
         </p>
       ) : null}
 
+      {board.pendingServeDraft ? (
+        <Card>
+          <p>请先完成 {board.pendingServeDraft.ownerName} 的接待草稿。</p>
+          <Button href={`/member/repairs/${board.pendingServeDraft.repairRecordId}`}>
+            继续填写备案
+          </Button>
+        </Card>
+      ) : null}
       <div className="activity-board__panes">
         <Card className="activity-board__pane">
           <header className="activity-board__pane-head">
@@ -308,7 +316,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
                     <Button
                       variant="solid"
                       onClick={() => void serve(row.id)}
-                      disabled={opsDisabled}
+                      disabled={opsDisabled || Boolean(board.pendingServeDraft)}
                     >
                       {busy === `serve:${row.id}` ? copy.serving : copy.serve}
                     </Button>
@@ -327,6 +335,21 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
         </Card>
       </div>
 
+      <Card>
+        <h2>已接待</h2>
+        {board.served.length === 0 ? (
+          <p>暂无已接待报名</p>
+        ) : (
+          board.served.map((row) => (
+            <p key={row.id}>
+              {row.name} · {row.phoneMasked} · {row.recordStatus ?? "备案不可用"}
+              {row.repairRecordId && row.recordStatus && row.canOpenRecord ? (
+                <Button href={`/member/repairs/${row.repairRecordId}`}>查看备案</Button>
+              ) : null}
+            </p>
+          ))
+        )}
+      </Card>
       {withdrawTarget ? (
         <ConfirmDialog
           title={copy.withdrawConfirmTitle}

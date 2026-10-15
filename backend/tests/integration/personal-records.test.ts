@@ -14,7 +14,7 @@ import { POST as orderAccept } from "../../src/app/api/v1/staff/repair-orders/[i
 import { POST as linkedCreate } from "../../src/app/api/v1/staff/repair-orders/[id]/record/route";
 import { PATCH as adminEdit } from "../../src/app/api/v1/admin/repairs/[id]/route";
 import { repairService } from "../../src/features/repairs/repair-service";
-import { createSubmittedForActivity } from "../../src/features/repairs/repair-service";
+import { createServeDraftForActivity } from "../../src/features/repairs/repair-service";
 import { getDb, disconnectDb } from "../../src/lib/db/client";
 import { authenticateRequest } from "../../src/lib/auth/request";
 import { integrationTestsEnabled } from "./db-guard";
@@ -183,21 +183,20 @@ dbTest("独立建档拒绝同作者报修/活动来源键；包括关联尚未�
   const category = await getDb().repairCategory.findFirstOrThrow({
     where: { deletedAt: null, isActive: true },
   });
-  const activityKey = randomUUID(),
+  const activityKey = `activity-serve:${randomUUID()}`,
     member = await actor(a);
   await getDb().$transaction((tx) =>
-    createSubmittedForActivity(
+    createServeDraftForActivity(
       tx,
       {
         memberProfileId: MP_A_ID,
         categoryId: category.id,
         repairDate: "2026-10-13",
-        content: "活动合成材料",
-        remark: "test",
-        durationMinutes: 30,
+        ownerName: "合成活动机主",
+        ownerPhone: "13800138000",
         deviceModel: null,
         createRequestKey: activityKey,
-        registrationId: randomUUID(),
+        registrationId: activityKey.slice("activity-serve:".length),
         activityId: randomUUID(),
       },
       member,
@@ -509,8 +508,9 @@ dbTest("草稿实质修改使旧典型来源失效；活动仅复制联系快照
     where: { deletedAt: null, isActive: true },
   });
   const aActor = await actor(a);
+  const activityRegistrationId = randomUUID();
   const made = await getDb().$transaction((tx) =>
-    createSubmittedForActivity(
+    createServeDraftForActivity(
       tx,
       {
         ownerName: "合成报名机主",
@@ -518,12 +518,10 @@ dbTest("草稿实质修改使旧典型来源失效；活动仅复制联系快照
         memberProfileId: MP_A_ID,
         categoryId: category.id,
         repairDate: "2026-10-13",
-        content: "合成活动接待",
-        remark: "test",
-        durationMinutes: 30,
+
         deviceModel: "活动机型",
-        createRequestKey: randomUUID(),
-        registrationId: randomUUID(),
+        createRequestKey: `activity-serve:${activityRegistrationId}`,
+        registrationId: activityRegistrationId,
         activityId: randomUUID(),
       },
       aActor,

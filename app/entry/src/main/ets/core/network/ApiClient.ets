@@ -1,7 +1,7 @@
 import { http } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { ApiErrorBody, ApiMeta } from './ApiContract';
+import { ApiErrorBody, ApiMeta, ApiPage } from './ApiContract';
 
 /**
  * 统一请求错误（ArkTS 只允许抛出 Error 及其子类）。
@@ -88,6 +88,9 @@ export interface MultipartFilePart {
 
 /** 公共 HTTP 客户端：拼接 API 地址、携带原生通道头、拆信封、统一抛 ApiRequestError。 */
 export class ApiClient {
+  static async getPage<T>(baseUrl: string, path: string, token: string): Promise<ApiPage<T>> {
+    return ApiClient.request<ApiPage<T>>(baseUrl, http.RequestMethod.GET, path, '', token, undefined, undefined, true);
+  }
   private static readonly BASE_HEADERS: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Client-Type': 'native',
@@ -240,7 +243,8 @@ export class ApiClient {
     body: string,
     token: string,
     options?: ApiRequestOptions,
-    extraHeaders?: Record<string, string>
+    extraHeaders?: Record<string, string>,
+    paginated: boolean = false
   ): Promise<T> {
     const headers: Record<string, string> = {};
     const baseKeys: string[] = Object.keys(ApiClient.BASE_HEADERS);
@@ -274,6 +278,15 @@ export class ApiClient {
       throw new ApiRequestError('NETWORK_ERROR', describeNetworkError(error as BusinessError), 0, '');
     } finally {
       httpRequest.destroy();
+    }
+    if (paginated) {
+      const items: Object = ApiClient.parse<Object>(response);
+      const envelope = JSON.parse(response.result as string) as EnvelopeShape;
+      if (envelope.meta === undefined || envelope.meta.pagination === undefined) {
+        throw new ApiRequestError('UNEXPECTED_RESPONSE', '分页信息缺失，请重试', response.responseCode, '');
+      }
+      const page: ApiPage<Object> = { items: items as Object[], pagination: envelope.meta.pagination };
+      return page as T;
     }
     return ApiClient.parse<T>(response);
   }

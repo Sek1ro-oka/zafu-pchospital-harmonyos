@@ -1,0 +1,54 @@
+{
+  "environment": "isolated loopback development server; synthetic data only",
+  "checkedAt": "2026-10-15T10:45:43.462042+08:00",
+  "checks": [
+    {
+      "name": "customer A registration retained",
+      "actual": 1,
+      "expected": 1,
+      "passed": true
+    },
+    {
+      "name": "customer registration served",
+      "actual": "SERVED",
+      "expected": "SERVED",
+      "passed": true
+    },
+    {
+      "name": "admin capacity persisted",
+      "actual": 12,
+      "expected": 12,
+      "passed": true
+    },
+    {
+      "name": "admin location persisted",
+      "actual": "合成测试地点 B",
+      "expected": "合成测试地点 B",
+      "passed": true
+    },
+    {
+      "name": "soft deleted registration excluded",
+      "actual": 1,
+      "expected": 1,
+      "passed": true
+    },
+    {
+      "name": "submitted draft no longer blocks",
+      "actual": null,
+      "expected": null,
+      "passed": true
+    },
+    {
+      "name": "served record actually pending review",
+      "actual": "PENDING",
+      "expected": "PENDING",
+      "passed": true
+    },
+    {
+      "name": "created then soft deleted activity excluded",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    }
+  ]
+}

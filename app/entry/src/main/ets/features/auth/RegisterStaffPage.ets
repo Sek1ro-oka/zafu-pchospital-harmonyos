@@ -193,7 +193,7 @@ export struct RegisterStaffPage {
           LabeledInput({
             label: '邀请码',
             placeholder: '管理员发放的邀请码',
-            text: $$this.code,
+            text: this.code,
             disabled: this.busy,
             maxLength: 64,
             errorText: this.fieldError('code'),
@@ -202,7 +202,7 @@ export struct RegisterStaffPage {
           LabeledInput({
             label: '姓名',
             placeholder: '真实姓名（2–64 字）',
-            text: $$this.realName,
+            text: this.realName,
             disabled: this.busy,
             errorText: this.fieldError('realName'),
             onChange: (value: string): void => { this.realName = value; }
@@ -210,7 +210,7 @@ export struct RegisterStaffPage {
           LabeledInput({
             label: 'QQ 号',
             placeholder: '5–11 位数字',
-            text: $$this.qq,
+            text: this.qq,
             inputType: InputType.Number,
             maxLength: 11,
             disabled: this.busy,
@@ -220,7 +220,7 @@ export struct RegisterStaffPage {
           LabeledInput({
             label: '手机号',
             placeholder: '11 位手机号',
-            text: $$this.phone,
+            text: this.phone,
             inputType: InputType.Number,
             maxLength: 11,
             disabled: this.busy,
@@ -230,7 +230,7 @@ export struct RegisterStaffPage {
           LabeledInput({
             label: '密码',
             placeholder: '至少 6 位',
-            text: $$this.password,
+            text: this.password,
             inputType: InputType.Password,
             disabled: this.busy,
             errorText: this.fieldError('password'),
@@ -239,7 +239,7 @@ export struct RegisterStaffPage {
           LabeledInput({
             label: '确认密码',
             placeholder: '再输入一次密码',
-            text: $$this.passwordConfirmation,
+            text: this.passwordConfirmation,
             inputType: InputType.Password,
             disabled: this.busy,
             errorText: this.fieldError('passwordConfirmation'),
@@ -248,7 +248,7 @@ export struct RegisterStaffPage {
           LabeledInput({
             label: '学号（选填）',
             placeholder: '成员档案信息',
-            text: $$this.studentId,
+            text: this.studentId,
             disabled: this.busy,
             maxLength: 32,
             onChange: (value: string): void => { this.studentId = value; }
@@ -256,7 +256,7 @@ export struct RegisterStaffPage {
           LabeledInput({
             label: '班级（选填）',
             placeholder: '成员档案信息',
-            text: $$this.className,
+            text: this.className,
             disabled: this.busy,
             maxLength: 64,
             onChange: (value: string): void => { this.className = value; }

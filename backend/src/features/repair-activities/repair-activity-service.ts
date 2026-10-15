@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { repairActivityConsentVersion } from "@/config/repair-activities";
+import { repairActivitiesPage, repairActivityConsentVersion } from "@/config/repair-activities";
 import {
   issueRegistrationEditToken,
   verifyRegistrationEditToken,
@@ -13,6 +13,7 @@ import {
   assertValidIssueType,
   assertValidRegistrantName,
   assertValidTitle,
+  assertValidLocation,
   canAcceptNewRegistration,
   canEditIssueType,
   deriveRepairActivityStatus,
@@ -42,13 +43,20 @@ export type RepairActivityPublicView = {
   remaining: number;
 };
 
+export type RepairActivityDetailView = RepairActivityPublicView & {
+  location: string | null;
+  consent: { version: string; title: string; clauses: readonly string[] };
+};
+
 export type RepairActivityAdminView = RepairActivityPublicView & {
+  location: string | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string | null;
 };
 
 export type CreateRepairActivityInput = {
+  location?: unknown;
   title: string;
   activityAt: Date;
   capacity: number;
@@ -57,6 +65,7 @@ export type CreateRepairActivityInput = {
 };
 
 export type UpdateRepairActivityInput = {
+  location?: unknown;
   title?: string;
   activityAt?: Date;
   capacity?: number;
@@ -85,7 +94,7 @@ export type RegistrationAdminView = {
   id: string;
   activityId: string;
   name: string;
-  phone: string;
+  phoneMasked: string;
   issueType: RepairActivityIssueType;
   /** 机型，选填（issue #68）。 */
   deviceModel: string | null;
@@ -101,6 +110,7 @@ export type UpdateRegistrationInput = {
 };
 
 type ActivityRow = {
+  location: string | null;
   id: string;
   title: string;
   activityAt: Date;
@@ -157,6 +167,7 @@ function toAdminView(
 ): RepairActivityAdminView {
   return {
     ...toPublicView(row, registeredCount, now),
+    location: row.location,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     createdBy: row.createdBy,
@@ -178,7 +189,7 @@ function toRegistrationAdminView(row: {
     id: row.id,
     activityId: row.activityId,
     name: row.name,
-    phone: row.phone,
+    phoneMasked: maskActivityPhone(row.phone),
     issueType: assertValidIssueType(row.issueType),
     deviceModel: row.deviceModel,
     status: row.status,
@@ -334,6 +345,7 @@ export const repairActivityService = {
   ): Promise<RepairActivityAdminView> {
     requirePermission(actor, "activity:admin");
     const title = assertValidTitle(input.title);
+    const location = assertValidLocation(input.location);
     assertValidCapacity(input.capacity);
     assertActivityTimeRules({
       activityAt: input.activityAt,
@@ -346,6 +358,7 @@ export const repairActivityService = {
         data: {
           id: randomUUID(),
           title,
+          location,
           activityAt: input.activityAt,
           capacity: input.capacity,
           signupOpensAt: input.signupOpensAt,
@@ -364,6 +377,7 @@ export const repairActivityService = {
         result: "SUCCESS",
         after: {
           title,
+          location,
           capacity: input.capacity,
           activityAt: input.activityAt.toISOString(),
           signupOpensAt: input.signupOpensAt.toISOString(),
@@ -387,6 +401,8 @@ export const repairActivityService = {
         throw new AppError("ACTIVITY_NOT_FOUND", "活动不存在");
       }
       const title = input.title !== undefined ? assertValidTitle(input.title) : before.title;
+      const location =
+        input.location !== undefined ? assertValidLocation(input.location) : before.location;
       const capacity = input.capacity !== undefined ? input.capacity : before.capacity;
       assertValidCapacity(capacity);
       const activityAt = input.activityAt ?? before.activityAt;
@@ -406,7 +422,7 @@ export const repairActivityService = {
 
       const updated = await tx.repairActivity.update({
         where: { id: activityId },
-        data: { title, capacity, activityAt, signupOpensAt, signupClosesAt },
+        data: { title, location, capacity, activityAt, signupOpensAt, signupClosesAt },
       });
       await appendAuditLog(tx, {
         actor,
@@ -418,6 +434,7 @@ export const repairActivityService = {
         result: "SUCCESS",
         before: {
           title: before.title,
+          location: before.location,
           capacity: before.capacity,
           activityAt: before.activityAt.toISOString(),
           signupOpensAt: before.signupOpensAt.toISOString(),
@@ -425,6 +442,7 @@ export const repairActivityService = {
         },
         after: {
           title: updated.title,
+          location: updated.location,
           capacity: updated.capacity,
           activityAt: updated.activityAt.toISOString(),
           signupOpensAt: updated.signupOpensAt.toISOString(),
@@ -487,7 +505,7 @@ export const repairActivityService = {
     }));
   },
 
-  async getPublic(activityId: string): Promise<RepairActivityPublicView> {
+  async getPublic(activityId: string): Promise<RepairActivityDetailView> {
     const now = new Date();
     const row = await getDb().repairActivity.findFirst({
       where: { id: activityId, deletedAt: null },
@@ -495,10 +513,15 @@ export const repairActivityService = {
     if (!row) throw new AppError("ACTIVITY_NOT_FOUND", "活动不存在");
     const count = await countEffectiveRegistrations(activityId);
     const view = toPublicView(row, count, now);
-    if (view.status === "ENDED") {
-      throw new AppError("ACTIVITY_ENDED", "活动已结束");
-    }
-    return view;
+    return {
+      ...view,
+      location: row.location,
+      consent: {
+        version: repairActivityConsentVersion,
+        title: repairActivitiesPage.detail.consent.title,
+        clauses: repairActivitiesPage.detail.consent.clauses,
+      },
+    };
   },
 
   async register(
@@ -509,8 +532,10 @@ export const repairActivityService = {
       issueType: unknown;
       deviceModel?: unknown;
       consentAccepted?: boolean;
+      consentVersion?: unknown;
     },
     context: PublicRequestContext,
+    account?: AuthorizedActor,
   ): Promise<RegistrationPublicView> {
     const name = assertValidRegistrantName(input.name);
     const phone = normalizePhone(input.phone);
@@ -522,6 +547,13 @@ export const repairActivityService = {
     // 顺序：先报字段问题、再报缺同意，否则一个手机号填错的人会先看到「请先同意免责声明」。
     if (input.consentAccepted !== true) {
       throw new AppError("ACTIVITY_CONSENT_REQUIRED", "请先阅读并同意报名须知与免责声明");
+    }
+    // Legacy Web may omit the version; account requests must echo the displayed version.
+    if (
+      (account || input.consentVersion !== undefined) &&
+      input.consentVersion !== repairActivityConsentVersion
+    ) {
+      throw new AppError("ACTIVITY_CONSENT_VERSION_CHANGED", "报名须知已更新，请重新阅读并同意");
     }
 
     return inSerializableTransaction(async (tx) => {
@@ -560,6 +592,7 @@ export const repairActivityService = {
         data: {
           id: randomUUID(),
           activityId,
+          userId: account?.userId ?? null,
           name,
           phone,
           phoneLast4: phone.slice(-4),
@@ -572,8 +605,9 @@ export const repairActivityService = {
         },
       });
       await appendAuditLog(tx, {
-        actor: context,
-        actorType: "SYSTEM",
+        actor: account ?? context,
+        actorType: account ? "USER" : "SYSTEM",
+        actorUserId: account?.userId,
         action: "repair_activity.registration_created",
         targetType: "RepairActivityRegistration",
         targetId: created.id,
@@ -614,7 +648,7 @@ export const repairActivityService = {
       throw new AppError("ACTIVITY_ENDED", "活动已结束");
     }
     const reg = await getDb().repairActivityRegistration.findFirst({
-      where: { activityId, phone, deletedAt: null },
+      where: { activityId, phone, userId: null, deletedAt: null },
     });
     if (!reg) {
       throw new AppError("ACTIVITY_REGISTRATION_NOT_FOUND", "未找到该手机号的报名记录");
@@ -652,7 +686,7 @@ export const repairActivityService = {
     context: PublicRequestContext,
   ): Promise<RegistrationPublicView> {
     const issueType = assertValidIssueType(input.issueType);
-    normalizePhone(input.phone);
+    const phone = normalizePhone(input.phone);
     if (typeof input.editToken !== "string" || !input.editToken.trim()) {
       throw new AppError("ACTIVITY_EDIT_TOKEN_INVALID", "改类型凭证无效或已过期");
     }
@@ -681,7 +715,7 @@ export const repairActivityService = {
       }
 
       const reg = await tx.repairActivityRegistration.findFirst({
-        where: { id: registrationId, activityId, deletedAt: null },
+        where: { id: registrationId, activityId, phone, userId: null, deletedAt: null },
       });
       if (!reg) {
         throw new AppError("ACTIVITY_REGISTRATION_NOT_FOUND", "报名记录不存在");

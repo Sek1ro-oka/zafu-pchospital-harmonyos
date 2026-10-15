@@ -18,7 +18,7 @@ import {
 } from "@/features/repair-activities/repair-activity-validation";
 import type {
   RegistrationLookupView,
-  RepairActivityPublicView,
+  RepairActivityDetailView,
 } from "@/features/repair-activities/repair-activity-service";
 
 type Props = { activityId: string };
@@ -26,7 +26,7 @@ type Props = { activityId: string };
 export function RepairActivityDetail({ activityId }: Props) {
   const copy = repairActivitiesPage.detail;
   const [state, setState] = useState<"loading" | "ready" | "missing" | "error">("loading");
-  const [activity, setActivity] = useState<RepairActivityPublicView | null>(null);
+  const [activity, setActivity] = useState<RepairActivityDetailView | null>(null);
   const [problem, setProblem] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,7 +47,7 @@ export function RepairActivityDetail({ activityId }: Props) {
       const response = await fetch(`/api/v1/repair-activities/${activityId}`);
       const json = (await response.json()) as {
         success: boolean;
-        data?: RepairActivityPublicView;
+        data?: RepairActivityDetailView;
         error?: { code?: string; message?: string };
       };
       if (!json.success || !json.data) {
@@ -96,7 +96,11 @@ export function RepairActivityDetail({ activityId }: Props) {
       const response = await fetch(`/api/v1/repair-activities/${activityId}/registrations`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...pendingSignup, consentAccepted: true }),
+        body: JSON.stringify({
+          ...pendingSignup,
+          consentAccepted: true,
+          consentVersion: activity?.consent.version,
+        }),
       });
       const json = (await response.json()) as {
         success: boolean;
@@ -245,7 +249,8 @@ export function RepairActivityDetail({ activityId }: Props) {
           <div>
             <dt>{repairActivitiesPage.window}</dt>
             <dd>
-              {formatShanghaiDateTime(activity.signupOpensAt)} — {formatShanghaiDateTime(activity.signupClosesAt)}
+              {formatShanghaiDateTime(activity.signupOpensAt)} —{" "}
+              {formatShanghaiDateTime(activity.signupClosesAt)}
             </dd>
           </div>
           <div>
@@ -406,7 +411,7 @@ export function RepairActivityDetail({ activityId }: Props) {
           服务端同样强制，绕开这个弹层直接打接口会拿到 400。 */}
       {pendingSignup ? (
         <ConfirmDialog
-          title={copy.consent.title}
+          title={activity?.consent.title ?? copy.consent.title}
           confirmLabel={copy.consent.agree}
           cancelLabel={copy.consent.cancel}
           busy={busy}
@@ -416,7 +421,7 @@ export function RepairActivityDetail({ activityId }: Props) {
           <div className="admin-section">
             <p className="muted">{copy.consent.subtitle}</p>
             <ol className="admin-plain-list">
-              {copy.consent.clauses.map((clause) => (
+              {(activity?.consent.clauses ?? copy.consent.clauses).map((clause) => (
                 <li key={clause}>{clause}</li>
               ))}
             </ol>
@@ -426,4 +431,3 @@ export function RepairActivityDetail({ activityId }: Props) {
     </div>
   );
 }
-

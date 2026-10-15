@@ -165,7 +165,7 @@ export struct RegisterCustomerPage {
           LabeledInput({
             label: 'QQ 号',
             placeholder: '5–11 位数字',
-            text: $$this.qq,
+            text: this.qq,
             inputType: InputType.Number,
             maxLength: 11,
             disabled: this.busy,
@@ -175,7 +175,7 @@ export struct RegisterCustomerPage {
           LabeledInput({
             label: '密码',
             placeholder: '至少 6 位',
-            text: $$this.password,
+            text: this.password,
             inputType: InputType.Password,
             disabled: this.busy,
             errorText: this.fieldError('password'),
@@ -184,7 +184,7 @@ export struct RegisterCustomerPage {
           LabeledInput({
             label: '确认密码',
             placeholder: '再输入一次密码',
-            text: $$this.passwordConfirmation,
+            text: this.passwordConfirmation,
             inputType: InputType.Password,
             disabled: this.busy,
             errorText: this.fieldError('passwordConfirmation'),

@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { defaultRepairResult } from "@/config/repairs";
 import type { Prisma } from "@/generated/prisma/client";
 import { appendAuditLog } from "@/lib/audit/audit-service";
 import { AppError } from "@/lib/api/errors";
@@ -239,35 +238,67 @@ export async function timeline(
 
 /**
  * 活动接待内部落单通道（仅供维修活动 serve 在同一可序列化事务内调用）。
- * 跳过照片必填；仍写 timeline（CREATED + SUBMITTED）与审计；直接落 PENDING。
+ *
+ * 生成 **DRAFT**（issue #79 第 6 项）：预填机主（姓名 / 电话）与日期 / 分类 / 机型，
+ * 正文、时长、备注全部留空，由成员在表单里补齐后自行提交；只写 CREATED 时间线，
+ * 不写 SUBMITTED、不置 `submittedAt`。来源痕留在时间线 summary 与审计里。
  */
-export type CreateSubmittedForActivityInput = {
-  ownerName?: string | null;
-  ownerPhone?: string | null;
+export type CreateServeDraftForActivityInput = {
   memberProfileId: string;
-  categoryId: string;
+  /** 分类映射结果；映射不到 / 已停用时为 null，由成员在表单里补选，接待动作本身必须成功。 */
+  categoryId: string | null;
   repairDate: string; // YYYY-MM-DD（上海日历日）
-  content: string;
-  remark: string;
-  durationMinutes: number;
+  ownerName: string;
+  /** 完整 11 位；可见性收口在视图层（`toRepairView` 的 `canViewOwnerPhone`），不在这里掩码。 */
+  ownerPhone: string;
   /** 报名时选填的机型（issue #68）；没填传 null。 */
   deviceModel: string | null;
-  /** 幂等键；建议 `activity-serve:{registrationId}` */
+  /** 幂等键；固定 `activity-serve:{registrationId}` */
   createRequestKey: string;
   registrationId: string;
   activityId: string;
 };
 
-export async function createSubmittedForActivity(
+export async function createServeDraftForActivity(
   tx: Prisma.TransactionClient,
-  input: CreateSubmittedForActivityInput,
+  input: CreateServeDraftForActivityInput,
   actor: import("@/types/contracts").AuthorizedActor,
   now: Date,
 ): Promise<{ repairRecordId: string }> {
+  const member = await tx.memberProfile.findFirst({
+    where: { id: input.memberProfileId, userId: actor.userId, status: "ACTIVE", deletedAt: null },
+  });
+  if (!actor.userId || !member) throw new AppError("MEMBER_REQUIRED", "需要有效成员身份");
+  if (input.createRequestKey !== `activity-serve:${input.registrationId}`) {
+    throw new AppError("IDEMPOTENCY_CONFLICT", "接待创建键无效");
+  }
   const existing = await tx.repairRecord.findUnique({
     where: { createRequestKey: input.createRequestKey },
+    include: { activityRegistration: true, repairOrder: true, timeline: true },
   });
-  if (existing && !existing.deletedAt) {
+  if (existing) {
+    const source = existing.timeline.some((event) => {
+      const summary = event.summary as {
+        source?: string;
+        activityId?: string;
+        registrationId?: string;
+      } | null;
+      return (
+        event.eventType === "CREATED" &&
+        summary?.source === "repair_activity_serve" &&
+        summary.activityId === input.activityId &&
+        summary.registrationId === input.registrationId
+      );
+    });
+    if (
+      existing.deletedAt ||
+      existing.memberProfileId !== member.id ||
+      existing.repairOrder ||
+      !source ||
+      (existing.activityRegistration && existing.activityRegistration.id !== input.registrationId)
+    ) {
+      throw new AppError("IDEMPOTENCY_CONFLICT", "幂等键已被其它来源使用");
+    }
     return { repairRecordId: existing.id };
   }
 
@@ -281,18 +312,19 @@ export async function createSubmittedForActivity(
     data: {
       id: recordId,
       memberProfileId: input.memberProfileId,
-      status: "PENDING",
+      status: "DRAFT",
       createRequestKey: input.createRequestKey,
       repairDate,
-      durationMinutes: input.durationMinutes,
       categoryId: input.categoryId,
       deviceModel: input.deviceModel,
-      ownerName: input.ownerName ?? null,
-      ownerPhone: input.ownerPhone ?? null,
-      content: input.content,
-      result: defaultRepairResult,
-      remark: input.remark,
-      submittedAt: now,
+      ownerName: input.ownerName,
+      ownerPhone: input.ownerPhone,
+      // 正文 / 时长 / 备注留空：模板正文、「1 分钟」占位与「活动接待自动落单」备注是旧流程
+      // 的产物，改造后由成员在表单里补齐（issue #79 第 6 项）。
+      content: null,
+      durationMinutes: null,
+      remark: null,
+      result: null,
       createdAt: now,
     },
   });
@@ -302,23 +334,10 @@ export async function createSubmittedForActivity(
     actor.userId,
     "CREATED",
     {
-      status: "PENDING",
+      status: "DRAFT",
       source: "repair_activity_serve",
       activityId: input.activityId,
       registrationId: input.registrationId,
-    },
-    now,
-  );
-  await timeline(
-    tx,
-    recordId,
-    actor.userId,
-    "SUBMITTED",
-    {
-      from: "DRAFT",
-      to: "PENDING",
-      source: "repair_activity_serve",
-      idempotencyKey: input.createRequestKey,
     },
     now,
   );
@@ -334,7 +353,7 @@ export async function createSubmittedForActivity(
       activityId: input.activityId,
       registrationId: input.registrationId,
       categoryId: input.categoryId,
-      status: "PENDING",
+      status: "DRAFT",
     },
   });
   return { repairRecordId: recordId };

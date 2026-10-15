@@ -197,9 +197,26 @@ async function registerCheckInAndServe(input: {
   });
   assert.equal(created.status, 201, `报名应成功：${JSON.stringify(created.json)}`);
   const registrationId = (created.json.data as { id: string }).id;
+  // Isolate snapshot cases from the new global pending-draft guard.
+  await getDb().repairRecord.updateMany({
+    where: {
+      createRequestKey: { startsWith: "activity-serve:" },
+      memberProfileId: STAFF_PROFILE_ID,
+      status: "DRAFT",
+    },
+    data: { deletedAt: new Date() },
+  });
+  await getDb().repairActivity.update({
+    where: { id: ACTIVITY_ID },
+    data: { signupClosesAt: new Date(Date.now() - 1000) },
+  });
   await repairActivityStaffService.markAttendance(ACTIVITY_ID, staffActor);
   await repairActivityStaffService.checkIn(ACTIVITY_ID, [registrationId], staffActor);
   const served = await repairActivityStaffService.serve(ACTIVITY_ID, registrationId, staffActor);
+  await getDb().repairActivity.update({
+    where: { id: ACTIVITY_ID },
+    data: { signupClosesAt: new Date(Date.now() + 86400000) },
+  });
   return { registrationId, repairRecordId: served.repairRecordId };
 }
 
@@ -310,7 +327,10 @@ dbTest("接待落单把机型复制进维修记录", async () => {
 
   const record = await getDb().repairRecord.findUniqueOrThrow({ where: { id: repairRecordId } });
   assert.equal(record.deviceModel, "ThinkPad X1 Carbon");
-  assert.equal(record.status, "PENDING");
+  assert.equal(record.status, "DRAFT");
+  assert.equal(record.result, null);
+  assert.equal(record.content, null);
+  assert.equal(record.submittedAt, null);
 
   const registration = await getDb().repairActivityRegistration.findUniqueOrThrow({
     where: { id: registrationId },

@@ -1,4 +1,5 @@
 import { ROUTE_REPAIR_RECORDS } from '../../core/ui/Routes';
+import { ROUTE_MY_REGISTRATIONS, ROUTE_STAFF_ACTIVITIES, ROUTE_MANAGEMENT } from '../../core/ui/Routes';
 import { RecordListParam } from '../repair/RepairRecordsPage';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
@@ -118,7 +119,7 @@ export struct ProfilePage {
     return [
       { title: '我的报修', icon: $r('app.media.ref_document'), note: '', route: ROUTE_REPAIR_ORDERS },
       { title: '维修记录', icon: $r('app.media.ref_grid'), note: '暂未接入', route: '' },
-      { title: '我的报名', icon: $r('app.media.ref_flag'), note: '暂未接入', route: '' },
+      { title: '我的报名', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_MY_REGISTRATIONS },
       { title: '收藏', icon: $r('app.media.ref_star'), note: '', route: ROUTE_FAVORITES },
       { title: '消息', icon: $r('app.media.ref_message'), note: '', route: ROUTE_MESSAGES },
       { title: '修改密码', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_PASSWORD_CHANGE },
@@ -130,7 +131,7 @@ export struct ProfilePage {
     const entries: ProfileEntry[] = [
       { title: '本人维修备案', icon: $r('app.media.ref_document'), note: '', route: ROUTE_REPAIR_RECORDS },
       { title: '已审核备案库', icon: $r('app.media.ref_grid'), note: '', route: ROUTE_REPAIR_RECORDS },
-      { title: '我的报名', icon: $r('app.media.ref_flag'), note: '等待 #62 接口', route: '' },
+      { title: '我的报名', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_MY_REGISTRATIONS },
       { title: '收藏', icon: $r('app.media.ref_star'), note: '', route: ROUTE_FAVORITES },
       { title: '个人资料', icon: $r('app.media.ref_profile'), note: '', route: ROUTE_PERSONAL_PROFILE },
       { title: '进入工作台', icon: $r('app.media.ref_document'), note: '', route: ROUTE_STAFF_ORDERS },
@@ -142,6 +143,8 @@ export struct ProfilePage {
       entries.push({ title: '备案审核', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_STAFF_REVIEW });
     }
     entries.push({ title: '消息', icon: $r('app.media.ref_message'), note: '', route: ROUTE_MESSAGES });
+    if (this.permissions.includes('activity:staff')) entries.push({ title: '成员活动', icon: $r('app.media.ref_activity'), note: '', route: ROUTE_STAFF_ACTIVITIES });
+    if (this.permissions.includes('activity:admin')) entries.push({ title: '管理', icon: $r('app.media.ref_grid'), note: '', route: ROUTE_MANAGEMENT });
     return entries;
   }
 

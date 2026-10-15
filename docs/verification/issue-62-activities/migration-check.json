@@ -1,0 +1,10 @@
+{
+  "baseline": "9ac3226db7fea4d670d9ade394d88f591df55361",
+  "migration": "20261014120000_issue62_account_activities",
+  "data": "synthetic anonymous fixture inserted before migration",
+  "oldColumnsUnchanged": true,
+  "userId": null,
+  "consentVersion": null,
+  "consentAcceptedAt": null,
+  "oldActivityLocation": null
+}

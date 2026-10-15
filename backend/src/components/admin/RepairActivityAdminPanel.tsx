@@ -76,6 +76,7 @@ export function RepairActivityAdminPanel() {
       method: "POST",
       body: {
         title: data.title ?? "",
+        location: data.location?.trim() || null,
         capacity: Number(data.capacity),
         activityAt: toIso(data.activityAt ?? ""),
         signupOpensAt: toIso(data.signupOpensAt ?? ""),
@@ -105,6 +106,7 @@ export function RepairActivityAdminPanel() {
         method: "PATCH",
         body: {
           title: data.title ?? "",
+          location: data.location?.trim() || null,
           capacity: Number(data.capacity),
           activityAt: toIso(data.activityAt ?? ""),
           signupOpensAt: toIso(data.signupOpensAt ?? ""),
@@ -151,7 +153,7 @@ export function RepairActivityAdminPanel() {
         method: "PATCH",
         body: {
           name: data.name ?? "",
-          phone: data.phone ?? "",
+          ...(data.phone?.trim() ? { phone: data.phone } : {}),
           issueType: data.issueType ?? "",
         },
       },
@@ -244,6 +246,10 @@ export function RepairActivityAdminPanel() {
             <label className="field">
               <span className="field__label">{copy.create.titleField}</span>
               <input className="field__input" name="title" required maxLength={120} />
+            </label>
+            <label className="field">
+              <span className="field__label">地点（选填）</span>
+              <input className="field__input" name="location" maxLength={200} />
             </label>
             <label className="field">
               <span className="field__label">{copy.create.capacity}</span>
@@ -383,6 +389,15 @@ export function RepairActivityAdminPanel() {
                 />
               </label>
               <label className="field">
+                <span className="field__label">地点（选填）</span>
+                <input
+                  className="field__input"
+                  name="location"
+                  maxLength={200}
+                  defaultValue={editing.location ?? ""}
+                />
+              </label>
+              <label className="field">
                 <span className="field__label">{copy.create.capacity}</span>
                 <input
                   className="field__input"
@@ -473,7 +488,7 @@ export function RepairActivityAdminPanel() {
                         {registrationFirstRowNumber + index}
                       </td>
                       <td data-label={copy.registrations.name}>{registration.name}</td>
-                      <td data-label={copy.registrations.phone}>{registration.phone}</td>
+                      <td data-label={copy.registrations.phone}>{registration.phoneMasked}</td>
                       <td data-label={copy.registrations.issueType}>
                         {repairActivityIssueTypeLabels[registration.issueType] ??
                           registration.issueType}
@@ -530,10 +545,10 @@ export function RepairActivityAdminPanel() {
               <input
                 className="field__input"
                 name="phone"
-                required
+                placeholder="留空保持原手机号"
                 inputMode="numeric"
                 maxLength={11}
-                defaultValue={editingRegistration.phone}
+                defaultValue={""}
               />
             </label>
             <label className="field">
@@ -577,7 +592,7 @@ export function RepairActivityAdminPanel() {
           <p>{copy.registrations.deleteHint}</p>
           <p>
             <strong>
-              {removingRegistration.name} · {removingRegistration.phone}
+              {removingRegistration.name} · {removingRegistration.phoneMasked}
             </strong>
           </p>
         </ConfirmDialog>

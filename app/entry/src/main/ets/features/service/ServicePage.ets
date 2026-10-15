@@ -1,4 +1,5 @@
 import { WorkbenchSummary } from '../repair/WorkbenchSummary';
+import { ROUTE_STAFF_ACTIVITIES, ROUTE_MANAGEMENT } from '../../core/ui/Routes';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { RepairOrderFocusParam, ROUTE_CASE_LIBRARY, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
@@ -89,6 +90,8 @@ export struct ServicePage {
       { title: '知识问答', note: '有出处的 AI 咨询', icon: $r('app.media.ref_shield'), hue: 'blue', route: ROUTE_KNOWLEDGE, ready: true },
       { title: '典型案例库', note: '已发布的典型案例', icon: $r('app.media.ref_system'), hue: 'gold', route: ROUTE_CASE_LIBRARY, ready: true }
     ];
+    if (this.permissions.includes('activity:staff')) entries.push({ title: '成员活动', note: '出勤与现场接待', icon: $r('app.media.ref_activity'), hue: 'purple', route: ROUTE_STAFF_ACTIVITIES, ready: true });
+    if (this.permissions.includes('activity:admin')) entries.push({ title: '管理', note: '活动与报名管理', icon: $r('app.media.ref_grid'), hue: 'blue', route: ROUTE_MANAGEMENT, ready: true });
     if (this.permissions.includes('repair:review')) {
       entries.push({ title: '备案审核', note: '审核维修备案', icon: $r('app.media.ref_document'), hue: 'red', route: ROUTE_STAFF_REVIEW, ready: true });
     } else {
