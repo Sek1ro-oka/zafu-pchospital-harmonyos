@@ -1,0 +1,169 @@
+{
+  "environment": "isolated loopback development API; synthetic fixtures only",
+  "sourceRevision": "6e28dc015b2fed732aa51ea031f8487fa68b62b1",
+  "checkedAt": "2026-10-15T14:28:05.821060+08:00",
+  "checks": [
+    {
+      "name": "Final customer registration persisted and served",
+      "actual": "SERVED",
+      "expected": "SERVED",
+      "passed": true
+    },
+    {
+      "name": "Customer DTO excludes internal repair ID",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "Second customer owns no history",
+      "actual": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "name": "Second customer cannot read first registration",
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "name": "Second customer cannot edit first registration",
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "name": "App admin capacity persisted",
+      "actual": 15,
+      "expected": 15,
+      "passed": true
+    },
+    {
+      "name": "App admin location persisted",
+      "actual": "合成同包验收点B",
+      "expected": "合成同包验收点B",
+      "passed": true
+    },
+    {
+      "name": "Soft deleted B excluded from count",
+      "actual": 2,
+      "expected": 2,
+      "passed": true
+    },
+    {
+      "name": "Submitted draft no longer blocks",
+      "actual": null,
+      "expected": null,
+      "passed": true
+    },
+    {
+      "name": "Processed attendance cannot cancel",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "Actual repair pending review",
+      "actual": "PENDING",
+      "expected": "PENDING",
+      "passed": true
+    },
+    {
+      "name": "System picker App multipart produced one photo",
+      "actual": 1,
+      "expected": 1,
+      "passed": true
+    },
+    {
+      "name": "Record owner from signup snapshot",
+      "actual": "合成同包客户",
+      "expected": "合成同包客户",
+      "passed": true
+    },
+    {
+      "name": "Manual result persisted",
+      "actual": "COMPLETED",
+      "expected": "COMPLETED",
+      "passed": true
+    },
+    {
+      "name": "Manual duration persisted",
+      "actual": 20,
+      "expected": 20,
+      "passed": true
+    },
+    {
+      "name": "Processing still blocks actual DELETE",
+      "actual": "ACTIVITY_ATTENDANCE_CANCEL_BLOCKED",
+      "expected": "ACTIVITY_ATTENDANCE_CANCEL_BLOCKED",
+      "passed": true
+    },
+    {
+      "name": "Pure admin remains non-member",
+      "actual": "MEMBER_REQUIRED",
+      "expected": "MEMBER_REQUIRED",
+      "passed": true
+    },
+    {
+      "name": "Authorized phone cache remains private",
+      "actual": "private, no-store",
+      "expected": "private, no-store",
+      "passed": true
+    },
+    {
+      "name": "Customer cannot read staff phone",
+      "actual": 403,
+      "expected": 403,
+      "passed": true
+    },
+    {
+      "name": "Explicit current A save persisted",
+      "actual": "合成同包管理A已确认",
+      "expected": "合成同包管理A已确认",
+      "passed": true
+    },
+    {
+      "name": "B stays soft deleted",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "name": "Admin phone defaults masked",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "App-created and soft-deleted activity is hidden",
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "name": "Legacy anonymous lookup still works",
+      "actual": 200,
+      "expected": 200,
+      "passed": true
+    },
+    {
+      "name": "Anonymous row remains distinct",
+      "actual": "52e0d5e6-9912-4472-af67-0379a472fbe3",
+      "expected": "52e0d5e6-9912-4472-af67-0379a472fbe3",
+      "passed": true
+    },
+    {
+      "name": "Account row never leaks to anonymous lookup",
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "name": "Pre-migration processed attendance blocked by historical evidence",
+      "actual": "ACTIVITY_ATTENDANCE_CANCEL_BLOCKED",
+      "expected": "ACTIVITY_ATTENDANCE_CANCEL_BLOCKED",
+      "passed": true
+    }
+  ]
+}

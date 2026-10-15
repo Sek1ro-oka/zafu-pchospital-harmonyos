@@ -1,0 +1,14 @@
+{
+  "sourceRevision": "6e28dc015b2fed732aa51ea031f8487fa68b62b1",
+  "latestMain": "8129961a4d91e4b6fa3ca39621a9a89600deaeba",
+  "hapSha256": "47F26DF19A67DC6B095AACEF071232B0096CCDD1AF6B9825971F0D6566F413F9",
+  "hapSizeBytes": 2897550,
+  "sourceTrees": {
+    "app": "9056c068e24b5f14c950255d1f155d8a0f41072c",
+    "backend/src": "23f378f4920d1e81aab80072cb9c6896d2b28d5e",
+    "backend/prisma": "74c73325cc54d3aff478df12f3be8c7657200c02",
+    "backend/tests": "bbf14438d7dd26291e6838d0595d4604174321e7"
+  },
+  "temporaryPickerDiagnosticsRemoved": true,
+  "testRevision": "57a442ee03d0194f81d2a02ac257e2c82a8d1866"
+}

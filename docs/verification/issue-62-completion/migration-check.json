@@ -1,0 +1,23 @@
+{
+  "environment": "isolated loopback development database",
+  "appliedMigrationCount": 18,
+  "newMigration": "20261015133000_issue62_attendance_cancellation",
+  "columns": [
+    {
+      "name": "business_started_at",
+      "nullable": "YES"
+    },
+    {
+      "name": "cancelled_at",
+      "nullable": "YES"
+    }
+  ],
+  "legacyAttendanceUnchanged": [
+    {
+      "checkedInAt": "2026-10-14T12:56:15.039Z",
+      "businessStartedAt": null,
+      "cancelledAt": null
+    }
+  ],
+  "oldIssue62MigrationDiff": "unchanged against PR74 abf405e"
+}

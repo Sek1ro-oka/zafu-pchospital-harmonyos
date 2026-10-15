@@ -26,7 +26,9 @@ corepack pnpm dev --port 13080
 
 ## 开发范围与检查
 
-2026-10-15：#62 功能分支新增账号报名归属/本人分页与最小结构迁移、真实地点/条款，适配活动双写通道、现场签到/电话/接待草稿及管理接口；[活动契约](docs/native-activities-api.md) 包含权限、状态及 #63 路由交接。独立库 44 项相关回归、521 项单测、lint 和生产构建通过，见 [验证记录](../docs/verification/issue-62-activities.md)。取消成员出勤按用户确认保留缺口，未部署共享服务。
+2026-10-15 收尾新增 `DELETE /member/repair-activities/{id}/attendance`：历史保留、处理证据兼容和现场写事务互斥；见 [契约](docs/native-activities-api.md) 和 [收尾验证](../docs/verification/issue-62-completion.md)。529 项单测、54 项相关 DB 回归和 lint/生产构建通过，前轮取消缺口已按新任务补齐。
+
+首轮历史（2026-10-15）：#62 功能分支新增账号报名归属/本人分页与最小结构迁移、真实地点/条款，适配活动双写通道、现场签到/电话/接待草稿及管理接口；[活动契约](docs/native-activities-api.md) 包含权限、状态及 #63 路由交接。独立库 44 项相关回归、521 项单测、lint 和生产构建通过，见 [验证记录](../docs/verification/issue-62-activities.md)。取消成员出勤按用户确认保留缺口，未部署共享服务。
 
 - 接口：`src/app/api/v1/`；业务：`src/features/`；模型与迁移：`prisma/`；测试：`tests/`。
 - 原生 Bearer 登录/会话与公开注册（客户自助注册、邀请码注册工作人员）已实现

@@ -1,0 +1,18 @@
+{
+  "environment": "isolated synthetic development fixtures",
+  "sourceRevision": "6e28dc015b2fed732aa51ea031f8487fa68b62b1",
+  "checks": [
+    {
+      "name": "Final package retry B never saved unconfirmed A",
+      "actual": "合成同包管理A",
+      "expected": "合成同包管理A",
+      "passed": true
+    },
+    {
+      "name": "Final package retry B soft deleted only B",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    }
+  ]
+}
