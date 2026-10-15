@@ -34,7 +34,7 @@ interface Knowledge {
   authenticated: boolean; home: string; permissions: string[];
   cases: { id: string }[]; casesLoading: boolean; casesError: string;
   loadCases(): Promise<void>; authChanged(): void;
-  guides: { id: string; title: string; revision: null }[]; category: string; query: string;
+  guides: { id: string; title: string; revision: null }[]; category: string;
   visibleGuides(): { id: string }[];
 }
 
@@ -75,7 +75,7 @@ test("退出后工作人员案例的迟到响应不泄入客户/游客首页", a
   assert.equal(library.casesError, "");
 });
 
-test("公开指南按标题分类与搜索共同过滤，无匹配返回空态", () => {
+test("知识主页面按标题粗分类，无分类内容返回空态；关键词搜索由独立页承担", () => {
   const library = page<Knowledge>("knowledge/KnowledgeLibraryPage.ets", "KnowledgeLibraryPage", {});
   library.guides = [
     { id: "a", title: "开机黑屏", revision: null },
@@ -86,9 +86,8 @@ test("公开指南按标题分类与搜索共同过滤，无匹配返回空态",
   library.category = "开机故障";
   assert.equal(library.visibleGuides().map((x) => x.id).join(","), "a");
   library.category = "散热";
-  library.query = "风扇";
   assert.equal(library.visibleGuides().map((x) => x.id).join(","), "b");
-  library.query = "黑屏";
+  library.category = "硬件外设";
   assert.equal(library.visibleGuides().length, 0);
   assert.equal(guideCategory("开机进临时桌面"), "系统软件");
 });

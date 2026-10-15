@@ -26,6 +26,11 @@ test("切换类型/关键词后，旧响应和 finally 不污染新范围", asyn
   pending.resolve(page(["old"])); await old;
   assert.equal(c.state.type, "guides"); assert.deepEqual(c.state.guides, [guide]); assert.deepEqual(c.state.cases, []);
 });
+test("独立指南搜索换成无匹配关键词后清除旧结果", async () => {
+  const c = controller(async () => page([]));
+  await c.search("Windows", "guides", false); assert.equal(c.state.guides.length, 1);
+  await c.search("不存在的故障", "guides", false); assert.equal(c.state.guides.length, 0);
+});
 test("分页失败重试同一页；成功后去重追加，不跳页", async () => {
   const requested: number[] = []; let fail = true;
   const c = controller(async (_q, n) => { requested.push(n); if (n === 1) return page(["A"], 1, true); if (fail) { fail = false; throw new Error(); } return page(["A", "B"], 2); });

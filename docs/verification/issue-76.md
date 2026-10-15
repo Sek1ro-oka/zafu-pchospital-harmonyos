@@ -38,14 +38,14 @@
 
 ```powershell
 # backend/
-node --import tsx --test tests/unit/knowledge-browse-app.test.ts tests/unit/public-guides.test.ts tests/unit/guest-login-app.test.ts tests/unit/customer-community-app.test.ts
+node --import tsx --test tests/unit/knowledge-browse-app.test.ts tests/unit/public-guides.test.ts tests/unit/guest-login-app.test.ts tests/unit/customer-community-app.test.ts tests/unit/reference-pages-app.test.ts
 node tools/db-task.mjs test tests/integration/knowledge-browse.test.ts tests/integration/customer-community.test.ts
-node node_modules/eslint/bin/eslint.js src/features/knowledge/case-search.ts src/features/customer-community/customer-case-service.ts src/app/api/v1/knowledge/cases/search/route.ts tests/unit/knowledge-browse-app.test.ts tests/unit/guest-login-app.test.ts tests/integration/knowledge-browse.test.ts
+node node_modules/eslint/bin/eslint.js src/features/knowledge/case-search.ts src/features/customer-community/customer-case-service.ts src/app/api/v1/knowledge/cases/search/route.ts tests/unit/knowledge-browse-app.test.ts tests/unit/guest-login-app.test.ts tests/unit/reference-pages-app.test.ts tests/integration/knowledge-browse.test.ts
 node tools/ensure-doc-manifest.mjs
 node node_modules/next/dist/bin/next build
 ```
 
-- 相关单测 **33/33**：换词/清空、切类型、分页失败后同页重试/去重、旧分页不污染新请求、离开/返回、失败与游客、字面高亮、实际搜索页异步目标确认，以及原有登录/公开内容状态回归。
+- 相关单测 **39/39**：换词/清空、切类型、分页失败后同页重试/去重、旧分页不污染新请求、离开/返回、失败与游客、字面高亮、实际搜索页异步目标确认，以及原有主页面/登录/公开内容状态回归。旧主页面的「分类加内联关键词」断言随搜索入口迁移更新为分类/空态检查；独立搜索补充同一指南从命中到无命中的真实控制器回归。
 - 相关 DB 回归 **11/11**：新增 6 项搜索，使用真实独立测试库、24 条合成案例，其中 22 条有效公开、一条内部、一条撤回；验证第一页 20 / 第二页 2、大小写/正文匹配、参数、公开/内部权限、旧结果、撤回和来源哈希变化。复用 5 项原公开内容/收藏回归检查共用有效性路径。测试夹具完成后清理，没有向开发库灌入分页样本。
 - 变更服务/路由/测试 ESLint **exit 0**；后端生产构建 **exit 0**。
 - `next build` 的 Web 文档清单使用现有工具生成的明确占位清单，不代表 Web 文档站验证完成；App 指南来自另行加载的真实知识索引。
