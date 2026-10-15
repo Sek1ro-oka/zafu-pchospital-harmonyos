@@ -46,6 +46,15 @@ export struct PasswordChangePage {
   onCancel: () => void = () => {};
   /** 会话失效（401 类）时通知上层走统一登出路径。 */
   onSessionExpired: () => void = () => {};
+  /**
+   * 请求中状态上报（与 `LoginPage` / 两个注册页同一契约）。
+   *
+   * 为什么必须有：普通改密（非强制）在途时用户本来可以用返回键离开本页，而迟到的
+   * 响应会把令牌写成这个被放弃的账号（账号串用）。`SessionService` 侧现在有代次
+   * 校验兜底，页面侧再拦一次返回键是代价最小的一道防线 —— 页面还在，迟到的响应
+   * 写的正是它自己。
+   */
+  onBusyChange: (busy: boolean) => void = () => {};
   /** 强制改密账号：true 时不允许跳过（契约：必须先改密才能用业务接口）。 */
   @Prop forced: boolean = false;
   @State currentPassword: string = '';
@@ -111,6 +120,7 @@ export struct PasswordChangePage {
       return;
     }
     this.busy = true;
+    this.onBusyChange(true);
     const generation: number = this.generation;
     try {
       // 显式声明类型：ArkTS 不允许未加标注的对象字面量（arkts-no-untyped-obj-literals）。
@@ -159,6 +169,10 @@ export struct PasswordChangePage {
       if (generation === this.generation) {
         this.busy = false;
       }
+      // 对父级的上报刻意**无条件**（与两个注册页一致）：改密成功后本页会被 pop，
+      // aboutToDisappear 已递增 generation，上面受代次保护的 this.busy = false 会被跳过；
+      // 但父级的 passwordChangeBusy 必须复位，否则下一个改密页的返回键会被永久错误拦截。
+      this.onBusyChange(false);
     }
   }
 
