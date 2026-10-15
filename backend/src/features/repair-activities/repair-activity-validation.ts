@@ -145,6 +145,58 @@ export function assertValidTitle(title: string): string {
   return trimmed;
 }
 
+export function assertValidLocation(value: unknown): string | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value !== "string" || value.trim().length > 200) {
+    throw new AppError("VALIDATION_FAILED", "地点须为不超过 200 字的文本");
+  }
+  return value.trim() || null;
+}
+
+export type StaffCheckInIssueTypeUpdate = {
+  registrationId: string;
+  issueType: RepairActivityIssueType;
+};
+
+/** Route 与 Service 共用的签到类型校验；先限制数组长度再遍历。 */
+export function validateCheckInIssueTypeUpdates(
+  value: unknown,
+  registrationIds: string[],
+): StaffCheckInIssueTypeUpdate[] {
+  const ids = new Set(registrationIds.map((id) => id.trim()).filter(Boolean));
+  if (ids.size === 0 || ids.size > 100) {
+    throw new AppError("VALIDATION_FAILED", "单次请选择 1–100 条报名记录");
+  }
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > ids.size) {
+    throw new AppError("VALIDATION_FAILED", "issueTypeUpdates 必须是数组且不能超过本批客户数量");
+  }
+  const seen = new Set<string>();
+  return value.map((item: unknown) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new AppError("VALIDATION_FAILED", "故障类型更新项无效");
+    }
+    const entry = item as Record<string, unknown>;
+    const id = typeof entry.registrationId === "string" ? entry.registrationId.trim() : "";
+    if (!id || id.length > 36 || !ids.has(id) || seen.has(id)) {
+      throw new AppError("VALIDATION_FAILED", "更新 ID 必须属于本批客户且不能重复");
+    }
+    seen.add(id);
+    return { registrationId: id, issueType: assertValidIssueType(entry.issueType) };
+  });
+}
+
+/** 报名截止后才开放成员出勤、客户签到与接待；报满不代表报名截止。 */
+export function canOperateActivityStaff(signupClosesAt: Date | string, now = new Date()): boolean {
+  return now.getTime() >= new Date(signupClosesAt).getTime();
+}
+
+export function assertActivityStaffOpen(signupClosesAt: Date, now = new Date()): void {
+  if (!canOperateActivityStaff(signupClosesAt, now)) {
+    throw new AppError("ACTIVITY_NOT_OPEN", "报名尚未截止，暂不可出勤、签到或接待");
+  }
+}
+
 export function assertValidRegistrantName(name: string): string {
   const trimmed = name.trim();
   if (trimmed.length < 2 || trimmed.length > 40) {

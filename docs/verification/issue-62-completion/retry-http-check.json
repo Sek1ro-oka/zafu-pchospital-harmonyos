@@ -1,0 +1,17 @@
+{
+  "environment": "isolated synthetic development fixtures",
+  "checks": [
+    {
+      "name": "Retry delete B did not save A",
+      "actual": "合成管理A",
+      "expected": "合成管理A",
+      "passed": true
+    },
+    {
+      "name": "Retry delete B soft deleted B",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+> hvigor [32mhvigor client: Starting hvigor daemon.[39m
+> hvigor [32mHvigor Daemon started in 2.5 s[39m
+> hvigor [32mUP-TO-DATE :entry:default@PreBuild...  [39m
+> hvigor [32mFinished :entry:default@CreateModuleInfo... after 3 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@GenerateMetadata...  [39m
+> hvigor [32mFinished :entry:default@ConfigureCmake... after 1 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@MergeProfile...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@CreateBuildProfile...  [39m
+> hvigor [32mFinished :entry:default@PreCheckSyscap... after 1 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@GeneratePkgContextInfo...  [39m
+> hvigor [32mFinished :entry:default@GeneratePkgSdkInfo... after 5 ms [39m
+> hvigor [32mFinished :entry:default@ProcessIntegratedHsp... after 2 ms [39m
+> hvigor [32mFinished :entry:default@BuildNativeWithCmake... after 1 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@MakePackInfo...  [39m
+> hvigor [32mFinished :entry:default@SyscapTransform... after 18 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessProfile...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessRouterMap...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessShareConfig...  [39m
+> hvigor [32mFinished :entry:default@ProcessStartupConfig... after 13 ms [39m
+> hvigor [32mFinished :entry:default@BuildNativeWithNinja... after 2 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessResource...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@GenerateLoaderJson...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@ProcessLibs...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@CompileResource...  [39m
+> hvigor [32mUP-TO-DATE :entry:default@DoNativeStrip...  [39m
+> hvigor [32mFinished :entry:default@BuildJS... after 5 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@CacheNativeLibs...  [39m
+> hvigor WARN: WARN: ArkTS:WARN File: C:/Users/19687/.codex/visualizations/2026/10/14/01a13a2d-166a-74d3-8636-2b85eabda69d/issue-62/app/entry/src/main/ets/features/knowledge/CitationDetailPage.ets:103:45
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: C:/Users/19687/.codex/visualizations/2026/10/14/01a13a2d-166a-74d3-8636-2b85eabda69d/issue-62/app/entry/src/main/ets/features/knowledge/KnowledgePage.ets:131:45
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: C:/Users/19687/.codex/visualizations/2026/10/14/01a13a2d-166a-74d3-8636-2b85eabda69d/issue-62/app/entry/src/main/ets/features/service/ServicePage.ets:158:45
+ Function may throw exceptions. Special handling is required.
+
+WARN: ArkTS:WARN File: C:/Users/19687/.codex/visualizations/2026/10/14/01a13a2d-166a-74d3-8636-2b85eabda69d/issue-62/app/entry/src/main/ets/features/profile/ProfilePage.ets:153:45
+ Function may throw exceptions. Special handling is required.
+
+
+> hvigor [32mFinished :entry:default@CompileArkTS... after 37 s 563 ms [39m
+> hvigor [32mUP-TO-DATE :entry:default@GeneratePkgModuleJson...  [39m
+> hvigor [32mFinished :entry:default@ProcessCompiledResources... after 2 ms [39m
+> hvigor [32mFinished :entry:default@PackageHap... after 1 s 541 ms [39m
+> hvigor [32mFinished :entry:default@PackingCheck... after 9 ms [39m
+> hvigor WARN: Will skip sign 'hos_hap'. No signingConfigs profile is configured in current project.
+             If needed, configure the signingConfigs in C:\Users\19687\.codex\visualizations\2026\10\14\01a13a2d-166a-74d3-8636-2b85eabda69d\issue-62\app\build-profile.json5.
+> hvigor [32mFinished :entry:default@SignHap... after 3 ms [39m
+> hvigor [32mFinished :entry:default@CollectDebugSymbol... after 2 ms [39m
+> hvigor [32mFinished :entry:assembleHap... after 1 ms [39m
+> hvigor [32mBUILD SUCCESSFUL in 1 min 20 s 627 ms [39m
+
+33 tasks in total: 17 executed, 16 up-to-date

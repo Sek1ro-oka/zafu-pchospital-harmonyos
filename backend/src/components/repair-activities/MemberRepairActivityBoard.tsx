@@ -22,6 +22,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
   const [toast, setToast] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState<string | null>(null);
+  const [cancelOpen, setCancelOpen] = useState(false);
   const [withdrawTarget, setWithdrawTarget] = useState<StaffRegistrationView | null>(null);
 
   const load = useCallback(async () => {
@@ -56,10 +57,11 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
   async function postJson<T>(
     path: string,
     body: Record<string, unknown>,
+    method: "POST" | "DELETE" = "POST",
   ): Promise<{ ok: true; data: T } | { ok: false; message: string; code?: string }> {
     try {
       const response = await fetch(path, {
-        method: "POST",
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
@@ -94,6 +96,26 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       return;
     }
     setToast(copy.attendSuccess);
+    await load();
+  }
+
+  async function cancelAttendance() {
+    if (busy !== null) return;
+    setBusy("cancel-attendance");
+    setMessage("");
+    setToast(null);
+    const result = await postJson<{ attended: false }>(
+      `/api/v1/member/repair-activities/${activityId}/attendance`,
+      {},
+      "DELETE",
+    );
+    setBusy(null);
+    if (!result.ok) {
+      setMessage(result.message);
+      return;
+    }
+    setCancelOpen(false);
+    setToast("已取消本人本场出勤");
     await load();
   }
 
@@ -151,8 +173,8 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
       setMessage(result.message);
       return;
     }
-    setToast(copy.serveSuccess);
     await load();
+    window.location.assign(`/member/repairs/${result.data.repairRecordId}/edit`);
   }
 
   function toggle(id: string) {
@@ -189,12 +211,34 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
 
   return (
     <div className="activity-board">
+      {cancelOpen ? (
+        <ConfirmDialog
+          title="取消本场出勤？"
+          confirmLabel="确认取消出勤"
+          cancelLabel="返回"
+          busy={busy === "cancel-attendance"}
+          onConfirm={() => void cancelAttendance()}
+          onClose={() => setCancelOpen(false)}
+        >
+          <p>只取消本人出勤，不影响客户报名、排队或已有备案；已进行现场处理时不能取消。</p>
+          {message ? <p role="alert">{message}</p> : null}
+        </ConfirmDialog>
+      ) : null}
       <div className="activity-board__toolbar">
         <Button href="/member/repair-activities" variant="ghost">
           {copy.back}
         </Button>
         {board.attended ? (
-          <span className="admin-tag admin-tag--accent">{copy.attendedBadge}</span>
+          <>
+            <span className="admin-tag admin-tag--accent">{copy.attendedBadge}</span>
+            {board.canCancelAttendance ? (
+              <Button variant="ghost" disabled={busy !== null} onClick={() => setCancelOpen(true)}>
+                取消本场出勤
+              </Button>
+            ) : (
+              <span>{board.attendanceCancelBlockedReason}</span>
+            )}
+          </>
         ) : (
           <Button
             className="activity-board__attend-cta"
@@ -226,6 +270,14 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
         </p>
       ) : null}
 
+      {board.pendingServeDraft ? (
+        <Card>
+          <p>请先完成 {board.pendingServeDraft.ownerName} 的接待草稿。</p>
+          <Button href={`/member/repairs/${board.pendingServeDraft.repairRecordId}`}>
+            继续填写备案
+          </Button>
+        </Card>
+      ) : null}
       <div className="activity-board__panes">
         <Card className="activity-board__pane">
           <header className="activity-board__pane-head">
@@ -308,7 +360,7 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
                     <Button
                       variant="solid"
                       onClick={() => void serve(row.id)}
-                      disabled={opsDisabled}
+                      disabled={opsDisabled || Boolean(board.pendingServeDraft)}
                     >
                       {busy === `serve:${row.id}` ? copy.serving : copy.serve}
                     </Button>
@@ -327,6 +379,21 @@ export function MemberRepairActivityBoard({ activityId }: Props) {
         </Card>
       </div>
 
+      <Card>
+        <h2>已接待</h2>
+        {board.served.length === 0 ? (
+          <p>暂无已接待报名</p>
+        ) : (
+          board.served.map((row) => (
+            <p key={row.id}>
+              {row.name} · {row.phoneMasked} · {row.recordStatus ?? "备案不可用"}
+              {row.repairRecordId && row.recordStatus && row.canOpenRecord ? (
+                <Button href={`/member/repairs/${row.repairRecordId}`}>查看备案</Button>
+              ) : null}
+            </p>
+          ))
+        )}
+      </Card>
       {withdrawTarget ? (
         <ConfirmDialog
           title={copy.withdrawConfirmTitle}

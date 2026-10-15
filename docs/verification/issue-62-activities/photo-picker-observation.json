@@ -1,0 +1,14 @@
+{
+  "environment": "API 26 emulator",
+  "observedLabels": [
+    "所有图片",
+    "所有相册",
+    "拍照",
+    "已选 0/9",
+    "完成",
+    "仅可访问所选图片"
+  ],
+  "selectableExistingImages": 0,
+  "systemPickerUploadVerified": false,
+  "continuation": "Uploaded actual PNG bytes from a synthetic verification screenshot via local authenticated API; refreshed and submitted in the App."
+}

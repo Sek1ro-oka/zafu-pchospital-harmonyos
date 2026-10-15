@@ -1,7 +1,7 @@
 import { repairActivityService } from "@/features/repair-activities/repair-activity-service";
 import { apiFailure, apiSuccess } from "@/lib/api/response";
 import { getRequestId } from "@/lib/api/request-id";
-import { assertSameOrigin, authenticateRequest } from "@/lib/auth/request";
+import { assertWriteAccess, authenticateRequest } from "@/lib/auth/request";
 
 export const runtime = "nodejs";
 
@@ -11,7 +11,7 @@ export async function PATCH(
 ) {
   const requestId = getRequestId(request.headers);
   try {
-    assertSameOrigin(request);
+    assertWriteAccess(request);
     const { actor } = await authenticateRequest(request, requestId);
     const { id, regId } = await params;
     const body = (await request.json()) as Record<string, unknown>;
@@ -37,7 +37,7 @@ export async function DELETE(
 ) {
   const requestId = getRequestId(request.headers);
   try {
-    assertSameOrigin(request);
+    assertWriteAccess(request);
     const { actor } = await authenticateRequest(request, requestId);
     const { id, regId } = await params;
     await repairActivityService.softDeleteRegistration(id, regId, actor);
@@ -46,3 +46,6 @@ export async function DELETE(
     return apiFailure(error, requestId);
   }
 }
+
+// ArkTS http has no PATCH; both methods execute the same handler.
+export const POST = PATCH;

@@ -2,6 +2,8 @@ import { ApiClient, ApiRequestError } from '../../core/network/ApiClient';
 import { ApiConfig } from '../../core/network/ApiConfig';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
 import { ReferenceBanner, ReferenceSearch, ReferenceShortcut, REFERENCE_BACKGROUND } from '../../core/ui/ReferencePage';
+import { ROUTE_ACTIVITY_DETAIL } from '../../core/ui/Routes';
+import { ActivityParam } from './ActivityContract';
 
 interface RepairActivity {
   id: string;
@@ -15,15 +17,15 @@ interface RepairActivity {
   remaining: number;
 }
 
-/** 只读复用公开维修活动接口；公告/分享和报名尚未接入，不填充假帖子。 */
+/** 公开活动列表；报名与现场流程通过原生子页接入。 */
 @Component
 export struct ActivityPage {
+  onOpen: (route: string, param: Object | null) => void = () => {};
   @State channel: string = '推荐';
   @State query: string = '';
   @State activities: RepairActivity[] = [];
   @State loading: boolean = false;
   @State errorText: string = '';
-  @State expandedId: string = '';
   private generation: number = 0;
 
   aboutToAppear(): void { this.load(); }
@@ -80,15 +82,14 @@ export struct ActivityPage {
         .backgroundColor('#F1EBFF').borderRadius(12).accessibilityText('项目主题插画，非活动现场照片')
       Row() {
         Text(`已报名 ${item.registeredCount} · 剩余名额 ${item.remaining}`).fontSize(12).fontColor('#747A7F').layoutWeight(1)
-        Text(this.expandedId === item.id ? '收起 ∧' : '活动信息 ›').fontSize(12).fontColor('#2474D4')
+        Text('活动详情 ›').fontSize(12).fontColor('#2474D4')
       }.width('100%')
-      if (this.expandedId === item.id) {
-        Text(`报名开始：${this.dateText(item.signupOpensAt)}\n报名截止：${this.dateText(item.signupClosesAt)}\n名额：${item.capacity}\nApp 活动报名暂未接入。`)
-          .fontSize(13).fontColor('#626C75').lineHeight(22).width('100%')
-      }
     }.width('100%').padding(14).backgroundColor(Color.White).borderRadius(20)
       .alignItems(HorizontalAlign.Start)
-      .onClick(() => { this.expandedId = this.expandedId === item.id ? '' : item.id; })
+      .onClick(() => {
+        const param: ActivityParam = { activityId: item.id };
+        this.onOpen(ROUTE_ACTIVITY_DETAIL, param);
+      })
   }
 
   build() {

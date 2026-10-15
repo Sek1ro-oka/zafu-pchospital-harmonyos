@@ -1,0 +1,195 @@
+$ node tools/ensure-doc-manifest.mjs && next build
+   ▲ Next.js 15.5.25
+   - Environments: .env
+   - Experiments (use with caution):
+     · cpus: 1
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 20.7s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/72) ...
+   Generating static pages (18/72)
+   Generating static pages (36/72)
+   Generating static pages (54/72)
+ ✓ Generating static pages (72/72)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                                        Size  First Load JS
+┌ ƒ /                                                                             165 B         105 kB
+├ ○ /_not-found                                                                   443 B         102 kB
+├ ○ /about                                                                      3.56 kB         105 kB
+├ ○ /account/change-password                                                    3.51 kB         109 kB
+├ ƒ /admin                                                                         2 kB         119 kB
+├ ƒ /admin/audit                                                                3.66 kB         137 kB
+├ ƒ /admin/categories                                                           3.39 kB         136 kB
+├ ƒ /admin/comments                                                             2.48 kB         147 kB
+├ ƒ /admin/export                                                               5.25 kB         122 kB
+├ ƒ /admin/invite-codes                                                         4.08 kB         137 kB
+├ ƒ /admin/join-applications                                                    5.47 kB         138 kB
+├ ƒ /admin/members                                                              11.4 kB         148 kB
+├ ƒ /admin/repair-activities                                                    4.86 kB         123 kB
+├ ƒ /admin/repairs                                                              6.65 kB         151 kB
+├ ƒ /admin/settings                                                             3.35 kB         120 kB
+├ ƒ /admin/skills                                                               3.34 kB         136 kB
+├ ƒ /api/v1/admin/audit-logs                                                      443 B         102 kB
+├ ƒ /api/v1/admin/audit-logs/actions                                              443 B         102 kB
+├ ƒ /api/v1/admin/comments                                                        443 B         102 kB
+├ ƒ /api/v1/admin/comments/[id]                                                   443 B         102 kB
+├ ƒ /api/v1/admin/dashboard                                                       443 B         102 kB
+├ ƒ /api/v1/admin/invite-codes                                                    443 B         102 kB
+├ ƒ /api/v1/admin/invite-codes/[id]                                               443 B         102 kB
+├ ƒ /api/v1/admin/invite-codes/[id]/revoke                                        443 B         102 kB
+├ ƒ /api/v1/admin/join-applications                                               443 B         102 kB
+├ ƒ /api/v1/admin/join-applications/[id]                                          443 B         102 kB
+├ ƒ /api/v1/admin/join-applications/[id]/provision                                443 B         102 kB
+├ ƒ /api/v1/admin/join-applications/[id]/provision/retry                          443 B         102 kB
+├ ƒ /api/v1/admin/join-applications/[id]/reviews                                  443 B         102 kB
+├ ƒ /api/v1/admin/join-applications/export                                        443 B         102 kB
+├ ƒ /api/v1/admin/members                                                         443 B         102 kB
+├ ƒ /api/v1/admin/members/[id]                                                    443 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/disable                                            443 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/enable                                             443 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/password-reset                                     443 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/roles                                              443 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/skills                                             443 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/stats                                              443 B         102 kB
+├ ƒ /api/v1/admin/members/batch                                                   443 B         102 kB
+├ ƒ /api/v1/admin/members/move                                                    443 B         102 kB
+├ ƒ /api/v1/admin/repair-activities                                               443 B         102 kB
+├ ƒ /api/v1/admin/repair-activities/[id]                                          443 B         102 kB
+├ ƒ /api/v1/admin/repair-activities/[id]/registrations                            443 B         102 kB
+├ ƒ /api/v1/admin/repair-activities/[id]/registrations/[regId]                    443 B         102 kB
+├ ƒ /api/v1/admin/repair-categories                                               443 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]                                          443 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]/activate                                 443 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]/deactivate                               443 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]/move                                     443 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]/reorder                                  443 B         102 kB
+├ ƒ /api/v1/admin/repairs                                                         443 B         102 kB
+├ ƒ /api/v1/admin/repairs/[id]                                                    443 B         102 kB
+├ ƒ /api/v1/admin/repairs/[id]/flags                                              443 B         102 kB
+├ ƒ /api/v1/admin/repairs/[id]/reviews                                            443 B         102 kB
+├ ƒ /api/v1/admin/repairs/batch-reviews                                           443 B         102 kB
+├ ƒ /api/v1/admin/repairs/export                                                  443 B         102 kB
+├ ƒ /api/v1/admin/settings/public-content                                         443 B         102 kB
+├ ƒ /api/v1/admin/skills                                                          443 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]                                                     443 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]/activate                                            443 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]/deactivate                                          443 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]/move                                                443 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]/reorder                                             443 B         102 kB
+├ ƒ /api/v1/auth/login                                                            443 B         102 kB
+├ ƒ /api/v1/auth/logout                                                           443 B         102 kB
+├ ƒ /api/v1/auth/native/login                                                     443 B         102 kB
+├ ƒ /api/v1/auth/native/logout                                                    443 B         102 kB
+├ ƒ /api/v1/auth/native/password/change                                           443 B         102 kB
+├ ƒ /api/v1/auth/native/session                                                   443 B         102 kB
+├ ƒ /api/v1/auth/password/change                                                  443 B         102 kB
+├ ƒ /api/v1/auth/register/customer                                                443 B         102 kB
+├ ƒ /api/v1/auth/register/staff                                                   443 B         102 kB
+├ ƒ /api/v1/customer/activity-registrations                                       443 B         102 kB
+├ ƒ /api/v1/customer/activity-registrations/[regId]                               443 B         102 kB
+├ ƒ /api/v1/customer/favorites                                                    443 B         102 kB
+├ ƒ /api/v1/customer/favorites/[id]                                               443 B         102 kB
+├ ƒ /api/v1/customer/knowledge-cases                                              443 B         102 kB
+├ ƒ /api/v1/customer/knowledge-cases/[id]                                         443 B         102 kB
+├ ƒ /api/v1/customer/notifications                                                443 B         102 kB
+├ ƒ /api/v1/customer/notifications/[id]                                           443 B         102 kB
+├ ƒ /api/v1/customer/notifications/[id]/read                                      443 B         102 kB
+├ ƒ /api/v1/customer/notifications/read-all                                       443 B         102 kB
+├ ƒ /api/v1/customer/profile                                                      443 B         102 kB
+├ ƒ /api/v1/customer/repair-activities/[id]/registrations                         443 B         102 kB
+├ ƒ /api/v1/health                                                                443 B         102 kB
+├ ƒ /api/v1/join-applications                                                     443 B         102 kB
+├ ƒ /api/v1/knowledge-cases                                                       443 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]                                                  443 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]/embedding                                        443 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]/reprocess                                        443 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]/visibility                                       443 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]/withdraw                                         443 B         102 kB
+├ ƒ /api/v1/knowledge-cases/records/[id]/retry                                    443 B         102 kB
+├ ƒ /api/v1/knowledge-cases/records/[id]/status                                   443 B         102 kB
+├ ƒ /api/v1/knowledge-cases/records/[id]/typical                                  443 B         102 kB
+├ ƒ /api/v1/knowledge/chat                                                        443 B         102 kB
+├ ƒ /api/v1/knowledge/search                                                      443 B         102 kB
+├ ƒ /api/v1/knowledge/sources/[id]                                                443 B         102 kB
+├ ƒ /api/v1/me                                                                    443 B         102 kB
+├ ƒ /api/v1/member-registrations/invite                                           443 B         102 kB
+├ ƒ /api/v1/member/analytics                                                      443 B         102 kB
+├ ƒ /api/v1/member/dashboard                                                      443 B         102 kB
+├ ƒ /api/v1/member/directory                                                      443 B         102 kB
+├ ƒ /api/v1/member/favorites                                                      443 B         102 kB
+├ ƒ /api/v1/member/favorites/[repairId]                                           443 B         102 kB
+├ ƒ /api/v1/member/notifications                                                  443 B         102 kB
+├ ƒ /api/v1/member/notifications/[id]                                             443 B         102 kB
+├ ƒ /api/v1/member/notifications/[id]/read                                        443 B         102 kB
+├ ƒ /api/v1/member/notifications/read-all                                         443 B         102 kB
+├ ƒ /api/v1/member/profile                                                        443 B         102 kB
+├ ƒ /api/v1/member/profile/skills                                                 443 B         102 kB
+├ ƒ /api/v1/member/rankings                                                       443 B         102 kB
+├ ƒ /api/v1/member/repair-activities                                              443 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/attendance                              443 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/board                                   443 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/check-in                                443 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/registrations/[registrationId]/phone    443 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/serve                                   443 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/withdraw                                443 B         102 kB
+├ ƒ /api/v1/member/repairs                                                        443 B         102 kB
+├ ƒ /api/v1/members/[memberProfileId]/profile                                     443 B         102 kB
+├ ƒ /api/v1/public/knowledge/guides                                               443 B         102 kB
+├ ƒ /api/v1/repair-activities                                                     443 B         102 kB
+├ ƒ /api/v1/repair-activities/[id]                                                443 B         102 kB
+├ ƒ /api/v1/repair-activities/[id]/registrations                                  443 B         102 kB
+├ ƒ /api/v1/repair-activities/[id]/registrations/[regId]                          443 B         102 kB
+├ ƒ /api/v1/repair-activities/[id]/registrations/lookup                           443 B         102 kB
+├ ƒ /api/v1/repair-categories                                                     443 B         102 kB
+├ ƒ /api/v1/repair-members                                                        443 B         102 kB
+├ ƒ /api/v1/repair-orders                                                         443 B         102 kB
+├ ƒ /api/v1/repair-orders/[id]                                                    443 B         102 kB
+├ ƒ /api/v1/repair-photos/[photoId]/content                                       443 B         102 kB
+├ ƒ /api/v1/repairs                                                               443 B         102 kB
+├ ƒ /api/v1/repairs/[id]                                                          443 B         102 kB
+├ ƒ /api/v1/repairs/[id]/comments                                                 443 B         102 kB
+├ ƒ /api/v1/repairs/[id]/comments/[commentId]                                     443 B         102 kB
+├ ƒ /api/v1/repairs/[id]/photos                                                   443 B         102 kB
+├ ƒ /api/v1/repairs/[id]/photos/[photoId]                                         443 B         102 kB
+├ ƒ /api/v1/repairs/[id]/submit                                                   443 B         102 kB
+├ ƒ /api/v1/skills                                                                443 B         102 kB
+├ ƒ /api/v1/staff/repair-orders                                                   443 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]                                              443 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]/accept                                       443 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]/cancel                                       443 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]/progress                                     443 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]/record                                       443 B         102 kB
+├ ○ /docs                                                                         168 B         105 kB
+├ ○ /icon.svg                                                                       0 B            0 B
+├ ○ /join                                                                       5.63 kB         111 kB
+├ ƒ /login                                                                      5.25 kB         110 kB
+├ ƒ /member                                                                     8.65 kB         120 kB
+├ ƒ /member/cases                                                               7.84 kB         116 kB
+├ ƒ /member/favorites                                                           6.83 kB         115 kB
+├ ƒ /member/notifications                                                       6.06 kB         114 kB
+├ ƒ /member/profile                                                             6.88 kB         119 kB
+├ ƒ /member/profile/[memberProfileId]                                            6.2 kB         115 kB
+├ ƒ /member/rankings                                                             8.1 kB         113 kB
+├ ƒ /member/repair-activities                                                   3.53 kB         109 kB
+├ ƒ /member/repair-activities/[id]                                              7.67 kB         113 kB
+├ ƒ /member/repairs                                                             4.59 kB         113 kB
+├ ƒ /member/repairs/[id]                                                        7.44 kB         120 kB
+├ ƒ /member/repairs/[id]/edit                                                   7.24 kB         118 kB
+├ ƒ /member/repairs/new                                                         3.34 kB         108 kB
+├ ○ /register/member                                                              443 B         102 kB
+├ ○ /repair-activities                                                          5.59 kB         112 kB
+├ ƒ /repair-activities/[id]                                                     7.22 kB         113 kB
+├ ○ /robots.txt                                                                   443 B         102 kB
+└ ○ /sitemap.xml                                                                  443 B         102 kB
++ First Load JS shared by all                                                    102 kB
+  ├ chunks/1127-64b0a81fc387ef08.js                                             45.5 kB
+  ├ chunks/251bdf5a-4d5c8a054da74568.js                                         54.2 kB
+  └ other shared chunks (total)                                                 1.99 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand

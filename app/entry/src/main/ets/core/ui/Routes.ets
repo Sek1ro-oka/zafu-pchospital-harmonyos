@@ -3,6 +3,17 @@ export const ROUTE_PERSONAL_PROFILE: string = 'personal-profile';
 export const ROUTE_MEMBER_DIRECTORY: string = 'member-directory';
 export const ROUTE_FAVORITES: string = 'favorites';
 export const ROUTE_MESSAGES: string = 'messages';
+export const ROUTE_ACTIVITY_DETAIL: string = 'activity-detail';
+export const ROUTE_ACTIVITY_SIGNUP: string = 'activity-signup';
+export const ROUTE_ACTIVITY_LOOKUP: string = 'activity-lookup';
+export const ROUTE_MY_REGISTRATIONS: string = 'my-activity-registrations';
+export const ROUTE_MY_REGISTRATION: string = 'my-activity-registration';
+export const ROUTE_STAFF_ACTIVITIES: string = 'staff-activities';
+export const ROUTE_ACTIVITY_BOARD: string = 'activity-board';
+export const ROUTE_MANAGEMENT: string = 'management';
+export const ROUTE_ACTIVITY_ADMIN: string = 'activity-admin';
+export const ROUTE_ACTIVITY_EDIT: string = 'activity-edit';
+export const ROUTE_ACTIVITY_REGISTRATION_ADMIN: string = 'activity-registration-admin';
 
 /**
  * 客户自主注册（Issue #60 App 侧第三批）。
@@ -52,6 +63,17 @@ export const ROUTE_CASE_DETAIL: string = 'knowledge-case-detail';
  * 标题从这里取，保证所有子页的系统标题栏与返回按钮样式一致（Issue #41）。
  */
 export function routeTitle(name: string): string {
+  if (name === ROUTE_ACTIVITY_DETAIL) return '活动详情';
+  if (name === ROUTE_ACTIVITY_SIGNUP) return '活动报名';
+  if (name === ROUTE_ACTIVITY_LOOKUP) return '旧匿名报名查询';
+  if (name === ROUTE_MY_REGISTRATIONS) return '我的报名';
+  if (name === ROUTE_MY_REGISTRATION) return '报名详情';
+  if (name === ROUTE_STAFF_ACTIVITIES) return '成员活动';
+  if (name === ROUTE_ACTIVITY_BOARD) return '活动现场看板';
+  if (name === ROUTE_MANAGEMENT) return '管理';
+  if (name === ROUTE_ACTIVITY_ADMIN) return '活动管理';
+  if (name === ROUTE_ACTIVITY_EDIT) return '创建 / 编辑活动';
+  if (name === ROUTE_ACTIVITY_REGISTRATION_ADMIN) return '活动报名管理';
   if (name === ROUTE_FAVORITES) return '我的收藏';
   if (name === ROUTE_REGISTER_CUSTOMER) return '注册账号';
   if (name === ROUTE_STAFF_REGISTER) return '工作人员注册（需邀请码）';

@@ -23,7 +23,7 @@ export struct LabeledInput {
   @Prop label: string = '';
   @Prop placeholder: string = '';
   /** 受控文本：调用方单向传入当前值，并通过 onChange 回写自己的 @State。 */
-  text: string = '';
+  @Prop text: string = '';
   /** 输入类型：密码 / 数字等，默认普通文本。 */
   inputType: InputType = InputType.Normal;
   /** 禁用：请求进行中时输入框一并禁用，避免用户在等待期间改动已提交的内容。 */

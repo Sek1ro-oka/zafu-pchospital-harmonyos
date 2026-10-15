@@ -1,3 +1,14 @@
+import { ActivityDetailPage } from '../activity/ActivityDetailPage';
+import { ActivityLookupPage } from '../activity/ActivityLookupPage';
+import { MyRegistrationsPage } from '../activity/MyRegistrationsPage';
+import { MyRegistrationPage } from '../activity/MyRegistrationPage';
+import { ActivityWorkspacePage } from '../activity/ActivityWorkspacePage';
+import { ActivityBoardPage } from '../activity/ActivityBoardPage';
+import { ActivityEditPage } from '../activity/ActivityEditPage';
+import { ActivityRegistrationAdminPage } from '../activity/ActivityRegistrationAdminPage';
+import { ActivityParam, RegistrationParam } from '../activity/ActivityContract';
+import { ROUTE_ACTIVITY_DETAIL, ROUTE_ACTIVITY_SIGNUP, ROUTE_ACTIVITY_LOOKUP, ROUTE_MY_REGISTRATIONS, ROUTE_MY_REGISTRATION,
+  ROUTE_STAFF_ACTIVITIES, ROUTE_ACTIVITY_BOARD, ROUTE_MANAGEMENT, ROUTE_ACTIVITY_ADMIN, ROUTE_ACTIVITY_EDIT, ROUTE_ACTIVITY_REGISTRATION_ADMIN } from '../../core/ui/Routes';
 import { accessibility } from '@kit.AccessibilityKit';
 import { curves } from '@kit.ArkUI';
 import { ActivityPage } from '../activity/ActivityPage';
@@ -127,6 +138,7 @@ export struct HomePage {
   };
   @State pathStack: NavPathStack = new NavPathStack();
   @State currentTab: number = TAB_INDEX_HOME;
+  @State activityRevision: number = 0;
   @State recordsRevision: number = 0;
   @State workbenchRevision: number = 0;
   @State favoritesRevision: number = 0;
@@ -280,11 +292,11 @@ export struct HomePage {
     // 强制改密账号：契约规定只能访问 session / logout / 原生改密 / Web 改密，
     // 其余业务路由一律不放进栈（否则用户点进去只会看到 403 PASSWORD_CHANGE_REQUIRED）。
     // 公开维修指南对游客也开放，属于公共浏览，不拦。
-    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES) {
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP) {
       this.openPasswordChange(true);
       return;
     }
-    if (!this.authenticated && route !== ROUTE_PUBLIC_GUIDES) {
+    if (!this.authenticated && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP) {
       const intent = new LoginIntent();
       intent.route = route;
       intent.param = param;
@@ -367,6 +379,39 @@ export struct HomePage {
           onCancel: (): void => { this.cancelLogin(); },
           onSessionExpired: (): void => { this.expireSession(); }
         });
+      } else if (name === ROUTE_ACTIVITY_DETAIL || name === ROUTE_ACTIVITY_SIGNUP) {
+        ActivityDetailPage({ param: param as ActivityParam, signup: name === ROUTE_ACTIVITY_SIGNUP, refreshVersion: this.activityRevision,
+          onOpen: (route: string, target: Object | null): void => { this.openRoute(route, target); },
+          onSessionExpired: (): void => { this.expireSession(); } });
+      } else if (name === ROUTE_ACTIVITY_LOOKUP) {
+        ActivityLookupPage({ param: param as ActivityParam });
+      } else if (name === ROUTE_MY_REGISTRATIONS) {
+        MyRegistrationsPage({ refreshVersion: this.activityRevision,
+          onOpen: (route: string, target: Object | null): void => { this.openRoute(route, target); },
+          onSessionExpired: (): void => { this.expireSession(); } });
+      } else if (name === ROUTE_MY_REGISTRATION) {
+        MyRegistrationPage({ param: param as RegistrationParam, refreshVersion: this.activityRevision,
+          onSessionExpired: (): void => { this.expireSession(); } });
+      } else if (name === ROUTE_STAFF_ACTIVITIES || name === ROUTE_ACTIVITY_ADMIN) {
+        ActivityWorkspacePage({ admin: name === ROUTE_ACTIVITY_ADMIN, refreshVersion: this.activityRevision,
+          onOpen: (route: string, target: Object | null): void => { this.openRoute(route, target); },
+          onSessionExpired: (): void => { this.expireSession(); } });
+      } else if (name === ROUTE_ACTIVITY_BOARD) {
+        ActivityBoardPage({ param: param as ActivityParam, refreshVersion: this.activityRevision,
+          onOpen: (route: string, target: Object | null): void => { this.openRoute(route, target); },
+          onSessionExpired: (): void => { this.expireSession(); } });
+      } else if (name === ROUTE_ACTIVITY_EDIT) {
+        ActivityEditPage({ param: param as ActivityParam, onSessionExpired: (): void => { this.expireSession(); } });
+      } else if (name === ROUTE_ACTIVITY_REGISTRATION_ADMIN) {
+        ActivityRegistrationAdminPage({ param: param as ActivityParam, refreshVersion: this.activityRevision,
+          onSessionExpired: (): void => { this.expireSession(); } });
+      } else if (name === ROUTE_MANAGEMENT) {
+        Column({ space: 18 }) {
+          Text('管理').fontSize(26).fontWeight(FontWeight.Bold)
+          if (this.permissions.includes('activity:admin')) {
+            Button('活动管理').width('100%').onClick(() => { this.openRoute(ROUTE_ACTIVITY_ADMIN, null); })
+          } else { Text('当前账号没有活动管理权限') }
+        }.width('100%').padding(24)
       } else if (name === ROUTE_FAVORITES) {
         FavoritesPage({ home: this.home, refreshVersion: this.favoritesRevision,
           onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
@@ -487,6 +532,7 @@ export struct HomePage {
     .title(name === ROUTE_LOGIN ? '登录' : routeTitle(name))
     .onShown(() => {
       this.workbenchRevision += 1;
+      if (name.indexOf('activity') >= 0 || name === ROUTE_STAFF_ACTIVITIES) this.activityRevision += 1;
       if (name === ROUTE_REPAIR_RECORDS) this.recordsRevision += 1;
       if (name === ROUTE_FAVORITES) this.favoritesRevision += 1;
       if (name === ROUTE_MESSAGES) this.messagesRevision += 1;
@@ -568,7 +614,7 @@ export struct HomePage {
           }
 
           TabContent() {
-            ActivityPage()
+            ActivityPage({ onOpen: (route: string, target: Object | null): void => { this.openRoute(route, target); } })
           }
 
           TabContent() {

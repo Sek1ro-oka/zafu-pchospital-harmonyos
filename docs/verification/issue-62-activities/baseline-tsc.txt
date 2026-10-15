@@ -1,0 +1,263 @@
+tests/integration/customer-community.test.ts(149,29): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<{ removed: boolean; }>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(151,29): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<{ removed: boolean; }>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(169,30): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<KnowledgeCaseCitationDetail>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(189,31): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<KnowledgeCaseCitationDetail>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(210,29): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<KnowledgeCaseCitationDetail>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(230,18): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<StaffRepairOrderView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(238,31): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<StaffRepairOrderView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(240,18): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<StaffRepairOrderView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(249,33): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<StaffRepairOrderView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(253,20): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<StaffRepairOrderView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(261,29): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<{ read: boolean; }>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(262,29): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<{ removed: boolean; }>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(263,29): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<{ read: boolean; }>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(266,29): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<{ removed: boolean; }>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/customer-community.test.ts(303,32): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<StaffRepairOrderView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(112,29): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<StaffRepairOrderView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(113,30): error TS2345: Argument of type '(request: Request, context: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(121,36): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairDetailView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(124,5): error TS2345: Argument of type '(request: Request, context: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(141,5): error TS2345: Argument of type '(request: Request, context: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(158,25): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairDetailView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(164,9): error TS2345: Argument of type '(request: Request, context: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(237,5): error TS2345: Argument of type '(request: Request, context: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(247,18): error TS2345: Argument of type '(request: Request, context: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(251,18): error TS2345: Argument of type '(request: Request, context: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(255,29): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairDetailView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(256,29): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairDetailView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(264,9): error TS2345: Argument of type '(request: Request, context: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(316,37): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairDetailView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(321,25): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairDetailView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(325,25): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairDetailView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(375,5): error TS2345: Argument of type '(request: Request, { params }: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(384,5): error TS2345: Argument of type '(request: Request, { params }: { params: Promise<{ id: string; }>; }) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type '{ params: Promise<{ id: string; }>; }'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(402,5): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairCommentView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(418,5): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairCommentView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(426,5): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairCommentView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(434,31): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairCommentView[]>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(447,29): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairCommentView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(449,18): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairCommentView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(454,29): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairCommentView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(493,5): error TS2345: Argument of type '(request: Request, context: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters 'context' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/personal-records.test.ts(539,29): error TS2345: Argument of type '(request: Request, { params }: Context) => Promise<NextResponse<ApiFailure> | NextResponse<ApiSuccess<RepairDetailView>>>' is not assignable to parameter of type '(request: Request, context: { params: Promise<Record<string, string>>; }) => Promise<Response>'.
+  Types of parameters '__1' and 'context' are incompatible.
+    Type '{ params: Promise<Record<string, string>>; }' is not assignable to type 'Context'.
+      Types of property 'params' are incompatible.
+        Type 'Promise<Record<string, string>>' is not assignable to type 'Promise<{ id: string; }>'.
+          Property 'id' is missing in type 'Record<string, string>' but required in type '{ id: string; }'.
+tests/integration/staff-repair-records.test.ts(163,35): error TS2322: Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BlobPart'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+    Types of property 'buffer' are incompatible.
+      Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+        Type 'SharedArrayBuffer' is missing the following properties from type 'ArrayBuffer': resizable, resize, detached, transfer, transferToFixedLength
+tests/unit/native-auth.test.ts(42,82): error TS2322: Type '{ "x-client-type"?: undefined; origin?: undefined; } | { "x-client-type": string; origin?: undefined; } | { origin: string; "x-client-type"?: undefined; }' is not assignable to type 'HeadersInit | undefined'.
+  Type '{ "x-client-type"?: undefined; origin?: undefined; }' is not assignable to type 'HeadersInit | undefined'.
+    Type '{ "x-client-type"?: undefined; origin?: undefined; }' is not assignable to type 'Record<string, string>'.
+      Property '"x-client-type"' is incompatible with index signature.
+        Type 'undefined' is not assignable to type 'string'.
+tests/unit/public-guides.test.ts(18,20): error TS18048: 'data.guides' is possibly 'undefined'.

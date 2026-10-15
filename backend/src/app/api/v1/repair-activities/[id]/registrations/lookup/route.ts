@@ -7,7 +7,7 @@ import { AppError } from "@/lib/api/errors";
 import { enforceRateLimit } from "@/lib/api/rate-limit";
 import { apiFailure, apiSuccess } from "@/lib/api/response";
 import { getRequestId } from "@/lib/api/request-id";
-import { assertSameOrigin, requestContext } from "@/lib/auth/request";
+import { assertPublicWriteAccess, requestContext } from "@/lib/auth/request";
 import { normalizePhone } from "@/lib/security/normalization";
 
 export const runtime = "nodejs";
@@ -16,7 +16,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const requestId = getRequestId(request.headers);
   const context = requestContext(request, requestId);
   try {
-    assertSameOrigin(request);
+    assertPublicWriteAccess(request);
     const ip = context.ipAddress ?? "unknown";
     enforceRateLimit(repairActivityIpRateLimitKey(ip), 10, 60_000);
     const body = (await request.json()) as Record<string, unknown>;

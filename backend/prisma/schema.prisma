@@ -37,6 +37,7 @@ model User {
   skillsCreated      Skill[]                 @relation("SkillCreator")
   publicSettings     PublicContentSetting[]  @relation("PublicContentSettingUpdater")
   repairActivities   RepairActivity[]        @relation("RepairActivityCreator")
+  activityRegistrations RepairActivityRegistration[] @relation("ActivityRegistrant")
   repairOrders       RepairOrder[]           @relation("RepairOrderSubmitter")
   repairOrderEvents  RepairOrderEvent[]      @relation("RepairOrderEventActor")
   knowledgeCasesWithdrawn KnowledgeCase[]    @relation("KnowledgeCaseWithdrawnBy")
@@ -657,6 +658,7 @@ model PublicContentSetting {
 model RepairActivity {
   id             String                        @id @db.Char(36)
   title          String                        @db.VarChar(120)
+  location       String?                       @db.VarChar(200)
   activityAt     DateTime                      @map("activity_at") @db.DateTime(3)
   capacity       Int
   signupOpensAt  DateTime                      @map("signup_opens_at") @db.DateTime(3)
@@ -678,6 +680,7 @@ model RepairActivity {
 model RepairActivityRegistration {
   id                      String         @id @db.Char(36)
   activityId              String         @map("activity_id") @db.Char(36)
+  userId                  String?        @map("user_id") @db.Char(36)
   name                    String         @db.VarChar(40)
   phone                   String         @db.VarChar(11)
   phoneLast4              String         @map("phone_last4") @db.VarChar(4)
@@ -696,10 +699,12 @@ model RepairActivityRegistration {
   updatedAt               DateTime       @updatedAt @map("updated_at") @db.DateTime(3)
   deletedAt               DateTime?      @map("deleted_at") @db.DateTime(3)
   activity                RepairActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
+  user                    User?          @relation("ActivityRegistrant", fields: [userId], references: [id], onDelete: Restrict)
   servedBy                MemberProfile? @relation("RepairActivityServedBy", fields: [servedByMemberProfileId], references: [id], onDelete: Restrict)
   repairRecord            RepairRecord?  @relation(fields: [repairRecordId], references: [id], onDelete: Restrict)
 
   @@index([activityId, phone], map: "repair_activity_regs_activity_phone_idx")
+  @@index([userId, deletedAt, createdAt, id], map: "repair_activity_regs_user_deleted_created_idx")
   @@index([activityId, status, checkedInAt], map: "repair_activity_regs_activity_status_checked_idx")
   @@index([activityId, deletedAt], map: "repair_activity_regs_activity_deleted_idx")
   @@map("repair_activity_registrations")
@@ -711,6 +716,8 @@ model RepairActivityAttendance {
   activityId      String         @map("activity_id") @db.Char(36)
   memberProfileId String         @map("member_profile_id") @db.Char(36)
   checkedInAt     DateTime       @map("checked_in_at") @db.DateTime(3)
+  cancelledAt     DateTime?      @map("cancelled_at") @db.DateTime(3)
+  businessStartedAt DateTime?    @map("business_started_at") @db.DateTime(3)
   activity        RepairActivity @relation(fields: [activityId], references: [id], onDelete: Restrict)
   memberProfile   MemberProfile  @relation(fields: [memberProfileId], references: [id], onDelete: Restrict)
 

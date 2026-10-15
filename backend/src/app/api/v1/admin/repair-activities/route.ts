@@ -7,7 +7,7 @@ import { REPAIR_ACTIVITY_CAPACITY_MIN } from "@/features/repair-activities/repai
 import { repairActivityService } from "@/features/repair-activities/repair-activity-service";
 import { apiFailure, apiSuccess } from "@/lib/api/response";
 import { getRequestId } from "@/lib/api/request-id";
-import { assertSameOrigin, authenticateRequest } from "@/lib/auth/request";
+import { assertWriteAccess, authenticateRequest } from "@/lib/auth/request";
 
 export const runtime = "nodejs";
 
@@ -24,12 +24,13 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const requestId = getRequestId(request.headers);
   try {
-    assertSameOrigin(request);
+    assertWriteAccess(request);
     const { actor } = await authenticateRequest(request, requestId);
     const body = (await request.json()) as Record<string, unknown>;
     const result = await repairActivityService.create(
       {
         title: bodyString(body, "title"),
+        location: body.location,
         capacity: bodyRequiredInt(body, "capacity", {
           min: REPAIR_ACTIVITY_CAPACITY_MIN,
           max: 10_000,
