@@ -146,7 +146,7 @@ export struct MyRegistrationPage {
       Scroll() {
         Column({ space: 0 }) {
           if (this.loading) { LoadingPanel({ text: '正在读取报名详情…' }) }
-          if (this.errorText !== '') { ErrorPanel({ message: this.errorText, onRetry: (): void => { this.retry(); } }) }
+          if (this.errorText !== '' && this.item === null) { ErrorPanel({ message: this.errorText, onRetry: (): void => { this.retry(); } }) }
           if (this.item !== null) {
             this.heading()
             Column({ space: 16 }) {
@@ -158,6 +158,11 @@ export struct MyRegistrationPage {
         }.width('100%')
       }.width('100%').layoutWeight(1)
       Column({ space: 8 }) {
+        if (this.errorText !== '' && this.item !== null) {
+          Text(this.errorText).fontSize(13).lineHeight(20).fontColor('#AD4935').width('100%')
+          Button('重试保存').height(40).fontSize(14).fontColor('#936135').backgroundColor('#FFF1DD')
+            .enabled(!this.loading && !this.busy).onClick(() => { this.retry(); })
+        }
         if (this.actionText !== '') { Text(this.actionText).fontSize(13).fontColor('#9B622F').width('100%') }
         Row({ space: 12 }) {
           Button('刷新详情').height(48).fontSize(15).fontColor('#936135').backgroundColor('#FFF1DD')

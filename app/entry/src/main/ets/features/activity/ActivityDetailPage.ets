@@ -1,3 +1,4 @@
+import { KeyboardAvoidMode } from '@kit.ArkUI';
 import { SessionIdentity } from '../../core/auth/AuthContract';
 import { SessionService } from '../../core/auth/SessionService';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
@@ -32,8 +33,20 @@ export struct ActivityDetailPage {
   private loadedIdentity: SessionIdentity | null = SessionService.current();
   private loadedActivityId: string = '';
   private loadedConsentVersion: string = '';
-  aboutToAppear(): void { this.load(); }
-  aboutToDisappear(): void { this.guard.invalidate(); this.loading = false; this.busy = false; }
+  private previousKeyboardMode: KeyboardAvoidMode | null = null;
+  aboutToAppear(): void {
+    if (this.signup) {
+      this.previousKeyboardMode = this.getUIContext().getKeyboardAvoidMode();
+      this.getUIContext().setKeyboardAvoidMode(KeyboardAvoidMode.RESIZE);
+    }
+    this.load();
+  }
+  aboutToDisappear(): void {
+    if (this.previousKeyboardMode !== null) {
+      this.getUIContext().setKeyboardAvoidMode(this.previousKeyboardMode); this.previousKeyboardMode = null;
+    }
+    this.guard.invalidate(); this.loading = false; this.busy = false;
+  }
   private refresh(): void { this.guard.invalidate(); this.loading = false; this.busy = false; this.load(); }
   private clearDraft(): void {
     this.name = ''; this.phone = ''; this.deviceModel = ''; this.issueType = 'OTHER';
@@ -187,6 +200,7 @@ export struct ActivityDetailPage {
             Checkbox({ name: 'activity-consent', group: 'signup' }).select(this.consentAccepted)
               .enabled(!this.busy && !this.loading).onChange((checked: boolean) => { this.consentAccepted = checked; })
             Text('我已阅读并同意以上报名须知').fontSize(14).lineHeight(22).layoutWeight(1)
+              .onClick(() => { if (!this.busy && !this.loading) this.consentAccepted = !this.consentAccepted; })
           }.width('100%')
           if (this.fieldError('consentAccepted') !== '') { Text(this.fieldError('consentAccepted')).fontSize(13).fontColor('#B04438') }
         }
