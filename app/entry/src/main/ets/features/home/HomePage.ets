@@ -103,6 +103,13 @@ export struct HomePage {
   @State sessionTransition: boolean = false;
   /** 改密页是否处于「强制改密」模式：true 时禁用返回跳过（契约：必须先改密）。 */
   @State passwordChangeForced: boolean = false;
+  /**
+   * 改密请求是否在途（由 `PasswordChangePage` 通过 `onBusyChange` 上报）。
+   *
+   * 普通改密（非强制）在途时返回键同样不能放行：离开页面后迟到的响应会把令牌写成
+   * 这个已被放弃的账号（账号串用）。与 `loginBusy` / `registerBusy` 同一机制。
+   */
+  private passwordChangeBusy: boolean = false;
   private admittedTab: number = -1;
   @State reduceMotion: boolean = false;
   private motionChanged: (enabled: boolean) => void = (enabled: boolean): void => { this.reduceMotion = enabled; };
@@ -336,11 +343,13 @@ export struct HomePage {
   /**
    * 系统返回键是否需要被拦截（true = 消费掉这次返回，页面不离开）。
    *
-   * 为什么拦：认证类**写请求进行中**（登录 / 注册）时离开本页，迟到的响应仍会把令牌与
-   * 内存身份写成这个已被放弃的账号，而界面已经在登录另一个账号 ——
+   * 为什么拦：认证类**写请求进行中**（登录 / 注册 / 改密）时离开本页，迟到的响应仍会把
+   * 令牌与内存身份写成这个已被放弃的账号，而界面已经在登录另一个账号 ——
    * 后续请求就用了错误身份（账号串用）。拦下返回键是代价最小的做法：
    * 页面还在，迟到的响应写的正是它自己。
-   * 强制改密则是另一条理由：契约规定必须先改密才能访问业务接口，不允许用返回键跳过。
+   * 改密分两种：普通改密靠 `passwordChangeBusy` 拦「请求在途」；
+   * 强制改密则是另一条理由：契约规定必须先改密才能访问业务接口，不允许用返回键跳过
+   * （`passwordChangeForced`），两者都要拦，且互不替代。
    *
    * 为什么抽成方法而不是直接写在 `onBackPressed` 里：`onBackPressed` 位于 `@Builder`
    * 内，后端 `guest-login-app.test.ts` 的「源码切片 + eval」不覆盖它，抽出来才能被回归测到。
@@ -348,7 +357,7 @@ export struct HomePage {
   private interceptBack(name: string): boolean {
     if (name === ROUTE_LOGIN) return this.loginBusy;
     if (name === ROUTE_REGISTER_CUSTOMER || name === ROUTE_REGISTER_STAFF) return this.registerBusy;
-    if (name === ROUTE_PASSWORD_CHANGE) return this.passwordChangeForced;
+    if (name === ROUTE_PASSWORD_CHANGE) return this.passwordChangeForced || this.passwordChangeBusy;
     return false;
   }
 
@@ -382,7 +391,8 @@ export struct HomePage {
           forced: this.passwordChangeForced,
           onChanged: (_data: PasswordChangeData): void => { this.onPasswordChanged(); },
           onCancel: (): void => { this.cancelLogin(); },
-          onSessionExpired: (): void => { this.expireSession(); }
+          onSessionExpired: (): void => { this.expireSession(); },
+          onBusyChange: (busy: boolean): void => { this.passwordChangeBusy = busy; }
         });
       } else if (name === ROUTE_ACTIVITY_DETAIL || name === ROUTE_ACTIVITY_SIGNUP) {
         ActivityDetailPage({ param: param as ActivityParam, signup: name === ROUTE_ACTIVITY_SIGNUP, refreshVersion: this.activityRevision,

@@ -30,6 +30,60 @@ export class RestoreResult {
 export class SessionService {
   private static identity: SessionIdentity | null = null;
 
+  /**
+   * 会话代次（epoch，Issue #60 迟到响应回归的结构性保证）。
+   *
+   * 语义：**本地会话归属每变一次就单调 +1** —— 登录 / 注册落库成功、`restore()`
+   * 建立或清空身份、`logout()` 清会话、改密换新令牌，都会推进它。
+   *
+   * 为什么光有「令牌非空」不够：`SessionStore.writeToken` 是迟到响应唯一能篡改本地
+   * 会话的入口，而「当前位置有没有会话」无法区分「还是同一个账号」与「已经换成另一个
+   * 账号」。代次把这两件事区分开：请求发起前记下代次与当时的令牌，响应回来后两者
+   * 只要有一个对不上，这份响应就属于一个**已被放弃的账号**，整份丢弃（fail-closed）。
+   */
+  private static epoch: number = 0;
+
+  /** 会话归属发生变化时调用；只递增，不重置（重置会让旧响应的代次重新「看起来匹配」）。 */
+  private static advanceEpoch(): void {
+    SessionService.epoch += 1;
+  }
+
+  /**
+   * 这次响应是否仍属于**发起请求时的那个会话**。
+   *
+   * 两个条件都比，缺一不可：
+   * - `epoch` 变化 = 期间发生过退出 / 换账号 / 恢复会话这类归属变更；
+   * - 令牌比对 = 期间本地令牌被别的路径改写（代次没赶上，但归属事实上已经变了）。
+   * 任一不一致都按「已被放弃的响应」处理；读取令牌失败（返回空串）同样按不一致处理，
+   * 宁可丢弃也不能把不确定归属的令牌写进去。
+   */
+  private static async stillCurrentSession(epoch: number, token: string): Promise<boolean> {
+    if (SessionService.epoch !== epoch) {
+      return false;
+    }
+    const current = await SessionStore.readToken();
+    return current === token;
+  }
+
+  /**
+   * 丢弃一个已不属于当前会话的服务端会话。
+   *
+   * 服务端在改密 / 登录成功那一刻已经**吊销旧会话并发出了新会话**；本地既然不采用，
+   * 它就成了「活着但没人持有」的悬空会话（拿到这个令牌的人依然能冒充该账号），
+   * 所以要尽力用**这个新令牌**去 logout 撤销它 —— 与 `writeToken` 失败分支同一手法。
+   * 撤销失败只记日志：本地绝不因为「撤销不掉」而把别的账号的令牌写进来。
+   */
+  private static async revokeAbandonedSession(baseUrl: string, token: string): Promise<void> {
+    if (token === '' || baseUrl === '') {
+      return;
+    }
+    try {
+      await ApiClient.post<LogoutData>(baseUrl, LOGOUT_PATH, '', token);
+    } catch (error) {
+      hilog.warn(DOMAIN, TAG, '%{public}s', '迟到响应带来的新会话撤销未成功');
+    }
+  }
+
   static current(): SessionIdentity | null {
     return SessionService.identity;
   }
@@ -40,8 +94,10 @@ export class SessionService {
       throw new ApiRequestError('NETWORK_ERROR', '请先填写服务器地址', 0, '');
     }
     const request: LoginRequest = { qq: qq, password: password, rememberMe: rememberMe };
+    const previousToken = await SessionStore.readToken();
+    const epoch = SessionService.epoch;
     const data = await ApiClient.post<NativeLoginData>(baseUrl, LOGIN_PATH, JSON.stringify(request), '');
-    const identity = await SessionService.adoptSession(data);
+    const identity = await SessionService.adoptSession(data, epoch, previousToken);
     return identity;
   }
 
@@ -64,8 +120,10 @@ export class SessionService {
       passwordConfirmation: passwordConfirmation,
       rememberMe: rememberMe
     };
+    const previousToken = await SessionStore.readToken();
+    const epoch = SessionService.epoch;
     const data = await ApiClient.post<NativeLoginData>(baseUrl, CUSTOMER_REGISTER_PATH, JSON.stringify(request), '');
-    return await SessionService.adoptSession(data);
+    return await SessionService.adoptSession(data, epoch, previousToken);
   }
 
   /**
@@ -79,21 +137,33 @@ export class SessionService {
     if (baseUrl === '') {
       throw new ApiRequestError('NETWORK_ERROR', '请先填写服务器地址', 0, '');
     }
+    const previousToken = await SessionStore.readToken();
+    const epoch = SessionService.epoch;
     const data = await ApiClient.post<NativeLoginData>(baseUrl, STAFF_REGISTER_PATH, JSON.stringify(request), '');
-    return await SessionService.adoptSession(data);
+    return await SessionService.adoptSession(data, epoch, previousToken);
   }
 
   /**
    * 登录 / 注册共用的收尾：保存令牌并建立内存身份。
    *
+   * 保存前先做**归属校验**：请求在途期间会话归属若已经变了（用户退出、或已经登录了
+   * 另一个账号），这份响应属于被放弃的账号，返回它的令牌就是把本地会话换成别人的
+   * （账号串用）。此时丢弃响应，并尽力撤销刚拿到的服务端新会话。
+   *
    * 保存失败按既有 `LOCAL_STORAGE_ERROR` 语义处理 —— 调 `logout` 撤销服务端会话，
    * 内存身份置空，抛错让界面停留在原表单，**绝不展示「已登录/已注册成功」**。
    */
-  private static async adoptSession(data: NativeLoginData): Promise<SessionIdentity> {
+  private static async adoptSession(data: NativeLoginData, epoch: number,
+    previousToken: string): Promise<SessionIdentity> {
     const baseUrl = ApiConfig.getBaseUrl();
+    if (!(await SessionService.stillCurrentSession(epoch, previousToken))) {
+      await SessionService.revokeAbandonedSession(baseUrl, data.token);
+      throw new ApiRequestError('SESSION_CHANGED', '登录状态已变更，本次结果未采用，请重新登录', 0, '');
+    }
     const persisted = await SessionStore.writeToken(data.token);
     if (!persisted) {
       SessionService.identity = null;
+      SessionService.advanceEpoch();
       try {
         await ApiClient.post<LogoutData>(baseUrl, LOGOUT_PATH, '', data.token);
       } catch (error) {
@@ -102,6 +172,7 @@ export class SessionService {
       throw new ApiRequestError('LOCAL_STORAGE_ERROR', '无法保存登录凭证，请检查设备存储后重试', 0, '');
     }
     SessionService.identity = data;
+    SessionService.advanceEpoch();
     return data;
   }
 
@@ -112,6 +183,9 @@ export class SessionService {
   static async restore(): Promise<RestoreResult> {
     const result = new RestoreResult();
     SessionService.identity = null;
+    // 恢复流程会重建 / 清空本地会话归属：先推进代次，让此前发起的任何认证写请求迟到时
+    // 都按「不属于当前会话」处理（boot 期间不会有这类请求，这里是语义上的封口）。
+    SessionService.advanceEpoch();
     const baseUrl = ApiConfig.getBaseUrl();
     const token = await SessionStore.readToken();
     if (token === '') {
@@ -155,6 +229,9 @@ export class SessionService {
     }
     await SessionStore.clearToken();
     SessionService.identity = null;
+    // 退出即换了一代会话归属：此前发出的认证写请求（尤其是改密）迟到时必须被丢弃，
+    // 否则它会把刚清空、甚至已经换成另一个账号的令牌重新写回（账号串用）。
+    SessionService.advanceEpoch();
   }
 
   /**
@@ -165,6 +242,11 @@ export class SessionService {
    * 之后所有请求自然带上新令牌。若本地保存失败，同样按登录的
    * `LOCAL_STORAGE_ERROR` 语义处理：调 logout 撤销**刚拿到的新会话**（不能用旧令牌，
    * 服务端已把它吊销），不展示「已改密成功」。
+   *
+   * **归属校验（Issue #60 迟到响应回归）**：落库前必须确认「这份响应仍属于发起请求时的
+   * 那个会话」。普通改密（非强制）在途时用户可以用返回键离开，于是可能出现
+   * 「A 的改密响应迟到、本地已经是 B」的交错 —— 无条件覆盖令牌就是账号串用。
+   * 代次 / 令牌任一不一致即整份丢弃（`SESSION_CHANGED`），并尽力撤销刚拿到的服务端新会话。
    *
    * 强制改密账号（`mustChangePassword = true`）也能调这个入口（服务端对该入口放行），
    * 这就是强制改密账号唯一的自救通道。
@@ -180,12 +262,21 @@ export class SessionService {
     if (token === '') {
       throw new ApiRequestError('UNAUTHENTICATED', '登录状态已失效，请重新登录', 0, '');
     }
+    // 发起前记下「这次响应属于谁」：会话代次 + 当时的令牌。
+    const epoch = SessionService.epoch;
     const data = await ApiClient.post<PasswordChangeData>(
       baseUrl,
       PASSWORD_CHANGE_PATH,
       JSON.stringify(request),
       token
     );
+    // 归属校验（Issue #60 迟到响应回归）：请求在途期间用户可能已经离开改密页、退出本账号、
+    // 甚至登录了另一个账号。此时这份响应里的令牌属于**被放弃的账号**，写进本地就会出现
+    // 「界面与内存身份是 B、后续请求头却是 A 的令牌」的账号串用。所以先比对再落库。
+    if (!(await SessionService.stillCurrentSession(epoch, token))) {
+      await SessionService.revokeAbandonedSession(baseUrl, data.token);
+      throw new ApiRequestError('SESSION_CHANGED', '登录状态已变更，本次修改结果未采用，请重新登录', 0, '');
+    }
     const persisted = await SessionStore.writeToken(data.token);
     if (!persisted) {
       try {
@@ -198,8 +289,12 @@ export class SessionService {
       }
       await SessionStore.clearToken();
       SessionService.identity = null;
+      SessionService.advanceEpoch();
       throw new ApiRequestError('LOCAL_STORAGE_ERROR', '无法保存新的登录凭证，请检查设备存储后重试', 0, '');
     }
+    // 令牌已轮换 = 会话归属又变了一代：此后任何**更早发起**的发令牌写请求迟到时都会被丢弃，
+    // 不会再把上一代的令牌盖回来（并发重复提交也由这条封口）。
+    SessionService.advanceEpoch();
     // 新会话的 mustChangePassword 恒为 false（初始密码已改）；其余身份字段沿用内存值。
     if (SessionService.identity !== null) {
       SessionService.identity.mustChangePassword = data.mustChangePassword;
