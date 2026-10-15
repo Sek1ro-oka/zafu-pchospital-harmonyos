@@ -1,3 +1,4 @@
+import { ReadingLibraryHero } from '../../core/ui/ReadingReference';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ROUTE_CASE_DETAIL } from '../../core/ui/Routes';
 import { CARD_RADIUS, PAGE_PADDING } from '../../core/ui/Theme';
@@ -152,82 +153,46 @@ export struct CaseLibraryPage {
 
   @Builder
   caseCard(item: CaseListItem) {
-    Column({ space: 8 }) {
-      Row({ space: 8 }) {
-        Text(item.title)
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .maxLines(1)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
-        Text(caseStatusLabel(item.status))
-          .fontSize(12)
-          .fontColor(item.status === 'FAILED' ? $r('app.color.danger') : $r('app.color.brand'))
-          .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-          .backgroundColor($r('app.color.brand_soft'))
-          .borderRadius(8)
-      }
-      .width('100%')
-
-      Text(`${caseVisibilityLabel(item.visibility)} · ${item.sourceCount} 条来源 · 版本 v${item.contentVersion}`)
-        .fontSize(13)
-        .fontColor($r('app.color.text_secondary'))
-        .width('100%')
-
+    Column({ space: 15 }) {
+      Row({ space: 12 }) {
+        Image($r('app.media.ref_shield')).width(38).height(38)
+        Column({ space: 5 }) {
+          Text('电脑医院 · AI 整理案例').fontSize(15).fontWeight(FontWeight.Medium).fontColor('#242D35')
+          Text('更新于 ' + formatOrderTime(item.updatedAt)).fontSize(11).fontColor('#8B949B')
+        }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+        Text(caseStatusLabel(item.status)).fontSize(12).fontColor(item.status === 'FAILED' ? '#C85252' : '#0877E0')
+          .padding({ left: 10, right: 10, top: 5, bottom: 5 }).backgroundColor('#F3F6FA').borderRadius(16)
+      }.width('100%')
+      Text(item.title).fontSize(20).lineHeight(29).fontWeight(FontWeight.Medium).fontColor('#171D22').width('100%')
       if (item.failureMessage !== null && item.failureMessage !== '') {
-        Text(item.failureMessage)
-          .fontSize(13)
-          .fontColor($r('app.color.danger'))
-          .width('100%')
-          .maxLines(2)
-          .textOverflow({ overflow: TextOverflow.Ellipsis })
+        Text(item.failureMessage).fontSize(14).lineHeight(23).fontColor('#C85252').maxLines(3).width('100%')
       }
-      Text(`更新于 ${formatOrderTime(item.updatedAt)}`)
-        .fontSize(12)
-        .fontColor($r('app.color.text_secondary'))
-        .width('100%')
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor($r('app.color.surface'))
-    .borderRadius(CARD_RADIUS)
-    .alignItems(HorizontalAlign.Start)
-    .onClick(() => {
-      this.openCase(item);
-    })
+      Row({ space: 8 }) {
+        Text(caseVisibilityLabel(item.visibility)).fontSize(13).fontColor('#879198').layoutWeight(1)
+        Text(item.sourceCount.toString() + ' 条来源证据').fontSize(13).fontColor('#879198')
+        Text('v' + item.contentVersion.toString()).fontSize(12).fontColor('#879198')
+      }.width('100%')
+    }.width('100%').padding(18).backgroundColor(Color.White).borderRadius(22).alignItems(HorizontalAlign.Start)
+      .onClick(() => { this.openCase(item); })
   }
 
   build() {
-    Column({ space: 14 }) {
-      Row({ space: 12 }) {
-        Text('典型案例库')
-          .fontSize(26)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Start)
-        Text('刷新')
-          .fontSize(14)
-          .fontColor($r('app.color.brand'))
-          .onClick(() => {
-            this.load();
-          })
-      }
-      .width('100%')
-
-      Flex({ wrap: FlexWrap.Wrap }) {
-        ForEach(statusFilters(), (filter: StatusFilter) => {
-          Column() {
-            this.filterChip(filter);
-          }
-          .margin({ right: 8, bottom: 8 })
-        }, (filter: StatusFilter) => filter.value)
-      }
-      .width('100%')
-
-      Scroll() {
-        Column({ space: 14 }) {
+    Scroll() {
+      Column({ space: 0 }) {
+        ReadingLibraryHero({ title: '维修案例库', scope: '工作人员授权资料', loaded: this.items.length,
+          onBack: (): void => { this.pathStack.pop(); }, onRefresh: (): void => { this.load(); } })
+        Column({ space: 16 }) {
+          Row() {
+            Text('案例资料').fontSize(21).fontWeight(FontWeight.Bold).fontColor('#151B20').layoutWeight(1)
+            Text('按状态浏览').fontSize(14).fontColor('#8B9399')
+          }.width('100%').margin({ top: 10 })
+          Text('已审核维修备案标记典型后，由 AI 整理并保留来源证据。').fontSize(13).lineHeight(21).fontColor('#69747D')
+            .width('100%').padding(14).backgroundColor(Color.White).borderRadius(16)
+          Scroll() {
+            Row({ space: 9 }) {
+              ForEach(statusFilters(), (filter: StatusFilter) => { this.filterChip(filter); }, (filter: StatusFilter) => filter.value)
+            }
+          }.width('100%').scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
           if (this.state === STATE_LOADING) {
             Column({ space: 12 }) {
               LoadingProgress()
@@ -303,18 +268,10 @@ export struct CaseLibraryPage {
                 })
             }
           }
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
-      }
-      .layoutWeight(1)
-      .scrollBar(BarState.Auto)
-      .align(Alignment.Top)
-    }
-    .width('100%')
-    .height('100%')
-    .padding(PAGE_PADDING)
-    .alignItems(HorizontalAlign.Start)
-    .backgroundColor($r('app.color.start_window_background'))
+
+        }.width('100%').padding({ left: 18, right: 18, top: 16, bottom: 24 })
+          .backgroundColor('#F1F6F9').borderRadius({ topLeft: 30, topRight: 30 }).alignItems(HorizontalAlign.Start)
+      }.width('100%').backgroundColor('#0C1723')
+    }.width('100%').height('100%').scrollBar(BarState.Off).align(Alignment.Top).backgroundColor('#F1F6F9')
   }
 }

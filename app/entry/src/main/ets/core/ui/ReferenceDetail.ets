@@ -16,7 +16,7 @@ export struct DetailRoundButton {
 
 @Component
 export struct DetailHeader {
-  title: string = '';
+  @Prop title: string = '';
   onBack: () => void = () => {};
   onRefresh: () => void = () => {};
   refresh: boolean = false;

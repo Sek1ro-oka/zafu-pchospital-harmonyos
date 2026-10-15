@@ -1,3 +1,5 @@
+import { DetailHeader } from '../../core/ui/ReferenceDetail';
+import { ReadingAuthor, ReadingBottomBar } from '../../core/ui/ReadingReference';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
 import { PublicCaseParam, PublicCaseDetail, PublicCaseSource, PublicCaseQuote } from './CommunityContract';
@@ -7,6 +9,7 @@ export struct PublicCaseDetailPage {
   @Prop @Watch('refresh') refreshVersion: number = 0;
   param: PublicCaseParam = { caseId: '' };
   onSessionExpired: () => void = () => {};
+  onBack: () => void = () => {};
   @State detail: PublicCaseDetail | null = null;
   @State loading: boolean = false;
   @State busy: boolean = false;
@@ -38,25 +41,35 @@ export struct PublicCaseDetailPage {
     } finally { if (generation === this.generation) this.busy = false; }
   }
   build() {
-    Scroll() {
-      Column({ space: 14 }) {
-        Button('刷新案例').enabled(!this.loading && !this.busy).onClick(() => { this.load(); })
-        if (this.loading) { LoadingPanel({ text: '正在读取案例…' }) }
-        if (this.errorText !== '') { ErrorPanel({ message: this.errorText, onRetry: (): void => { this.load(); } }) }
-        if (this.detail !== null) {
-          Text(this.detail.title).fontSize(24).fontWeight(FontWeight.Bold)
-          Text('来源：已审核维修备案的 AI 整理案例（公开）').fontSize(12).fontColor('#71808B')
-          Text(this.detail.displayText).fontSize(16).lineHeight(25).copyOption(CopyOptions.InApp)
-          Button(this.busy ? '收藏中…' : '收藏案例').enabled(!this.busy).onClick(() => { this.favorite(); })
-          if (this.notice !== '') { Text(this.notice).fontColor('#287B4E') }
-          ForEach(this.detail.sources, (source: PublicCaseSource) => {
-            Column({ space: 8 }) {
-              Text(`来源证据 ${source.index}`).fontSize(16).fontWeight(FontWeight.Medium)
-              ForEach(source.quotes, (quote: PublicCaseQuote) => { Text(quote.quote).fontSize(14).lineHeight(22) })
-            }.width('100%').padding(16).backgroundColor(Color.White).borderRadius(16)
-          }, (source: PublicCaseSource) => `${source.index}`)
-        }
-      }.width('100%').padding(16).alignItems(HorizontalAlign.Start)
-    }.width('100%').height('100%').align(Alignment.Top).backgroundColor('#F0F5F8')
+    Column() {
+      DetailHeader({ title: '案例详情', onBack: this.onBack, refresh: true,
+        onRefresh: (): void => { if (!this.loading && !this.busy) this.load(); } })
+      Scroll() {
+        Column({ space: 12 }) {
+          if (this.loading) { LoadingPanel({ text: '正在读取案例…' }) }
+          if (this.errorText !== '') { ErrorPanel({ message: this.errorText, onRetry: (): void => { this.load(); } }) }
+          if (this.detail !== null) {
+            Text(this.detail.title).fontSize(24).fontWeight(FontWeight.Medium).lineHeight(34).fontColor('#14191D').width('100%')
+            ReadingAuthor({ name: '电脑医院 · 已审核维修来源', note: 'AI 整理案例 · 公开 · 版本 v' + this.detail.contentVersion.toString() })
+            Text(this.detail.displayText).fontSize(16).lineHeight(29).fontColor('#343C42').width('100%').copyOption(CopyOptions.InApp)
+            if (this.notice !== '') { Text(this.notice).fontSize(13).fontColor('#287B4E').width('100%') }
+            Text('来源证据').fontSize(19).fontWeight(FontWeight.Medium).width('100%').margin({ top: 20, bottom: 6 })
+            ForEach(this.detail.sources, (source: PublicCaseSource) => {
+              Column({ space: 12 }) {
+                Text('来源 ' + source.index.toString()).fontSize(15).fontWeight(FontWeight.Medium).fontColor('#3B4652')
+                ForEach(source.quotes, (quote: PublicCaseQuote) => {
+                  Text('“' + quote.quote + '”').fontSize(15).lineHeight(26).fontColor('#65717B').width('100%')
+                })
+              }.width('100%').padding(18).backgroundColor('#F5F7FA').borderRadius(16).alignItems(HorizontalAlign.Start)
+            }, (source: PublicCaseSource) => source.index.toString())
+          }
+        }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 28 }).alignItems(HorizontalAlign.Start)
+      }.width('100%').layoutWeight(1).scrollBar(BarState.Off).align(Alignment.Top).backgroundColor(Color.White)
+      if (this.detail !== null) {
+        ReadingBottomBar({ text: '公开案例 · ' + this.detail.sources.length.toString() + ' 条来源证据',
+          action: this.busy ? '收藏中…' : '收藏案例', actionEnabled: !this.busy && !this.loading,
+          onSelect: (): void => { this.favorite(); } })
+      }
+    }.width('100%').height('100%').backgroundColor('#F1F6F9')
   }
 }

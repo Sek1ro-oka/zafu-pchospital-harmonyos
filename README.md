@@ -4,6 +4,8 @@
 
 ## 页面映射与参考图
 
+2026-10-15：第 12 模块 [#75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75) 已实现报修详情、指南详情、案例详情与案例库的参考图布局；HAP 构建与双角色模拟器操作通过，最终视觉效果待维护者审查。[四组参考图、实际截图与验证范围](docs/verification/issue-75.md)。
+
 新增子页面参考见 [PR #70 的 11 张图片索引与三个推荐映射](docs/reference/my-huawei/README.md#三个优先推荐映射)：账号资料 → 我的/个人资料，订单空态 → 报修列表，检测与帮助 → 知识分类与 AI 问诊入口。2026-10-14 已按维护者要求实施这三个映射并在模拟器验证，见 [页面还原记录与截图](docs/verification/three-reference-pages-20261014.md)；原五页基线如下。
 
 **以下为 2026-10-12 确认的页面开发基线。** 开发每一页前先打开该行参考图片，再阅读 [开发方案中的页面映射与交互要求](docs/development-plan.md#页面映射与交互要求)。五张图参考布局、层级和材质，内容改为电脑医院业务，不照搬购物或社交功能。
@@ -59,6 +61,12 @@
 客户自主注册产生客户身份；邀请码用于工作人员注册。客户收藏指南和有效公开 AI 案例，消息为站内报修通知。游客可看活动，App 报名先登录，新报名绑定账号；旧匿名报名仍用手机号查询，不自动认领。**原 Web 数据库数据不迁移**，只复用代码/规则和必要结构，保留现有课设数据。以上为新增目标，未接通入口继续如实标注。
 
 依赖和必要验收写在各模块内。接口就绪后可以并行推进，不必等前一个 Issue 全部关闭。测试与审查只覆盖本次改动及受影响链路。
+
+## 后续页面还原
+
+- [12 报修详情、指南详情与案例阅读 #75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75)：本轮实现与模拟器证据见 [验证记录](docs/verification/issue-75.md)。
+- [13 指南目录与知识搜索 #76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76)：后续复用本轮阅读入口。
+- [14 活动详情与我的报名 #77](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/77)：按活动接口与权限另行推进。
 
 ## 克隆与目录
 

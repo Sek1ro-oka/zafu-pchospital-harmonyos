@@ -12,11 +12,33 @@ interface PageState {
   loadingMore: boolean;
   hasMore: boolean;
   currentPage: number;
+  detailOpen: boolean;
+  detailTargetId: string;
+  detailRequestSeq: number;
+  detailLoading: boolean;
+  selected: { id: string } | null;
+  handleDetailBack(): boolean;
   load(): Promise<void>;
   loadMore(): Promise<void>;
   switchStatus(status: string): void;
   afterSubmit(): Promise<void>;
 }
+
+test("详情系统返回先回列表并作废在途详情；列表返回交还导航", () => {
+  const page = pageWithList(async () => []);
+  page.detailOpen = true;
+  page.detailTargetId = "order-A";
+  page.selected = { id: "order-A" };
+  page.detailLoading = true;
+  const before = page.detailRequestSeq;
+  assert.equal(page.handleDetailBack(), true);
+  assert.equal(page.detailOpen, false);
+  assert.equal(page.selected, null);
+  assert.equal(page.detailTargetId, "");
+  assert.equal(page.detailLoading, false);
+  assert.equal(page.detailRequestSeq, before + 1);
+  assert.equal(page.handleDetailBack(), false);
+});
 
 function pageWithList(
   listMine: (status: string, page: number) => Promise<{ id: string }[]>,

@@ -93,6 +93,7 @@ export struct HomePage {
   onProfileSaved: (name: string) => void = () => {};
   private loginIntent: LoginIntent = new LoginIntent();
   private loginBusy: boolean = false;
+  private customerOrderBackHandler: () => boolean = () => false;
   private registerBusy: boolean = false;
   private expiring: boolean = false;
   @State sessionTransition: boolean = false;
@@ -424,12 +425,14 @@ export struct HomePage {
         });
       } else if (name === ROUTE_PUBLIC_CASES) {
         PublicCasesPage({
+          onBack: (): void => { this.pathStack.pop(); },
           refreshVersion: this.publicCasesRevision,
           onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
           onSessionExpired: (): void => { this.expireSession(); }
         });
       } else if (name === ROUTE_PUBLIC_CASE_DETAIL) {
-        PublicCaseDetailPage({ param: param as PublicCaseParam, refreshVersion: this.publicCaseRevision,
+        PublicCaseDetailPage({
+          onBack: (): void => { this.pathStack.pop(); }, param: param as PublicCaseParam, refreshVersion: this.publicCaseRevision,
           onSessionExpired: (): void => { this.expireSession(); }
         });
       } else if (name === ROUTE_PERSONAL_PROFILE) {
@@ -447,6 +450,7 @@ export struct HomePage {
         });
       } else if (name === ROUTE_PUBLIC_GUIDES) {
         PublicGuidesPage({
+          onBack: (): void => { this.pathStack.pop(); },
           authenticated: this.authenticated, home: this.home,
           onSessionExpired: (): void => { this.expireSession(); },
           initialGuideId: param !== null && param !== undefined ? (param as GuideFocusParam).guideId : '',
@@ -463,6 +467,7 @@ export struct HomePage {
       } else if (name === ROUTE_REPAIR_ORDERS) {
         RepairOrdersPage({
           onBack: (): void => { this.pathStack.pop(); },
+          onRegisterBackHandler: (handler: () => boolean): void => { this.customerOrderBackHandler = handler; },
           initialDetailId: param !== null && param !== undefined
             ? (param as RepairOrderFocusParam).orderId
             : '',
@@ -521,6 +526,8 @@ export struct HomePage {
         });
       } else if (name === ROUTE_CASE_DETAIL) {
         CaseDetailPage({
+          onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+          onBack: (): void => { this.pathStack.pop(); },
           param: param as CaseDetailParam,
           onSessionExpired: (): void => {
             this.expireSession();
@@ -528,7 +535,9 @@ export struct HomePage {
         });
       }
     }
-    .hideTitleBar(name === ROUTE_PERSONAL_PROFILE || name === ROUTE_REPAIR_ORDERS || name === ROUTE_STAFF_ORDERS)
+    .hideTitleBar(name === ROUTE_PERSONAL_PROFILE || name === ROUTE_REPAIR_ORDERS || name === ROUTE_STAFF_ORDERS
+      || name === ROUTE_STAFF_ORDER_DETAIL || name === ROUTE_PUBLIC_GUIDES || name === ROUTE_CASE_DETAIL
+      || name === ROUTE_CASE_LIBRARY || name === ROUTE_PUBLIC_CASES || name === ROUTE_PUBLIC_CASE_DETAIL)
     .title(name === ROUTE_LOGIN ? '登录' : routeTitle(name))
     .onShown(() => {
       this.workbenchRevision += 1;
@@ -542,6 +551,7 @@ export struct HomePage {
     .onBackPressed((): boolean => {
       // 认证写请求进行中 / 强制改密未完成：拦下返回，避免迟到响应把会话写成另一个账号。
       if (this.interceptBack(name)) return true;
+      if (name === ROUTE_REPAIR_ORDERS && this.customerOrderBackHandler()) return true;
       if (name === ROUTE_LOGIN || name === ROUTE_PASSWORD_CHANGE) {
         // 放弃登录 / 改密即作废续接意图；注册路由刻意不清，注册页取消后要回登录页续接原操作。
         this.loginIntent = new LoginIntent();
