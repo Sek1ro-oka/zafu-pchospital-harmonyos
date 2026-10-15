@@ -270,6 +270,8 @@ export struct HomePage {
   /** 改密成功（新令牌已由 SessionService 保存）：刷新身份并续接原操作。 */
   private onPasswordChanged(): void {
     // mustChangePassword 已由 SessionService.changePassword 置 false，这里只把最新身份交回上层。
+    // 强制改密到此结束：复位强制标记，避免之后自愿进入改密页时被残留的 true 困住。
+    this.passwordChangeForced = false;
     const identity: SessionIdentity | null = SessionService.current();
     if (identity !== null) {
       this.onLoggedIn(identity);
@@ -300,6 +302,11 @@ export struct HomePage {
       intent.param = param;
       this.requestLogin(intent);
       return;
+    }
+    // 自愿进入改密页（如个人资料页「修改密码」）：清掉可能残留的强制标记。
+    // 否则上一次强制改密遗留的 true 会让本次自愿进入被返回键拦截（困在改密页）。
+    if (route === ROUTE_PASSWORD_CHANGE) {
+      this.passwordChangeForced = false;
     }
     this.pusher.push(this.pathStack, route, param);
   }

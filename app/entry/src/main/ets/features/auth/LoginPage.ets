@@ -37,8 +37,11 @@ export struct LoginPage {
   @State serverUrl: string = '';
   @State qq: string = '';
   @State password: string = '';
-  /** 保持登录（30 天）；缺省 false = 普通档位（24 小时），与注册/改密同一套语义。 */
-  @State rememberMe: boolean = false;
+  /**
+   * 保持登录（30 天）：清单第 7 项「App 默认保持登录并允许用户关闭」→ 默认勾选，
+   * 用户可关闭降为普通档位（24 小时）。提交语义不变：只有显式 true 才是 30 天。
+   */
+  @State rememberMe: boolean = true;
   @State busy: boolean = false;
   /** 地址检测进行中：覆盖「保存地址 + 连接检测」全程，期间按钮禁用防连点。 */
   @State checking: boolean = false;

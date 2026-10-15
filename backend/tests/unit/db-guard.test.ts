@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { assertExperimentDatabase } from "../../tools/db-target.mjs";
 import { assertDestructiveDbAllowed, assertTestDatabase, integrationTestsEnabled } from "../integration/db-guard";
 
 function withTarget(database: string, run: () => void) {
@@ -40,4 +41,20 @@ test("integration tests skip when disabled and reject the development database w
     process.env.RUN_DB_TESTS = "1";
     assert.throws(integrationTestsEnabled, /Refusing/);
   });
+});
+
+test("migrate 与 seed 模式只放行本地实验库，拒绝共享 / 生产库", () => {
+  // 验收 6：迁移与种子脚本必须拒绝对非本地库执行。此前只有 test / reset-test 模式被测过，
+  // migrate-dev / migrate / seed 三种模式从未覆盖——这里补上门禁：本地实验开发库放行，
+  // 共享 / 生产 / 未知库一律抛错（Refusing）。
+  withTarget("pchospital_exp_dev", () => {
+    assert.doesNotThrow(() => assertExperimentDatabase("migrate-dev"));
+    assert.doesNotThrow(() => assertExperimentDatabase("migrate"));
+    assert.doesNotThrow(() => assertExperimentDatabase("seed"));
+  });
+  for (const database of ["zafu_pchospital", "unrelated_test"]) {
+    withTarget(database, () => {
+      assert.throws(() => assertExperimentDatabase("migrate-dev"), /Refusing/);
+    });
+  }
 });

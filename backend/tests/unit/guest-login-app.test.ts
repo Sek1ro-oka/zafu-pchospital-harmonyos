@@ -9,9 +9,12 @@ interface Identity {
 }
 interface HomeShell {
   authenticated: boolean;
+  mustChangePassword: boolean;
+  passwordChangeForced: boolean;
   currentTab: number;
   pathStack: { names: string[]; getAllPathName(): string[] };
   openRoute(route: string, param: object | null): void;
+  onPasswordChanged(): void;
   selectNavigation(index: number): void;
   canChangeTab(index: number): boolean;
   cancelLogin(): void;
@@ -74,6 +77,7 @@ function shell(): HomeShell {
     ROUTE_KNOWLEDGE: "knowledge",
     ROUTE_ACTIVITY_DETAIL: "activity-detail",
     ROUTE_ACTIVITY_LOOKUP: "activity-lookup",
+    SessionService: { current: () => null },
   }) as HomeShell;
 }
 
@@ -234,4 +238,31 @@ test("活动详情游客可读；报名登录/注册后保留活动目标，取�
   page.completeLogin({ home: "CUSTOMER" });
   assert.equal(page.pathStack.names.join(","), "activity-detail,activity-signup");
   assert.equal((page.pathStack as unknown as { params: object[] }).params[1], target);
+});
+
+test("改密页强制标记只在自愿进入时复位；强制账号引导仍保持 true", () => {
+  // 强制改密账号点业务路由：被引导到改密页，强制标记保持 true（返回键不可跳过）。
+  const forced = shell();
+  forced.authenticated = true;
+  forced.mustChangePassword = true;
+  forced.openRoute("repair-orders", null);
+  assert.equal(forced.passwordChangeForced, true);
+  assert.equal(forced.pathStack.names.join(","), "password-change");
+
+  // 非强制账号自愿进入改密页（即使残留了上次强制改密遗留的 true）：必须复位，
+  // 否则 interceptBack("password-change") 会返回 true，把用户困在自愿打开的改密页里。
+  const voluntary = shell();
+  voluntary.authenticated = true;
+  voluntary.passwordChangeForced = true;
+  voluntary.openRoute("password-change", null);
+  assert.equal(voluntary.passwordChangeForced, false);
+  assert.equal(voluntary.pathStack.names.join(","), "password-change");
+});
+
+test("改密成功后复位强制标记：强制状态随改密结束", () => {
+  const page = shell();
+  page.passwordChangeForced = true;
+  page.onPasswordChanged();
+  // 改密成功即强制状态终结；复位后用户之后自愿进入改密页不会被返回键困住。
+  assert.equal(page.passwordChangeForced, false);
 });

@@ -1,6 +1,6 @@
 # “我的华为”参考截图
 
-项目组提供的五张截图，原文件名日期标记为 2026-09-29，图片保持原样。用于界面设计参考；App 版本和设备信息未记录。
+本目录共有 16 张项目组提供的参考截图：最初五张主页面图，及 [PR #70](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/pull/70) 补充的 11 张子页面图。最初五张原文件名日期标记为 2026-09-29；补充图片原始名称为 hash，2026-10-14 按实际画面重命名，图片字节保持原样。用于界面设计参考；App 版本和设备信息未记录。
 
 | 截图 | 本项目参考点 |
 | --- | --- |
@@ -11,6 +11,36 @@
 | [花粉社区](community-huafen-feed.jpg) | 内容列表、搜索和频道布局 |
 
 客户服务首页主要参考“服务”截图，个人页参考“我的”截图。报修表单、服务记录和进度详情按 [开发方案](../../development-plan.md)与实际业务设计；这些入口后的完整流程没有包含在现有截图中。
+
+## PR #70 补充截图索引
+
+文件名描述原图内容；下列参考点及后面的三个映射是设计建议，不代表页面已按新图改造。五个主页面及角色导航仍遵循下方原基线。
+
+| 原文件名 | 重命名后的图片 / 原图页面 | 可参考的组织方式 |
+| --- | --- | --- |
+| `2eb5c08e89b358eddad677839eed9fc1.jpg` | [service-device-benefits.jpg：权益查询](service-device-benefits.jpg) | 设备概要、状态卡片、有效/失效层级，可用于服务页设备上下文；本项目没有保修权益接口 |
+| `7133d345c48e776c76df1e855b252d2b.jpg` | [community-event-checkin-detail.jpg：活动帖子与每日打卡](community-event-checkin-detail.jpg) | 活动标题、发布信息、长图和底部操作；每日积分打卡不等于社团活动签到 |
+| `7c4132fc5318480b9d3a28125117bc4d.jpg` | [community-event-post-detail.jpg：活动帖子详情](community-event-post-detail.jpg) | 大标题、发布信息、正文图片区、底部收藏，适合活动详情或案例阅读 |
+| `7d96aa631f365b78fb7c10d356c3a6fe.jpg` | [community-circle-detail-feed.jpg：XMAGE 圈子详情](community-circle-detail-feed.jpg) | 主题头图、快捷分类、置顶、筛选和图文卡片；活动首版仍由社团发布 |
+| `9002876e6f51c7a920e08ab842df172e.jpg` | [service-diagnostics-help.jpg：检测与帮助](service-diagnostics-help.jpg) | 主行动按钮、图标、故障分类折叠卡片，推荐映射③ |
+| `a65ec9377d5706291f2150cee5b1b238.jpg` | [community-circles-category-list.jpg：全部圈子](community-circles-category-list.jpg) | 左侧分类、右侧分组条目，可用于知识分类目录；不引入加入圈子或发帖人数 |
+| `b29b5c354bc0be61e4fd4b6994e7a798.jpg` | [harmonyos-upgrade-guide.jpg：升级尝鲜指南](harmonyos-upgrade-guide.jpg) | 横幅、快捷入口、说明正文、分组行动卡片，可用于指南阅读；不引入系统升级功能 |
+| `b4ccd032c6739b6cd3aeebdbc66ae067.jpg` | [shopping-orders-empty-state.jpg：线下门店订单空态](shopping-orders-empty-state.jpg) | 状态筛选、说明条、居中空态，推荐映射② |
+| `cca21fc3171ddc95ebcba42df9cdd41b.jpg` | [account-profile-sheet.jpg：华为账号资料面板](account-profile-sheet.jpg) | 大圆角面板、头像、昵称与信息入口，推荐映射① |
+| `d1b45ae653de764fd6271646697d42c5.jpg` | [search-community-results.jpg：社区搜索结果](search-community-results.jpg) | 顶部搜索、类型筛选、分组结果、关键词强调，可用于指南/案例检索；成员结果只在已有授权目录展示 |
+| `e79b0a66c42ab6e9702e6f2aa5ef8a88.jpg` | [service-battery-replacement-campaign.jpg：换电池活动专题](service-battery-replacement-campaign.jpg) | 全宽活动主视觉、时间与说明、底部行动区，可用于维修活动详情；不照搬购买或收费承诺 |
+
+## 三个优先推荐映射
+
+以下以 `main` 的 PR #70 合入提交 `9ac3226` 中的真实页面为起点。仅安排视觉改造时优先采用这三个映射；本次只整理图片与说明，未实现页面变更。
+
+| 推荐 | 参考图 → 当前功能页面 | 具体改法 | 代码起点 |
+| --- | --- | --- | --- |
+| ① | [账号资料面板](account-profile-sheet.jpg) → **我的 / 个人资料** | 保留浅灰底、大圆角、居中头像与昵称层级。头像沿用项目默认资源，名称与联系电话来自当前账号；信息入口进入现有资料编辑。客户显示昵称/电话，成员显示本人有权查看的资料和技能。半屏面板可以后续选择，当前导航层级无需因截图改变 | [ProfilePage.ets](../../../app/entry/src/main/ets/features/profile/ProfilePage.ets)、[PersonalProfilePage.ets](../../../app/entry/src/main/ets/features/profile/PersonalProfilePage.ets) |
+| ② | [订单空态](shopping-orders-empty-state.jpg) → **我的报修 / 工作人员报修列表** | 保留大标题、横向状态筛选、提示条及空态留白；使用真实报修状态（待受理、已受理、维修中、已完成、已取消）。列表有数据时显示机型、问题摘要和更新时间；空态提示「暂无报修」，客户可去报修。筛选需对应真实结果，分页/失败/加载态继续保留。维修备案仍是独立对象，不与报修混成一张订单列表 | [RepairOrdersPage.ets](../../../app/entry/src/main/ets/features/repair/RepairOrdersPage.ets)、[StaffRepairOrdersPage.ets](../../../app/entry/src/main/ets/features/repair/StaffRepairOrdersPage.ets) |
+| ③ | [检测与帮助](service-diagnostics-help.jpg) → **知识库故障分类与 AI 问诊入口** | 保留主行动按钮和圆角故障类别卡；按钮改成「AI 故障问诊」，点击进入现有对话。类别改为开机、系统、网络、磁盘、散热等，展开或点击浏览真实指南，再打开指南/有效案例。这里是目录与入口，AI 对话仍为独立子页；不要将主按钮命名为自动硬件检测 | [KnowledgeLibraryPage.ets](../../../app/entry/src/main/ets/features/knowledge/KnowledgeLibraryPage.ets)、[PublicGuidesPage.ets](../../../app/entry/src/main/ets/features/knowledge/PublicGuidesPage.ets)、[KnowledgePage.ets](../../../app/entry/src/main/ets/features/knowledge/KnowledgePage.ets) |
+
+三个映射均复用当前数据、角色与入口；参考图的昵称、电话、设备、计数和状态不是项目数据。其余八张作为补充构图参考，活动详情/报名等按 #62 的实际交付再接入，不因有参考图就扩大当前功能范围。
 
 ## 页面映射与开发基线
 

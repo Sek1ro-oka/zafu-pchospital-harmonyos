@@ -22,6 +22,10 @@ const m6SettingsMigrationPath = new URL(
   "../../prisma/migrations/20260923100000_p2_m6_public_content_settings/migration.sql",
   import.meta.url,
 );
+const rememberMeMigrationPath = new URL(
+  "../../prisma/migrations/20261013150000_issue60_remember_me/migration.sql",
+  import.meta.url,
+);
 
 test("初始 Migration 固定 GreatSQL 字符集、引擎与邀请码计数约束", async () => {
   const sql = await readFile(migrationPath, "utf8");
@@ -99,4 +103,18 @@ test("M6 批次 2 Migration 建立公开内容设置单行表并约束展示策�
     .filter((line) => !line.trim().startsWith("--"))
     .join("\n");
   assert.doesNotMatch(ddl, /qq|phone|student_id/i);
+});
+
+test("Issue #60 rememberMe Migration 只追加可空列：不回填、不改写既有会话到期", async () => {
+  const sql = await readFile(rememberMeMigrationPath, "utf8");
+  // 变更是纯增量：给 auth_sessions 追加一个可空的 remember_me 列（存量会话保持 NULL）。
+  assert.match(sql, /ALTER TABLE `auth_sessions`/);
+  assert.match(sql, /ADD COLUMN `remember_me` BOOLEAN NULL/);
+  // 验收 6：schema 变更在隔离库上必须是增量的，绝不能回填或改写既有会话的 expires_at，
+  // 也不得 DROP / MODIFY 任何列。expires_at 只出现在 `--` 注释里，因此先剥掉注释再断言 DDL。
+  const ddl = sql
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  assert.doesNotMatch(ddl, /UPDATE|DROP|MODIFY|expires_at/i);
 });
