@@ -147,7 +147,7 @@ export function isActionRunCurrent(
 
 /** 「原文未提供」清单文案；为空返回空串（不显示空行）。 */
 export function unknownsText(unknowns: string[]): string {
-  if (unknowns.length === 0) {
+  if (!Array.isArray(unknowns) || unknowns.length === 0) {
     return '';
   }
   return `原文未提供：${unknowns.join('、')}`;
@@ -162,7 +162,7 @@ export interface CaseContentRow {
 export function contentRows(content: CaseStructuredContent): CaseContentRow[] {
   const rows: CaseContentRow[] = [];
   const push = (label: string, value: string | null): void => {
-    if (value !== null && value !== '') {
+    if (typeof value === 'string' && value !== '') {
       rows.push({ label: label, value: value });
     }
   };

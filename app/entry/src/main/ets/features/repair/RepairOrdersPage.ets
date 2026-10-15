@@ -1,3 +1,4 @@
+import { RepairDeviceCard, ReadingSectionLabel, ReadingStatusCard } from '../../core/ui/ReadingReference';
 import { DetailHeader, DetailNotice, DetailEmptyOrders, DETAIL_BACKGROUND } from '../../core/ui/ReferenceDetail';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
@@ -57,6 +58,7 @@ export struct RepairOrdersPage {
    */
   initialDetailId: string = '';
   onBack: () => void = () => {};
+  onRegisterBackHandler: (handler: () => boolean) => void = () => {};
   @State status: string = '';
   private listGeneration: number = 0;
   /** 会话失效时通知上层回登录页；由 Navigation 调用方注入。 */
@@ -92,6 +94,7 @@ export struct RepairOrdersPage {
   private refreshPending: boolean = false;
 
   aboutToAppear(): void {
+    this.onRegisterBackHandler((): boolean => { return this.handleDetailBack(); });
     this.load();
     if (this.initialDetailId !== '') {
       this.openDetailById(this.initialDetailId);
@@ -114,9 +117,17 @@ export struct RepairOrdersPage {
    * 网络错误补一句排查引导，业务错误直接用后端信封文案，两类提示可区分。
    */
   aboutToDisappear(): void {
+    this.onRegisterBackHandler((): boolean => { return false; });
     this.listGeneration += 1;
     this.requesting = false; this.loadingMore = false; this.refreshPending = false;
     this.closeDetail();
+  }
+
+  /** 详情与列表共用路由，系统返回与页头返回都先回到列表。 */
+  private handleDetailBack(): boolean {
+    if (!this.detailOpen) return false;
+    this.closeDetail();
+    return true;
   }
 
   private switchStatus(status: string): void {
@@ -370,65 +381,30 @@ export struct RepairOrdersPage {
   }
 
   @Builder
-  detailPanel(order: RepairOrderView | null) {
-    Column({ space: GAP_SM }) {
-      Row({ space: GAP_SM }) {
-        Text('报修详情')
-          .fontSize(FONT_HEADING)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-        Text('收起')
-          .fontSize(FONT_TEXT)
-          .fontColor($r('app.color.brand'))
-          .onClick(() => {
-            this.closeDetail();
-          })
-      }
-      .width('100%')
-
-      if (this.detailLoading) {
-        // 嵌在详情卡内：不再包卡片底色，只给统一的转圈与文案。
-        LoadingPanel({ text: '正在加载详情…' })
-      } else if (this.detailErrorText !== '') {
-        ErrorPanel({
-          message: this.detailErrorText,
-          onRetry: (): void => {
-            this.retryDetail();
+  detailPanel() {
+    Column({ space: 14 }) {
+      if (this.detailLoading) { LoadingPanel({ text: '正在加载详情…' }) }
+      else if (this.detailErrorText !== '') {
+        ErrorPanel({ message: this.detailErrorText, onRetry: (): void => { this.retryDetail(); } })
+      } else if (this.selected !== null) {
+        Column() {
+          ReadingSectionLabel({ text: '设备信息' })
+          RepairDeviceCard({ model: this.selected.deviceModel, serial: this.selected.deviceSerial, status: repairOrderStatusLabel(this.selected.status) })
+        }.width('100%')
+        ReadingStatusCard({ title: '报修处理状态', subtitle: '状态  ' + repairOrderStatusLabel(this.selected.status),
+          text: '提交时间  ' + formatOrderTime(this.selected.createdAt) + '\n最近进度  ' + (this.selected.lastProgressAt === null ? '暂无更新' : formatOrderTime(this.selected.lastProgressAt)),
+          icon: $r('app.media.ref_shield') })
+        ReadingStatusCard({ title: '故障与联系信息', subtitle: this.selected.faultDescription,
+          text: '联系电话  ' + this.selected.contactPhone, icon: $r('app.media.ref_document') })
+        Column({ space: 16 }) {
+          Text('服务进度').fontSize(18).fontWeight(FontWeight.Medium).fontColor('#171D21').width('100%')
+          if (this.selected.events.length === 0) { Text('暂无进度记录').fontSize(14).fontColor('#858D93') }
+          else {
+            ForEach(this.selected.events, (event: RepairOrderEventView) => { this.timelineEvent(event); }, (event: RepairOrderEventView) => event.id)
           }
-        })
-      } else if (order !== null) {
-        this.detailRow('设备机型', order.deviceModel)
-        this.detailRow('设备序列号', order.deviceSerial === null || order.deviceSerial === '' ? '未填写' : order.deviceSerial)
-        this.detailRow('联系电话', order.contactPhone)
-        this.detailRow('当前状态', repairOrderStatusLabel(order.status))
-        this.detailRow('故障描述', order.faultDescription)
-
-        Text('进度')
-          .fontSize(FONT_BODY)
-          .fontWeight(FontWeight.Medium)
-          .fontColor($r('app.color.text_primary'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
-
-        if (order.events.length === 0) {
-          Text('暂无进度记录')
-            .fontSize(FONT_NOTE)
-            .fontColor($r('app.color.text_secondary'))
-            .width('100%')
-            .textAlign(TextAlign.Start)
-        } else {
-          ForEach(order.events, (event: RepairOrderEventView) => {
-            this.timelineEvent(event);
-          }, (event: RepairOrderEventView) => event.id)
-        }
+        }.width('100%').padding(18).backgroundColor(Color.White).borderRadius(22).alignItems(HorizontalAlign.Start)
       }
-    }
-    .width('100%')
-    .padding(CARD_PADDING)
-    .backgroundColor($r('app.color.surface'))
-    .borderRadius(CARD_RADIUS)
-    .alignItems(HorizontalAlign.Start)
+    }.width('100%').alignItems(HorizontalAlign.Start)
   }
 
   @Builder
@@ -503,8 +479,13 @@ export struct RepairOrdersPage {
 
   build() {
     Column({ space: 0 }) {
-      DetailHeader({ title: '我的报修', onBack: this.onBack, refresh: true,
-        onRefresh: (): void => { this.load(true); } })
+      DetailHeader({ title: this.detailOpen ? '报修详情' : '我的报修',
+        onBack: (): void => { if (this.detailOpen) this.closeDetail(); else this.onBack(); }, refresh: true,
+        onRefresh: (): void => { if (this.detailOpen) this.retryDetail(); else this.load(true); } })
+      if (this.detailOpen) {
+        Scroll() { Column() { this.detailPanel() }.width('100%').padding({ left: 18, right: 18, bottom: 24 }) }
+          .width('100%').layoutWeight(1).scrollBar(BarState.Off).align(Alignment.Top)
+      } else {
       Scroll() {
         Row() {
           this.filterTab('全部', '')
@@ -531,7 +512,6 @@ export struct RepairOrdersPage {
                 submit: (request: RepairOrderSubmitRequest, idempotencyKey: string) => this.submitOrder(request, idempotencyKey),
                 onSessionExpired: () => this.onSessionExpired() })
             }
-            if (this.detailOpen) { this.detailPanel(this.selected) }
             if (this.state === STATE_LOADING) { this.loadingView() }
             else if (this.state === STATE_ERROR) { this.errorView() }
             else if (this.state === STATE_EMPTY) { Text('暂无报修单').fontColor('#969EA4').padding(24) }
@@ -546,6 +526,7 @@ export struct RepairOrdersPage {
       Button(this.showForm ? '收起报修表单' : '我要报修').fontSize(16).height(44).width(184)
         .backgroundColor('#0755FF').fontColor(Color.White).borderRadius(24).margin({ top: 8, bottom: 18 })
         .onClick(() => { this.showForm = !this.showForm; this.noticeText = ''; })
+      }
     }.width('100%').height('100%').backgroundColor(DETAIL_BACKGROUND)
   }
 }

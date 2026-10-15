@@ -103,6 +103,8 @@ flowchart LR
 
 ## 页面映射与交互要求
 
+2026-10-15，第 12 模块 [#75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75) 实施：以 [权益查询](reference/my-huawei/service-device-benefits.jpg) 还原客户/工作人员报修详情，以 [升级指南](reference/my-huawei/harmonyos-upgrade-guide.jpg) 还原维修指南阅读，以 [帖子详情](reference/my-huawei/community-event-post-detail.jpg) 还原案例阅读，以 [圈子信息流](reference/my-huawei/community-circle-detail-feed.jpg) 还原公开/工作人员案例库。保留真实状态、服务端权限、来源版本、章节定位、收藏和已有操作，设备/计数/正文只取实际接口。已构建并在模拟器操作，截图与未验证项见 [Issue #75 验证记录](verification/issue-75.md)，最终视觉效果待维护者确认。后续 #76 处理指南目录/知识搜索，#77 处理活动详情/报名，本轮未扩展这两批布局。
+
 2026-10-14 实施补充：维护者已确认实施下列三个子页面映射。个人资料改为账号面板，报修列表改为状态筛选/说明条/空态布局，知识页改为故障分类折叠卡与 AI 问诊入口。已构建并在模拟器操作，具体范围、截图和未验证项见 [本轮验证记录](verification/three-reference-pages-20261014.md)；其他主页面、五栏导航和角色权限保持现有规则。
 
 2026-10-14 补充：PR #70 新增的 11 张子页面截图已按内容命名，见 [完整图片索引与三个推荐映射](reference/my-huawei/README.md#三个优先推荐映射)。优先建议账号资料面板 → 我的/个人资料、订单空态 → 报修列表、检测与帮助 → 知识分类与 AI 问诊入口；这些是后续视觉改造建议，功能仍使用现有真实接口与权限。原五个主页面及双角色导航基线继续如下。

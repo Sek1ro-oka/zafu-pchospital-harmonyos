@@ -1,3 +1,7 @@
+import { DetailHeader } from '../../core/ui/ReferenceDetail';
+import { ReadingAuthor, ReadingBottomBar } from '../../core/ui/ReadingReference';
+import { ROUTE_STAFF_RECORD } from '../../core/ui/Routes';
+import { StaffRecordParam } from '../repair/StaffRepairContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { CARD_RADIUS, CONTROL_HEIGHT, PAGE_PADDING } from '../../core/ui/Theme';
 import { formatOrderTime } from '../repair/RepairOrderContract';
@@ -30,6 +34,8 @@ import { KnowledgeCaseService } from './KnowledgeCaseService';
 @Component
 export struct CaseDetailPage {
   param: CaseDetailParam = { caseId: '', title: '' };
+  onBack: () => void = () => {};
+  onOpen: (route: string, param: Object | null) => void = () => {};
   onSessionExpired: () => void = () => {
   };
   @State loading: boolean = true;
@@ -265,6 +271,11 @@ export struct CaseDetailPage {
           this.quoteView(quote);
         }, (quote: CaseEvidence) => `${source.id}:${quote.field}:${quote.quote}`)
       }
+      Button('查看原始维修备案').height(32).fontSize(13).fontColor('#2677DD').backgroundColor('#EFF4FC')
+        .onClick(() => {
+          const param: StaffRecordParam = { recordId: source.recordId, faultDescription: this.detail === null ? '' : (this.detail.content.fault || '') };
+          this.onOpen(ROUTE_STAFF_RECORD, param);
+        })
     }
     .width('100%')
     .padding(14)
@@ -274,166 +285,107 @@ export struct CaseDetailPage {
   }
 
   @Builder
-  adminPanel(detail: CaseDetailView) {
-    Column({ space: 10 }) {
-      Text('管理员操作')
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.text_primary'))
+  adminPanel() {
+    if (this.detail !== null) {
+      Column({ space: 10 }) {
+        Text('管理员操作')
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor($r('app.color.text_primary'))
+          .width('100%')
+
+        Text(`当前范围：${caseVisibilityLabel(this.detail.visibility)}`)
+          .fontSize(13)
+          .fontColor($r('app.color.text_secondary'))
+          .width('100%')
+
+        Row({ space: 10 }) {
+          if (this.detail.visibility === CASE_VISIBILITY_STAFF) {
+            Button(this.busy ? '处理中…' : '改为公开')
+              .layoutWeight(1)
+              .height(42)
+              .fontSize(14)
+              .backgroundColor($r('app.color.field_bg'))
+              .fontColor($r('app.color.brand'))
+              .enabled(!this.busy)
+              .onClick(() => {
+                this.runVisibility(CASE_VISIBILITY_PUBLIC);
+              })
+          } else {
+            Button(this.busy ? '处理中…' : '改为内部')
+              .layoutWeight(1)
+              .height(42)
+              .fontSize(14)
+              .backgroundColor($r('app.color.field_bg'))
+              .fontColor($r('app.color.brand'))
+              .enabled(!this.busy)
+              .onClick(() => {
+                this.runVisibility(CASE_VISIBILITY_STAFF);
+              })
+          }
+          if (this.detail.status !== 'WITHDRAWN') {
+            Button(this.busy ? '处理中…' : '撤回案例')
+              .layoutWeight(1)
+              .height(42)
+              .fontSize(14)
+              .backgroundColor($r('app.color.field_bg'))
+              .fontColor($r('app.color.danger'))
+              .enabled(!this.busy)
+              .onClick(() => {
+                this.confirmWithdraw();
+              })
+          }
+        }
         .width('100%')
 
-      Text(`当前范围：${caseVisibilityLabel(detail.visibility)}`)
-        .fontSize(13)
-        .fontColor($r('app.color.text_secondary'))
-        .width('100%')
-
-      Row({ space: 10 }) {
-        if (detail.visibility === CASE_VISIBILITY_STAFF) {
-          Button(this.busy ? '处理中…' : '改为公开')
-            .layoutWeight(1)
-            .height(42)
-            .fontSize(14)
-            .backgroundColor($r('app.color.field_bg'))
-            .fontColor($r('app.color.brand'))
+        if (this.detail.actions.canRestore || this.detail.actions.canReprocess) {
+          Button(this.busy ? '重整中…（最长约 1 分钟）' : this.detail.actions.canRestore ? '恢复并重新整理' : '重新整理')
+            .width('100%')
+            .height(CONTROL_HEIGHT)
+            .fontSize(15)
+            .backgroundColor($r('app.color.brand'))
+            .fontColor(Color.White)
             .enabled(!this.busy)
             .onClick(() => {
-              this.runVisibility(CASE_VISIBILITY_PUBLIC);
-            })
-        } else {
-          Button(this.busy ? '处理中…' : '改为内部')
-            .layoutWeight(1)
-            .height(42)
-            .fontSize(14)
-            .backgroundColor($r('app.color.field_bg'))
-            .fontColor($r('app.color.brand'))
-            .enabled(!this.busy)
-            .onClick(() => {
-              this.runVisibility(CASE_VISIBILITY_STAFF);
+              this.runReprocess();
             })
         }
-        if (detail.status !== 'WITHDRAWN') {
-          Button(this.busy ? '处理中…' : '撤回案例')
-            .layoutWeight(1)
+        if (this.detail.actions.canReembed) {
+          Button(this.busy ? '处理中…' : this.detail.embedding.status === 'READY' ? '重建向量' : '生成向量')
+            .width('100%')
             .height(42)
             .fontSize(14)
             .backgroundColor($r('app.color.field_bg'))
-            .fontColor($r('app.color.danger'))
+            .fontColor($r('app.color.brand'))
             .enabled(!this.busy)
             .onClick(() => {
-              this.confirmWithdraw();
+              this.runReembed();
             })
         }
       }
       .width('100%')
-
-      if (detail.actions.canRestore || detail.actions.canReprocess) {
-        Button(this.busy ? '重整中…（最长约 1 分钟）' : detail.actions.canRestore ? '恢复并重新整理' : '重新整理')
-          .width('100%')
-          .height(CONTROL_HEIGHT)
-          .fontSize(15)
-          .backgroundColor($r('app.color.brand'))
-          .fontColor(Color.White)
-          .enabled(!this.busy)
-          .onClick(() => {
-            this.runReprocess();
-          })
+      .padding(16)
+      .backgroundColor($r('app.color.surface'))
+      .borderRadius(CARD_RADIUS)
+      .alignItems(HorizontalAlign.Start)
       }
-      if (detail.actions.canReembed) {
-        Button(this.busy ? '处理中…' : detail.embedding.status === 'READY' ? '重建向量' : '生成向量')
-          .width('100%')
-          .height(42)
-          .fontSize(14)
-          .backgroundColor($r('app.color.field_bg'))
-          .fontColor($r('app.color.brand'))
-          .enabled(!this.busy)
-          .onClick(() => {
-            this.runReembed();
-          })
-      }
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor($r('app.color.surface'))
-    .borderRadius(CARD_RADIUS)
-    .alignItems(HorizontalAlign.Start)
   }
 
   build() {
-    Column({ space: 12 }) {
-      if (this.loading) {
-        Column({ space: 12 }) {
-          LoadingProgress()
-            .width(36)
-            .height(36)
-            .color($r('app.color.brand'))
-          Text('正在加载案例…')
-            .fontSize(14)
-            .fontColor($r('app.color.text_secondary'))
-        }
-        .width('100%')
-        .padding(32)
-        .justifyContent(FlexAlign.Center)
-      } else if (this.loadFailed) {
-        Column({ space: 12 }) {
-          Text(this.errorText)
-            .fontSize(14)
-            .fontColor($r('app.color.danger'))
-            .width('100%')
-            .textAlign(TextAlign.Center)
-          Button('重试')
-            .fontSize(14)
-            .height(40)
-            .backgroundColor($r('app.color.brand'))
-            .fontColor(Color.White)
-            .onClick(() => {
-              this.load();
-            })
-        }
-        .width('100%')
-        .padding(32)
-        .backgroundColor($r('app.color.surface'))
-        .borderRadius(CARD_RADIUS)
-        .alignItems(HorizontalAlign.Center)
-      } else if (this.detail !== null) {
-        Scroll() {
-          Column({ space: 12 }) {
-            // ---- 头部：标题 + 状态 ----
-            Column({ space: 8 }) {
-              Text(this.detail.title)
-                .fontSize(22)
-                .fontWeight(FontWeight.Bold)
-                .fontColor($r('app.color.text_primary'))
-                .width('100%')
-                .textAlign(TextAlign.Start)
-              Row({ space: 8 }) {
-                Text(caseStatusLabel(this.detail.status))
-                  .fontSize(12)
-                  .fontColor(this.detail.status === 'FAILED' ? $r('app.color.danger') : $r('app.color.brand'))
-                  .padding({ left: 8, right: 8, top: 3, bottom: 3 })
-                  .backgroundColor($r('app.color.brand_soft'))
-                  .borderRadius(8)
-                Text(caseVisibilityLabel(this.detail.visibility))
-                  .fontSize(12)
-                  .fontColor($r('app.color.text_secondary'))
-              }
-              .width('100%')
-              Text(`版本 v${this.detail.contentVersion} · ${this.detail.sources.length} 条来源`)
-                .fontSize(12)
-                .fontColor($r('app.color.text_secondary'))
-                .width('100%')
-              Text('刷新')
-                .fontSize(13)
-                .fontColor($r('app.color.brand'))
-                .onClick(() => {
-                  this.load();
-                })
-            }
-            .width('100%')
-            .padding(16)
-            .backgroundColor($r('app.color.surface'))
-            .borderRadius(CARD_RADIUS)
-            .alignItems(HorizontalAlign.Start)
-
+    Column() {
+      DetailHeader({ title: '案例详情', onBack: this.onBack, refresh: true,
+        onRefresh: (): void => { if (!this.busy) this.load(); } })
+      Scroll() {
+        Column({ space: 14 }) {
+          if (this.loading) { LoadingProgress().width(32).height(32).margin(24) }
+          else if (this.loadFailed) {
+            Text(this.errorText).fontSize(14).fontColor($r('app.color.danger')).width('100%')
+            Button('重试').onClick(() => { this.load(); })
+          } else if (this.detail !== null) {
+            Text(this.detail.title).fontSize(24).fontWeight(FontWeight.Medium).lineHeight(34).fontColor('#14191D').width('100%')
+            ReadingAuthor({ name: '电脑医院 · 已审核维修来源',
+              note: 'AI 整理案例 · ' + caseVisibilityLabel(this.detail.visibility) + ' · ' + caseStatusLabel(this.detail.status)
+                + ' · 版本 v' + this.detail.contentVersion.toString() })
             if (this.detail.withdrawn !== null) {
               Column({ space: 4 }) {
                 Text(`该案例已撤回：${caseWithdrawnLabel(this.detail.withdrawn.source)}`)
@@ -473,9 +425,10 @@ export struct CaseDetailPage {
             }
 
             // ---- 结构化正文 ----
+            Text(this.detail.displayText).fontSize(16).lineHeight(29).fontColor('#343C42').width('100%').copyOption(CopyOptions.InApp)
             Column({ space: 10 }) {
-              Text(`维修结果：${caseResultLabel(this.detail.content.result)}`)
-                .fontSize(14)
+              Text(`维修结果：${caseResultLabel(this.detail.content.result || 'UNKNOWN')}`)
+                .fontSize(16)
                 .fontWeight(FontWeight.Medium)
                 .fontColor($r('app.color.text_primary'))
                 .width('100%')
@@ -486,7 +439,7 @@ export struct CaseDetailPage {
                     .fontColor($r('app.color.text_secondary'))
                     .width('100%')
                   Text(row.value)
-                    .fontSize(14)
+                    .fontSize(16).lineHeight(28)
                     .fontColor($r('app.color.text_primary'))
                     .width('100%')
                     .textAlign(TextAlign.Start)
@@ -553,22 +506,15 @@ export struct CaseDetailPage {
             }
 
             if (this.detail.actions.canManage) {
-              this.adminPanel(this.detail);
+              this.adminPanel();
             }
+
           }
-          .width('100%')
-          .alignItems(HorizontalAlign.Start)
-        }
-        .layoutWeight(1)
-        .width('100%')
-        .scrollBar(BarState.Auto)
-        .align(Alignment.Top)
+        }.width('100%').padding({ left: 18, right: 18, top: 18, bottom: 28 }).alignItems(HorizontalAlign.Start)
+      }.width('100%').layoutWeight(1).scrollBar(BarState.Off).align(Alignment.Top).backgroundColor(Color.White)
+      if (this.detail !== null && !this.loadFailed && !this.loading) {
+        ReadingBottomBar({ text: caseVisibilityLabel(this.detail.visibility) + ' · ' + this.detail.sources.length.toString() + ' 条来源证据' })
       }
-    }
-    .width('100%')
-    .height('100%')
-    .padding(PAGE_PADDING)
-    .alignItems(HorizontalAlign.Start)
-    .backgroundColor($r('app.color.start_window_background'))
+    }.width('100%').height('100%').backgroundColor('#F1F6F9')
   }
 }

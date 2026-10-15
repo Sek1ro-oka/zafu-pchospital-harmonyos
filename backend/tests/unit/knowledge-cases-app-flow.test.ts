@@ -350,6 +350,12 @@ test("结构化正文：「原文未提供」清单为空不显示，非空如�
   assert.equal(unknownsText(["原因", "排查过程"]), "原文未提供：原因、排查过程");
 });
 
+test("历史合成案例缺少结构字段：不生成 undefined 空行，已有字段仍展示", () => {
+  const partial = { title: "合成样本", resolution: "重新连接线缆" } as CaseStructuredContent;
+  assert.deepEqual(contentRows(partial), [{ label: "处置", value: "重新连接线缆" }]);
+  assert.equal(unknownsText(partial.unknowns), "");
+});
+
 test("结构化正文：字段行跳过空值并保留差异说明与合并依据", () => {
   const content: CaseStructuredContent = {
     title: "t",

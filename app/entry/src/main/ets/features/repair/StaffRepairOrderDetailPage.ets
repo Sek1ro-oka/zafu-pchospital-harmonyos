@@ -1,3 +1,5 @@
+import { DetailHeader, DETAIL_BACKGROUND } from '../../core/ui/ReferenceDetail';
+import { RepairDeviceCard, ReadingSectionLabel, ReadingStatusCard } from '../../core/ui/ReadingReference';
 import { util } from '@kit.ArkTS';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ROUTE_STAFF_RECORD } from '../../core/ui/Routes';
@@ -251,169 +253,109 @@ export struct StaffRepairOrderDetailPage {
   }
 
   @Builder
-  actionsView(order: StaffRepairOrderView) {
-    Column({ space: 10 }) {
-      Text('可执行操作')
-        .fontSize(15)
-        .fontWeight(FontWeight.Medium)
-        .fontColor($r('app.color.text_primary'))
-        .width('100%')
-        .textAlign(TextAlign.Start)
-
-      if (order.actions.canAccept) {
-        this.actionButton('受理此单', true, false, () => {
-          this.runAccept();
-        })
-      }
-      if (order.actions.canStartRepair) {
-        this.actionButton('开始处理', true, false, () => {
-          this.runProgress('REPAIRING', '已开始处理。');
-        })
-      }
-      if (order.actions.canComplete) {
-        this.actionButton('完成维修', true, false, () => {
-          this.runProgress('COMPLETED', '已完成维修处理，可继续补填维修备案。');
-        })
-      }
-      if (order.actions.canCreateRecord) {
-        this.secondaryButton('建立维修备案', () => {
-          this.openRecord();
-        })
-      } else if (order.record !== null) {
-        this.secondaryButton('查看 / 继续备案', () => {
-          this.openRecord();
-        })
-      }
-      if (order.actions.canCancel) {
-        if (this.cancelOpen) {
-          Column({ space: 8 }) {
-            TextArea({ text: this.cancelNote, placeholder: '请填写取消说明（必填）' })
-              .height(88)
-              .backgroundColor($r('app.color.field_bg'))
-              .borderRadius(CONTROL_RADIUS)
-              .onChange((next: string) => {
-                this.cancelNote = next;
-              })
-            Row({ space: 10 }) {
-              Button(this.actionBusy ? '提交中…' : '确认取消')
-                .layoutWeight(1)
-                .height(42)
-                .fontSize(14)
-                .backgroundColor($r('app.color.danger'))
-                .fontColor(Color.White)
-                .enabled(!this.actionBusy)
-                .onClick(() => {
-                  this.runCancel();
-                })
-              Button('收起')
-                .layoutWeight(1)
-                .height(42)
-                .fontSize(14)
-                .backgroundColor($r('app.color.field_bg'))
-                .fontColor($r('app.color.text_primary'))
-                .onClick(() => {
-                  this.cancelOpen = false;
-                  this.actionError = '';
-                })
-            }
-            .width('100%')
-          }
-          .width('100%')
-        } else {
-          this.actionButton('取消报修', true, true, () => {
-            this.cancelOpen = true;
-            this.actionError = '';
-          })
-        }
-      }
-
-      if (this.actionError !== '') {
-        Text(this.actionError)
-          .fontSize(13)
-          .fontColor($r('app.color.danger'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
-      }
-      if (this.noticeText !== '') {
-        Text(this.noticeText)
-          .fontSize(13)
-          .fontColor($r('app.color.ok'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
-      }
-      if (!order.actions.canAccept &&
-        !order.actions.canStartRepair &&
-        !order.actions.canComplete &&
-        !order.actions.canCancel &&
-        !order.actions.canCreateRecord &&
-        order.record === null &&
-        this.actionError === '') {
-        Text('当前状态没有可执行的操作。')
-          .fontSize(13)
-          .fontColor($r('app.color.text_secondary'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
-      }
-    }
-    .width('100%')
-    .padding(16)
-    .backgroundColor($r('app.color.surface'))
-    .borderRadius(CARD_RADIUS)
-    .alignItems(HorizontalAlign.Start)
-  }
-
-  @Builder
-  detailBody(order: StaffRepairOrderView) {
-    Column({ space: 12 }) {
-      Row({ space: 8 }) {
-        Text(order.deviceModel)
-          .fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Start)
-        this.chip(repairOrderStatusLabel(order.status), true)
-      }
-      .width('100%')
-
-      Row({ space: 8 }) {
-        Text('处理状态')
-          .fontSize(13)
-          .fontColor($r('app.color.text_secondary'))
-        this.chip(repairOrderStatusLabel(order.status), false)
-        Text('备案状态')
-          .fontSize(13)
-          .fontColor($r('app.color.text_secondary'))
-        this.chip(recordSummaryLabel(order.record), false)
-      }
-      .width('100%')
-
-      this.detailRow('设备序列号', order.deviceSerial === null || order.deviceSerial === '' ? '未填写' : order.deviceSerial)
-      this.detailRow('联系电话', order.contactPhone)
-      this.detailRow('受理人', order.assignee === null ? '尚未受理' : order.assignee.name)
-      this.detailRow('提交时间', formatOrderTime(order.createdAt))
-      this.detailRow('最近进度', order.lastProgressAt === null ? '无' : formatOrderTime(order.lastProgressAt))
-      this.detailRow('故障描述', order.faultDescription)
-
-      this.actionsView(order)
-
+  actionsView() {
+    if (this.order !== null) {
       Column({ space: 10 }) {
-        Text('进度时间线')
+        Text('可执行操作')
           .fontSize(15)
           .fontWeight(FontWeight.Medium)
           .fontColor($r('app.color.text_primary'))
           .width('100%')
           .textAlign(TextAlign.Start)
-        if (order.events.length === 0) {
-          Text('暂无进度记录')
+
+        if (this.order.actions.canAccept) {
+          this.actionButton('受理此单', true, false, () => {
+            this.runAccept();
+          })
+        }
+        if (this.order.actions.canStartRepair) {
+          this.actionButton('开始处理', true, false, () => {
+            this.runProgress('REPAIRING', '已开始处理。');
+          })
+        }
+        if (this.order.actions.canComplete) {
+          this.actionButton('完成维修', true, false, () => {
+            this.runProgress('COMPLETED', '已完成维修处理，可继续补填维修备案。');
+          })
+        }
+        if (this.order.actions.canCreateRecord) {
+          this.secondaryButton('建立维修备案', () => {
+            this.openRecord();
+          })
+        } else if (this.order.record !== null) {
+          this.secondaryButton('查看 / 继续备案', () => {
+            this.openRecord();
+          })
+        }
+        if (this.order.actions.canCancel) {
+          if (this.cancelOpen) {
+            Column({ space: 8 }) {
+              TextArea({ text: this.cancelNote, placeholder: '请填写取消说明（必填）' })
+                .height(88)
+                .backgroundColor($r('app.color.field_bg'))
+                .borderRadius(CONTROL_RADIUS)
+                .onChange((next: string) => {
+                  this.cancelNote = next;
+                })
+              Row({ space: 10 }) {
+                Button(this.actionBusy ? '提交中…' : '确认取消')
+                  .layoutWeight(1)
+                  .height(42)
+                  .fontSize(14)
+                  .backgroundColor($r('app.color.danger'))
+                  .fontColor(Color.White)
+                  .enabled(!this.actionBusy)
+                  .onClick(() => {
+                    this.runCancel();
+                  })
+                Button('收起')
+                  .layoutWeight(1)
+                  .height(42)
+                  .fontSize(14)
+                  .backgroundColor($r('app.color.field_bg'))
+                  .fontColor($r('app.color.text_primary'))
+                  .onClick(() => {
+                    this.cancelOpen = false;
+                    this.actionError = '';
+                  })
+              }
+              .width('100%')
+            }
+            .width('100%')
+          } else {
+            this.actionButton('取消报修', true, true, () => {
+              this.cancelOpen = true;
+              this.actionError = '';
+            })
+          }
+        }
+
+        if (this.actionError !== '') {
+          Text(this.actionError)
+            .fontSize(13)
+            .fontColor($r('app.color.danger'))
+            .width('100%')
+            .textAlign(TextAlign.Start)
+        }
+        if (this.noticeText !== '') {
+          Text(this.noticeText)
+            .fontSize(13)
+            .fontColor($r('app.color.ok'))
+            .width('100%')
+            .textAlign(TextAlign.Start)
+        }
+        if (!this.order.actions.canAccept &&
+          !this.order.actions.canStartRepair &&
+          !this.order.actions.canComplete &&
+          !this.order.actions.canCancel &&
+          !this.order.actions.canCreateRecord &&
+          this.order.record === null &&
+          this.actionError === '') {
+          Text('当前状态没有可执行的操作。')
             .fontSize(13)
             .fontColor($r('app.color.text_secondary'))
             .width('100%')
             .textAlign(TextAlign.Start)
-        } else {
-          ForEach(order.events, (event: RepairOrderEventView) => {
-            this.timelineEvent(event.toStatus, event.note, event.createdAt);
-          }, (event: RepairOrderEventView) => event.id)
         }
       }
       .width('100%')
@@ -422,27 +364,43 @@ export struct StaffRepairOrderDetailPage {
       .borderRadius(CARD_RADIUS)
       .alignItems(HorizontalAlign.Start)
     }
-    .width('100%')
-    .alignItems(HorizontalAlign.Start)
+  }
+
+  @Builder
+  detailBody() {
+    if (this.order !== null) {
+      Column({ space: 14 }) {
+        Column() {
+          ReadingSectionLabel({ text: '设备信息' })
+          RepairDeviceCard({ model: this.order.deviceModel, serial: this.order.deviceSerial, status: repairOrderStatusLabel(this.order.status) })
+        }.width('100%')
+        ReadingStatusCard({ title: '报修处理状态', subtitle: '状态  ' + repairOrderStatusLabel(this.order.status),
+          text: '受理人  ' + (this.order.assignee === null ? '尚未受理' : this.order.assignee.name) + '\n提交时间  ' + formatOrderTime(this.order.createdAt)
+            + '\n最近进度  ' + (this.order.lastProgressAt === null ? '暂无更新' : formatOrderTime(this.order.lastProgressAt)),
+          icon: $r('app.media.ref_shield') })
+        ReadingStatusCard({ title: '维修备案', subtitle: '备案状态  ' + recordSummaryLabel(this.order.record),
+          text: this.order.record === null ? '尚未建立关联备案，报修完成后仍可补填。' : '报修进度与备案审核分别记录，可从下方入口查看。',
+          icon: $r('app.media.ref_document') })
+        ReadingStatusCard({ title: '故障与联系信息', subtitle: this.order.faultDescription,
+          text: '联系电话  ' + this.order.contactPhone, icon: $r('app.media.ref_profile') })
+        this.actionsView()
+        Column({ space: 16 }) {
+          Text('服务进度').fontSize(18).fontWeight(FontWeight.Medium).width('100%')
+          if (this.order.events.length === 0) { Text('暂无进度记录').fontSize(14).fontColor('#858D93') }
+          else {
+            ForEach(this.order.events, (event: RepairOrderEventView) => {
+              this.timelineEvent(event.toStatus, event.note, event.createdAt);
+            }, (event: RepairOrderEventView) => event.id)
+          }
+        }.width('100%').padding(18).backgroundColor(Color.White).borderRadius(22).alignItems(HorizontalAlign.Start)
+      }.width('100%').alignItems(HorizontalAlign.Start)
+      }
   }
 
   build() {
     Column({ space: 14 }) {
-      Row({ space: 12 }) {
-        Text('报修详情')
-          .fontSize(26)
-          .fontWeight(FontWeight.Bold)
-          .fontColor($r('app.color.text_primary'))
-          .layoutWeight(1)
-          .textAlign(TextAlign.Start)
-        Text('刷新')
-          .fontSize(14)
-          .fontColor($r('app.color.brand'))
-          .onClick(() => {
-            this.fetchDetail();
-          })
-      }
-      .width('100%')
+      DetailHeader({ title: '报修详情', onBack: (): void => { this.pathStack.pop(); }, refresh: true,
+        onRefresh: (): void => { if (!this.actionBusy) this.fetchDetail(); } })
 
       Scroll() {
         Column({ space: 14 }) {
@@ -481,20 +439,20 @@ export struct StaffRepairOrderDetailPage {
             .borderRadius(CARD_RADIUS)
             .alignItems(HorizontalAlign.Center)
           } else if (this.order !== null) {
-            this.detailBody(this.order);
+            this.detailBody();
           }
         }
         .width('100%')
         .alignItems(HorizontalAlign.Start)
       }
       .layoutWeight(1)
-      .scrollBar(BarState.Auto)
+      .scrollBar(BarState.Off)
+      .padding({ left: 18, right: 18, bottom: 24 })
       .align(Alignment.Top)
     }
     .width('100%')
     .height('100%')
-    .padding(PAGE_PADDING)
     .alignItems(HorizontalAlign.Start)
-    .backgroundColor($r('app.color.start_window_background'))
+    .backgroundColor(DETAIL_BACKGROUND)
   }
 }
