@@ -1,7 +1,7 @@
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { LoadingPanel, ErrorPanel } from '../../core/ui/StatePanel';
-import { REFERENCE_BACKGROUND } from '../../core/ui/ReferencePage';
+import { DETAIL_BACKGROUND, DetailRoundButton } from '../../core/ui/ReferenceDetail';
 import { ROUTE_MEMBER_DIRECTORY } from '../../core/ui/Routes';
 import { CustomerProfileUpdate, MemberProfileUpdate, MemberSkillsUpdate, SkillView, PersonalProfileParam } from './PersonalProfileContract';
 import { PersonalProfileService } from './PersonalProfileService';
@@ -14,6 +14,8 @@ export struct PersonalProfilePage {
   onSaved: (name: string) => void = () => {};
   onSessionExpired: () => void = () => {};
   onOpen: (route: string, param: Object | null) => void = () => {};
+  onBack: () => void = () => {};
+  @State editing: boolean = false;
   @State loading: boolean = false;
   @State ready: boolean = false;
   @State saving: boolean = false;
@@ -119,19 +121,9 @@ export struct PersonalProfilePage {
   field(label: string, value: string) {
     Row() { Text(label).fontSize(14).fontColor('#737A80').width(100); Text(value || '未填写').fontSize(15).layoutWeight(1) }.width('100%')
   }
-  build() {
-    Scroll() {
-      Column({ space: 16 }) {
-        if (this.loading) { LoadingPanel({ text: '正在读取资料…' }) }
-        if (this.errorText !== '') {
-          ErrorPanel({ message: this.errorText, onRetry: (): void => { this.load(); } })
-        }
-        if (this.ready && !this.loading) {
-          Column({ space: 16 }) {
-            Row({ space: 12 }) {
-              Image($r('app.media.profile_avatar')).width(56).height(56).borderRadius(28)
-              Text(this.name).fontSize(22).fontWeight(FontWeight.Bold).layoutWeight(1)
-            }.width('100%')
+  @Builder
+  informationForm() {
+    Column({ space: 16 }) {
             if (this.editable()) {
               Text('昵称（最多 64 字；清空后使用默认名称）').fontSize(13).fontColor('#737A80').width('100%')
               TextInput({ text: this.nickname, placeholder: '请输入昵称' }).enabled(!this.saving).onChange((value: string) => { this.nickname = value; })
@@ -159,14 +151,59 @@ export struct PersonalProfilePage {
                 Button('保存技能').enabled(!this.saving).width('100%').onClick(() => { this.saveSkills(); })
               }
             }
-            if (this.notice !== '') { Text(this.notice).fontColor('#288050') }
-          }.width('100%').padding(20).backgroundColor(Color.White).borderRadius(20)
-        }
-        Button('刷新资料').enabled(!this.loading && !this.saving).onClick(() => { this.load(); })
-        if (this.permissions.includes('member.profile.read_internal')) {
-          Button('查看成员资料').onClick(() => { this.onOpen(ROUTE_MEMBER_DIRECTORY, null); })
-        }
-      }.width('100%').padding(16)
-    }.width('100%').height('100%').align(Alignment.Top).backgroundColor(REFERENCE_BACKGROUND)
+
+      if (this.notice !== '') { Text(this.notice).fontColor('#288050') }
+    }.width('100%').padding(20).backgroundColor(Color.White).borderRadius(24).alignItems(HorizontalAlign.Start)
+  }
+
+  build() {
+    Column() {
+      Blank().height(8)
+      Scroll() {
+        Column() {
+          Row() {
+            Text(this.editing ? '个人信息' : '电脑医院账号').fontSize(21).fontWeight(FontWeight.Bold)
+              .fontColor('#101416').layoutWeight(1)
+            DetailRoundButton({ icon: $r('app.media.detail_close'), label: this.editing ? '关闭个人信息' : '关闭个人资料',
+              onSelect: (): void => { if (this.editing) this.editing = false; else this.onBack(); } })
+          }.width('100%').padding({ left: 18, right: 18, top: 12 }).height(64)
+          if (this.loading) { LoadingPanel({ text: '正在读取资料…' }) }
+          if (this.errorText !== '') {
+            Column() { ErrorPanel({ message: this.errorText, onRetry: (): void => { this.load(); } }) }
+              .padding(16).width('100%')
+          }
+          if (this.ready && !this.loading) {
+            if (this.editing) {
+              Column({ space: 16 }) { this.informationForm() }.padding(16).width('100%')
+            } else {
+              Column({ space: 0 }) {
+                Image($r('app.media.profile_avatar')).width(129).height(129).borderRadius(65)
+                  .margin({ top: 25, bottom: 14 })
+                Text(this.name).fontSize(30).fontWeight(FontWeight.Bold).fontColor('#101416')
+                  .maxLines(2).textAlign(TextAlign.Center)
+                Text(this.home === HOME_STAFF || this.internal() ? (this.qq || '工作人员') : (this.phone || '尚未填写联系电话'))
+                  .fontSize(17).fontColor('#666E74').margin({ top: 6 })
+                Button({ type: ButtonType.Normal }) {
+                  Row() {
+                    Text('个人信息').fontSize(18).fontWeight(FontWeight.Medium).fontColor('#101416').layoutWeight(1)
+                    Text('›').fontSize(30).fontColor('#BAC0C5')
+                  }.width('100%').padding({ left: 17, right: 17 })
+                }.width('100%').height(57).backgroundColor(Color.White).borderRadius(22).margin({ top: 38 })
+                  .onClick(() => { this.editing = true; })
+              }.width('100%').padding({ left: 18, right: 18 }).alignItems(HorizontalAlign.Center)
+            }
+          }
+          if (this.editing) {
+            Button('刷新资料').fontSize(14).fontColor('#737A80').backgroundColor(Color.Transparent)
+              .enabled(!this.loading && !this.saving).onClick(() => { this.load(); })
+            if (this.permissions.includes('member.profile.read_internal')) {
+              Button('查看成员资料').fontColor('#126FE0').backgroundColor(Color.Transparent)
+                .onClick(() => { this.onOpen(ROUTE_MEMBER_DIRECTORY, null); })
+            }
+          }
+        }.width('100%').constraintSize({ minHeight: '100%' }).alignItems(HorizontalAlign.Start)
+      }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
+        .backgroundColor(DETAIL_BACKGROUND).borderRadius({ topLeft: 32, topRight: 32 }).clip(true)
+    }.width('100%').height('100%').backgroundColor('#C0C6CA')
   }
 }
