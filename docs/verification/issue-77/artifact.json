@@ -1,0 +1,230 @@
+{
+  "issue": 77,
+  "mainBaseline": "d53f951973e257e6e5a6a8c93b71f5e5734df6a3",
+  "sourceRevision": "55d831589663092d1c2bcb8b597bd61b1cfb10cc",
+  "sourceTrees": {
+    "app": "bcb6674d90edb18fc8bfa8e2963ac67fef418a28",
+    "backend/src": "f1d129d3e5783e1bfe2c724008a82eff80e49ace",
+    "backend/prisma": "74c73325cc54d3aff478df12f3be8c7657200c02",
+    "backend/tests": "7b268872f82afba08fdb1db1a4abc7cffd99142f"
+  },
+  "hap": {
+    "path": "app/entry/build/default/outputs/default/entry-default-unsigned.hap",
+    "sha256": "259d5941ef4502c84da463e57742fbf21c54014064984a18ac61db37f052791f",
+    "bytes": 3273393,
+    "signed": false
+  },
+  "backendBuildRevision": "6826bc1f5cd7a13029caaea9898ea5e5d3272a61",
+  "backendSourceMatchesFinal": true,
+  "apiBaseUrl": "http://127.0.0.1:13082",
+  "database": "isolated local pchospital_exp_issue62 at MySQL 3310",
+  "device": {
+    "profile": "Pura 90 Pro",
+    "model": "emulator",
+    "width": 1256,
+    "height": 2760,
+    "api": 26,
+    "system": "OpenHarmony-7.0.0.105",
+    "hdcTarget": "127.0.0.1:5555"
+  },
+  "buildTarget": "6.1.1(24)",
+  "checks": {
+    "unitPassed": 566,
+    "unitSkipped": 0,
+    "relatedPassed": 38,
+    "lintExitCode": 0,
+    "backendBuildExitCode": 0,
+    "hapBuild": "BUILD SUCCESSFUL",
+    "realHttpPassed": 27,
+    "attendanceCancelRestore": "passed"
+  },
+  "fixtures": {
+    "activityId": "392985fd-d9ed-42b8-b3be-9d37875e95cc",
+    "flowRegistrationId": "be6e7eb4-37ef-4360-976c-447c4748e28d",
+    "laterPageRegistrationId": "1160a3a6-f0ae-4d1e-876b-5d42711cd28e",
+    "customerATotal": 26
+  },
+  "references": [
+    {
+      "file": "service-battery-replacement-campaign.jpg",
+      "sha256": "d1f61c7439a9855bbad5a61b78578d72afc988ab39b24c67db9d9ad8be0b68ad"
+    },
+    {
+      "file": "community-event-checkin-detail.jpg",
+      "sha256": "529a4543f86e8d7098335d2bff1f605419858de7da11951ee18df4bb0d1c249c"
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "admin-activities.png",
+      "sha256": "5400efcd1fda690ef56d4924e8b23e7edd6ed9888d388d6a07ab0198501b0852",
+      "bytes": 224027,
+      "capturedAtUtc": "2026-10-15T14:01:01.090790+00:00"
+    },
+    {
+      "file": "anonymous-lookup.png",
+      "sha256": "ef52a23b051353046c0e0d27f00d067dff6f9250ea4f906f6a825e7c53e63c91",
+      "bytes": 256662,
+      "capturedAtUtc": "2026-10-15T13:52:59.800324+00:00"
+    },
+    {
+      "file": "api-settings.png",
+      "sha256": "352eb2e513e26549a10bd20e3e47c0829c17ed5ca51c5b38f5824e30b2acd636",
+      "bytes": 266509,
+      "capturedAtUtc": "2026-10-15T13:56:26.601912+00:00"
+    },
+    {
+      "file": "checked-in.png",
+      "sha256": "4b87cdff8f619ccf661560a1a17a3479f99e7815379328933589f0743f001c09",
+      "bytes": 377717,
+      "capturedAtUtc": "2026-10-15T13:51:05.714324+00:00"
+    },
+    {
+      "file": "closed-confirmed-registration.png",
+      "sha256": "66d6b340a24ef29577d3694fc7c59c28ad0a7cf37b6a768be663779758848366",
+      "bytes": 459431,
+      "capturedAtUtc": "2026-10-15T13:52:42.468101+00:00"
+    },
+    {
+      "file": "closed.png",
+      "sha256": "a2d8adbb8ecdf546a4ade06ffaff40d9c0de6ca71f06fc5f0a436e58fa982c26",
+      "bytes": 386862,
+      "capturedAtUtc": "2026-10-15T13:44:37.677128+00:00"
+    },
+    {
+      "file": "detail-information.png",
+      "sha256": "bcabe4c48366b3cf64c386d39fbd79ae41875b8d2f660239b349a274f3a5a509",
+      "bytes": 318764,
+      "capturedAtUtc": "2026-10-15T13:52:47.648943+00:00"
+    },
+    {
+      "file": "ended.png",
+      "sha256": "5a540b8951ac90f6b32c6df346d231c830c7e01033246f039807441afe8a37c6",
+      "bytes": 383802,
+      "capturedAtUtc": "2026-10-15T13:44:47.964909+00:00"
+    },
+    {
+      "file": "full.png",
+      "sha256": "c3ab93f31b931994a25cec8e6455a1c7cc5b3a0a3eba704740934b6194231b0f",
+      "bytes": 391380,
+      "capturedAtUtc": "2026-10-15T13:44:16.689303+00:00"
+    },
+    {
+      "file": "guest-detail.png",
+      "sha256": "89e83c229ded56ba76556247d4567f1d27957c5a4e1e56d5861f3b4ed08b342c",
+      "bytes": 446420,
+      "capturedAtUtc": "2026-10-15T13:44:58.320639+00:00"
+    },
+    {
+      "file": "registered.png",
+      "sha256": "e9d0a4a6da512d9c689c52cf05b435b0720431a19e34bb53d558c75a096d5447",
+      "bytes": 383782,
+      "capturedAtUtc": "2026-10-15T13:47:57.305969+00:00"
+    },
+    {
+      "file": "registration-contact.png",
+      "sha256": "c06dcf7d998a3bd22c62818db08b0956e1830544ff283d8b87b6086ff996c530",
+      "bytes": 295481,
+      "capturedAtUtc": "2026-10-15T13:48:05.746796+00:00"
+    },
+    {
+      "file": "registration-saved.png",
+      "sha256": "78b185537d07401233166a611c4834d8687b74518686cfe40e2966d9bca20bd8",
+      "bytes": 391317,
+      "capturedAtUtc": "2026-10-15T13:50:17.535551+00:00"
+    },
+    {
+      "file": "registrations-first-page.png",
+      "sha256": "73f77eef36b4ef5eedeab20e0ee8e143d740801b6d14812a6e781bc1ad305b38",
+      "bytes": 372507,
+      "capturedAtUtc": "2026-10-15T13:53:04.579540+00:00"
+    },
+    {
+      "file": "registrations-load-more.png",
+      "sha256": "aacb7af7e4b8b2727b41d7a5310b8124898f755bdd73522474f1bbcf7cb9434f",
+      "bytes": 305963,
+      "capturedAtUtc": "2026-10-15T13:54:39.437169+00:00"
+    },
+    {
+      "file": "registrations-second-page.png",
+      "sha256": "57c5f64330f83d5d9279282452d2294a5736f9cd264ec363c523ebb019abefc3",
+      "bytes": 336204,
+      "capturedAtUtc": "2026-10-15T13:55:01.075891+00:00"
+    },
+    {
+      "file": "save-draft-changed.png",
+      "sha256": "bf5da993aa1fa32003cf019c05e09b9d87aa346827e7f6ebeaeea3cd5e77da74",
+      "bytes": 304703,
+      "capturedAtUtc": "2026-10-15T13:49:38.045436+00:00"
+    },
+    {
+      "file": "save-network-error.png",
+      "sha256": "c2490cf9ceb89fe507c666d6f012fc9a67ec8d252cca9afacad3700f3314fb94",
+      "bytes": 309179,
+      "capturedAtUtc": "2026-10-15T13:49:33.262987+00:00"
+    },
+    {
+      "file": "second-customer-empty.png",
+      "sha256": "db6b436cf7201dbf14d404a0ca3270b3c693da1a7229984642b875d07982481f",
+      "bytes": 145405,
+      "capturedAtUtc": "2026-10-15T13:57:54.614221+00:00"
+    },
+    {
+      "file": "served-explanation.png",
+      "sha256": "a5e4c9dea2fa7b068ef8a55003cf298436517d3675af867c5f9ec2305a814699",
+      "bytes": 283028,
+      "capturedAtUtc": "2026-10-15T14:01:33.698223+00:00"
+    },
+    {
+      "file": "served.png",
+      "sha256": "e4b575588b3f189b388ad20c9dca4cd4e25652188f4b415ebd643f80e7909094",
+      "bytes": 375895,
+      "capturedAtUtc": "2026-10-15T14:01:29.001340+00:00"
+    },
+    {
+      "file": "signup-consent.png",
+      "sha256": "537f297fd593911f102d2f5b2a4db63f112c3ae2da3d71b318495571d67c1b80",
+      "bytes": 392252,
+      "capturedAtUtc": "2026-10-15T13:47:46.321369+00:00"
+    },
+    {
+      "file": "signup-form.png",
+      "sha256": "ba68db6c33f3bfe1fe7bdd449c0ee1c580cc4ade1c5e5f6aa10ef721ce1900ca",
+      "bytes": 251972,
+      "capturedAtUtc": "2026-10-15T13:45:29.037338+00:00"
+    },
+    {
+      "file": "signup-keyboard.png",
+      "sha256": "d1be78899b5e06ddf5ea012183a7b3258a58b84cca0e0598d7ef6233403ce5f6",
+      "bytes": 339906,
+      "capturedAtUtc": "2026-10-15T13:46:44.043120+00:00"
+    },
+    {
+      "file": "signup-success.png",
+      "sha256": "3edd5738a0388ba8551d8631b66b2bf456427a0b6c84558daafdda5a19ccba52",
+      "bytes": 456893,
+      "capturedAtUtc": "2026-10-15T13:47:52.968694+00:00"
+    },
+    {
+      "file": "staff-board.png",
+      "sha256": "d5534fa83765146a9a2fee815eba297ca21f43111196418825a83270ab40bed2",
+      "bytes": 370531,
+      "capturedAtUtc": "2026-10-15T13:59:28.934399+00:00"
+    },
+    {
+      "file": "upcoming.png",
+      "sha256": "0dc799475ca339385a78962a1b6a55129a5aa8e24467821aa1cf62d694a71802",
+      "bytes": 387283,
+      "capturedAtUtc": "2026-10-15T13:44:27.523396+00:00"
+    },
+    {
+      "file": "withdrawn.png",
+      "sha256": "25712a4104a1629af14a5b7e555bd9cbeba701b27576c5f72a60b4d2664ba93e",
+      "bytes": 391349,
+      "capturedAtUtc": "2026-10-15T13:51:10.596831+00:00"
+    }
+  ],
+  "visualApproval": "pending maintainer review",
+  "sharedDeployment": false,
+  "physicalDeviceValidated": false
+}

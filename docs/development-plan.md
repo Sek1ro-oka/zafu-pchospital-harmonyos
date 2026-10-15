@@ -103,6 +103,8 @@ flowchart LR
 
 ## 页面映射与交互要求
 
+2026-10-15，第 14 模块 [#77](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/77)：[换电池专题](reference/my-huawei/service-battery-replacement-campaign.jpg) → 维修活动详情/报名（全宽浅蓝电脑主题插画、时间地点、名额窗口、实际条款和底部行动区）；[活动打卡详情](reference/my-huawei/community-event-checkin-detail.jpg) → 本人报名详情（暖色标题、白色大圆角状态卡、真实报名/签到/接待节点与允许的类型编辑）。不引入收费、积分、打卡游戏、虚构作者或社交计数。只按服务器状态/允许动作展示，未知保守提示；本次成功 ID 提供查看入口，跨场/跨账号旧响应隔离。保留 #75/#76 全部阅读/搜索接线，沿用 #62 业务与独立本机库，无迁移或部署。截图、最终包指纹和验证范围见 [#77 记录](verification/issue-77.md)，最终视觉待维护者确认。
+
 2026-10-15，第 13 模块 [#76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76)：[全部圈子](reference/my-huawei/community-circles-category-list.jpg) → 全部维修指南左右分类目录，[社区搜索](reference/my-huawei/search-community-results.jpg) → 知识搜索结果。保留知识主页面的 AI 主按钮和折叠分类；全部指南进入目录，搜索图标进入独立结果页。指南按完整快照标题本地匹配，分类仍为标题粗分；案例通过最小鉴权接口搜索完整有效可见集合，过滤后分页，不把最近一页冒充全库。客户/工作人员继续打开 #75 对应详情，原始备案不混成 AI 案例。实际实现、截图、检查及未部署共享后端的范围见 [验证记录](verification/issue-76.md)。
 
 2026-10-15，第 12 模块 [#75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75) 实施：以 [权益查询](reference/my-huawei/service-device-benefits.jpg) 还原客户/工作人员报修详情，以 [升级指南](reference/my-huawei/harmonyos-upgrade-guide.jpg) 还原维修指南阅读，以 [帖子详情](reference/my-huawei/community-event-post-detail.jpg) 还原案例阅读，以 [圈子信息流](reference/my-huawei/community-circle-detail-feed.jpg) 还原公开/工作人员案例库。保留真实状态、服务端权限、来源版本、章节定位、收藏和已有操作，设备/计数/正文只取实际接口。已构建并在模拟器操作，截图与未验证项见 [Issue #75 验证记录](verification/issue-75.md)，最终视觉效果待维护者确认。后续 #76 处理指南目录/知识搜索，#77 处理活动详情/报名，本轮未扩展这两批布局。
@@ -153,6 +155,8 @@ flowchart LR
 最终演示包括：客户登录与咨询、引用打开、人工确认报修、工作人员处理、客户查看变化、维修备案审核、标记典型后自动整理合并入库、再次检索与打开多来源证据。再展示一个无依据或无权访问的失败场景。界面截图、设备信息、应用包和四人贡献按实际完成情况记录。
 
 ## 当前状态
+
+2026-10-15 #77：完成既有活动详情/报名与本人报名详情的视觉改造及字段错误、状态边界、保存原目标重试回归。#62 的业务交付与本轮视觉交付分别记录；服务端仍决定账号归属、条款、容量窗口、编辑、现场与出勤取消。最终 HAP 和本机模拟器验收见 [记录](verification/issue-77.md)。未自行合并 PR、关闭 Issue、重置数据或部署共享服务器。
 
 2026-10-15 #62 收尾：取消本人未处理出勤、成功业务永久标记及旧审计兼容、取消/现场事务互斥已实现；管理员失败按原动作/目标/快照重试，成功写后仅重读。529 项单测、54 项相关 DB 回归、lint、后端/HAP 构建通过，本轮系统选图和最终包验收见 [收尾记录](verification/issue-62-completion.md)。此前取消缺口安排以新规则取代，未部署共享后端，PR/Issue 合入关闭交技术主线。
 

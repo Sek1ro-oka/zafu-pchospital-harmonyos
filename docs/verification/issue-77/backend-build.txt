@@ -1,0 +1,196 @@
+   ▲ Next.js 15.5.25
+   - Environments: .env
+   - Experiments (use with caution):
+     · cpus: 1
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 21.1s
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/72) ...
+   Generating static pages (18/72) 
+   Generating static pages (36/72) 
+   Generating static pages (54/72) 
+ ✓ Generating static pages (72/72)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                                        Size  First Load JS
+┌ ƒ /                                                                             165 B         105 kB
+├ ○ /_not-found                                                                   445 B         102 kB
+├ ○ /about                                                                      3.56 kB         105 kB
+├ ○ /account/change-password                                                    3.51 kB         109 kB
+├ ƒ /admin                                                                         2 kB         119 kB
+├ ƒ /admin/audit                                                                3.66 kB         137 kB
+├ ƒ /admin/categories                                                           3.39 kB         136 kB
+├ ƒ /admin/comments                                                             2.48 kB         147 kB
+├ ƒ /admin/export                                                               5.25 kB         122 kB
+├ ƒ /admin/invite-codes                                                         4.08 kB         137 kB
+├ ƒ /admin/join-applications                                                    5.47 kB         138 kB
+├ ƒ /admin/members                                                              11.4 kB         148 kB
+├ ƒ /admin/repair-activities                                                    4.86 kB         123 kB
+├ ƒ /admin/repairs                                                              6.65 kB         151 kB
+├ ƒ /admin/settings                                                             3.35 kB         120 kB
+├ ƒ /admin/skills                                                               3.34 kB         136 kB
+├ ƒ /api/v1/admin/audit-logs                                                      445 B         102 kB
+├ ƒ /api/v1/admin/audit-logs/actions                                              445 B         102 kB
+├ ƒ /api/v1/admin/comments                                                        445 B         102 kB
+├ ƒ /api/v1/admin/comments/[id]                                                   445 B         102 kB
+├ ƒ /api/v1/admin/dashboard                                                       445 B         102 kB
+├ ƒ /api/v1/admin/invite-codes                                                    445 B         102 kB
+├ ƒ /api/v1/admin/invite-codes/[id]                                               445 B         102 kB
+├ ƒ /api/v1/admin/invite-codes/[id]/revoke                                        445 B         102 kB
+├ ƒ /api/v1/admin/join-applications                                               445 B         102 kB
+├ ƒ /api/v1/admin/join-applications/[id]                                          445 B         102 kB
+├ ƒ /api/v1/admin/join-applications/[id]/provision                                445 B         102 kB
+├ ƒ /api/v1/admin/join-applications/[id]/provision/retry                          445 B         102 kB
+├ ƒ /api/v1/admin/join-applications/[id]/reviews                                  445 B         102 kB
+├ ƒ /api/v1/admin/join-applications/export                                        445 B         102 kB
+├ ƒ /api/v1/admin/members                                                         445 B         102 kB
+├ ƒ /api/v1/admin/members/[id]                                                    445 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/disable                                            445 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/enable                                             445 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/password-reset                                     445 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/roles                                              445 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/skills                                             445 B         102 kB
+├ ƒ /api/v1/admin/members/[id]/stats                                              445 B         102 kB
+├ ƒ /api/v1/admin/members/batch                                                   445 B         102 kB
+├ ƒ /api/v1/admin/members/move                                                    445 B         102 kB
+├ ƒ /api/v1/admin/repair-activities                                               445 B         102 kB
+├ ƒ /api/v1/admin/repair-activities/[id]                                          445 B         102 kB
+├ ƒ /api/v1/admin/repair-activities/[id]/registrations                            445 B         102 kB
+├ ƒ /api/v1/admin/repair-activities/[id]/registrations/[regId]                    445 B         102 kB
+├ ƒ /api/v1/admin/repair-categories                                               445 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]                                          445 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]/activate                                 445 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]/deactivate                               445 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]/move                                     445 B         102 kB
+├ ƒ /api/v1/admin/repair-categories/[id]/reorder                                  445 B         102 kB
+├ ƒ /api/v1/admin/repairs                                                         445 B         102 kB
+├ ƒ /api/v1/admin/repairs/[id]                                                    445 B         102 kB
+├ ƒ /api/v1/admin/repairs/[id]/flags                                              445 B         102 kB
+├ ƒ /api/v1/admin/repairs/[id]/reviews                                            445 B         102 kB
+├ ƒ /api/v1/admin/repairs/batch-reviews                                           445 B         102 kB
+├ ƒ /api/v1/admin/repairs/export                                                  445 B         102 kB
+├ ƒ /api/v1/admin/settings/public-content                                         445 B         102 kB
+├ ƒ /api/v1/admin/skills                                                          445 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]                                                     445 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]/activate                                            445 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]/deactivate                                          445 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]/move                                                445 B         102 kB
+├ ƒ /api/v1/admin/skills/[id]/reorder                                             445 B         102 kB
+├ ƒ /api/v1/auth/login                                                            445 B         102 kB
+├ ƒ /api/v1/auth/logout                                                           445 B         102 kB
+├ ƒ /api/v1/auth/native/login                                                     445 B         102 kB
+├ ƒ /api/v1/auth/native/logout                                                    445 B         102 kB
+├ ƒ /api/v1/auth/native/password/change                                           445 B         102 kB
+├ ƒ /api/v1/auth/native/session                                                   445 B         102 kB
+├ ƒ /api/v1/auth/password/change                                                  445 B         102 kB
+├ ƒ /api/v1/auth/register/customer                                                445 B         102 kB
+├ ƒ /api/v1/auth/register/staff                                                   445 B         102 kB
+├ ƒ /api/v1/customer/activity-registrations                                       445 B         102 kB
+├ ƒ /api/v1/customer/activity-registrations/[regId]                               445 B         102 kB
+├ ƒ /api/v1/customer/favorites                                                    445 B         102 kB
+├ ƒ /api/v1/customer/favorites/[id]                                               445 B         102 kB
+├ ƒ /api/v1/customer/knowledge-cases                                              445 B         102 kB
+├ ƒ /api/v1/customer/knowledge-cases/[id]                                         445 B         102 kB
+├ ƒ /api/v1/customer/notifications                                                445 B         102 kB
+├ ƒ /api/v1/customer/notifications/[id]                                           445 B         102 kB
+├ ƒ /api/v1/customer/notifications/[id]/read                                      445 B         102 kB
+├ ƒ /api/v1/customer/notifications/read-all                                       445 B         102 kB
+├ ƒ /api/v1/customer/profile                                                      445 B         102 kB
+├ ƒ /api/v1/customer/repair-activities/[id]/registrations                         445 B         102 kB
+├ ƒ /api/v1/health                                                                445 B         102 kB
+├ ƒ /api/v1/join-applications                                                     445 B         102 kB
+├ ƒ /api/v1/knowledge-cases                                                       445 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]                                                  445 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]/embedding                                        445 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]/reprocess                                        445 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]/visibility                                       445 B         102 kB
+├ ƒ /api/v1/knowledge-cases/[id]/withdraw                                         445 B         102 kB
+├ ƒ /api/v1/knowledge-cases/records/[id]/retry                                    445 B         102 kB
+├ ƒ /api/v1/knowledge-cases/records/[id]/status                                   445 B         102 kB
+├ ƒ /api/v1/knowledge-cases/records/[id]/typical                                  445 B         102 kB
+├ ƒ /api/v1/knowledge/cases/search                                                445 B         102 kB
+├ ƒ /api/v1/knowledge/chat                                                        445 B         102 kB
+├ ƒ /api/v1/knowledge/search                                                      445 B         102 kB
+├ ƒ /api/v1/knowledge/sources/[id]                                                445 B         102 kB
+├ ƒ /api/v1/me                                                                    445 B         102 kB
+├ ƒ /api/v1/member-registrations/invite                                           445 B         102 kB
+├ ƒ /api/v1/member/analytics                                                      445 B         102 kB
+├ ƒ /api/v1/member/dashboard                                                      445 B         102 kB
+├ ƒ /api/v1/member/directory                                                      445 B         102 kB
+├ ƒ /api/v1/member/favorites                                                      445 B         102 kB
+├ ƒ /api/v1/member/favorites/[repairId]                                           445 B         102 kB
+├ ƒ /api/v1/member/notifications                                                  445 B         102 kB
+├ ƒ /api/v1/member/notifications/[id]                                             445 B         102 kB
+├ ƒ /api/v1/member/notifications/[id]/read                                        445 B         102 kB
+├ ƒ /api/v1/member/notifications/read-all                                         445 B         102 kB
+├ ƒ /api/v1/member/profile                                                        445 B         102 kB
+├ ƒ /api/v1/member/profile/skills                                                 445 B         102 kB
+├ ƒ /api/v1/member/rankings                                                       445 B         102 kB
+├ ƒ /api/v1/member/repair-activities                                              445 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/attendance                              445 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/board                                   445 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/check-in                                445 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/registrations/[registrationId]/phone    445 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/serve                                   445 B         102 kB
+├ ƒ /api/v1/member/repair-activities/[id]/withdraw                                445 B         102 kB
+├ ƒ /api/v1/member/repairs                                                        445 B         102 kB
+├ ƒ /api/v1/members/[memberProfileId]/profile                                     445 B         102 kB
+├ ƒ /api/v1/public/knowledge/guides                                               445 B         102 kB
+├ ƒ /api/v1/repair-activities                                                     445 B         102 kB
+├ ƒ /api/v1/repair-activities/[id]                                                445 B         102 kB
+├ ƒ /api/v1/repair-activities/[id]/registrations                                  445 B         102 kB
+├ ƒ /api/v1/repair-activities/[id]/registrations/[regId]                          445 B         102 kB
+├ ƒ /api/v1/repair-activities/[id]/registrations/lookup                           445 B         102 kB
+├ ƒ /api/v1/repair-categories                                                     445 B         102 kB
+├ ƒ /api/v1/repair-members                                                        445 B         102 kB
+├ ƒ /api/v1/repair-orders                                                         445 B         102 kB
+├ ƒ /api/v1/repair-orders/[id]                                                    445 B         102 kB
+├ ƒ /api/v1/repair-photos/[photoId]/content                                       445 B         102 kB
+├ ƒ /api/v1/repairs                                                               445 B         102 kB
+├ ƒ /api/v1/repairs/[id]                                                          445 B         102 kB
+├ ƒ /api/v1/repairs/[id]/comments                                                 445 B         102 kB
+├ ƒ /api/v1/repairs/[id]/comments/[commentId]                                     445 B         102 kB
+├ ƒ /api/v1/repairs/[id]/photos                                                   445 B         102 kB
+├ ƒ /api/v1/repairs/[id]/photos/[photoId]                                         445 B         102 kB
+├ ƒ /api/v1/repairs/[id]/submit                                                   445 B         102 kB
+├ ƒ /api/v1/skills                                                                445 B         102 kB
+├ ƒ /api/v1/staff/repair-orders                                                   445 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]                                              445 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]/accept                                       445 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]/cancel                                       445 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]/progress                                     445 B         102 kB
+├ ƒ /api/v1/staff/repair-orders/[id]/record                                       445 B         102 kB
+├ ○ /docs                                                                         168 B         105 kB
+├ ○ /icon.svg                                                                       0 B            0 B
+├ ○ /join                                                                       5.63 kB         111 kB
+├ ƒ /login                                                                      5.25 kB         110 kB
+├ ƒ /member                                                                     8.65 kB         120 kB
+├ ƒ /member/cases                                                               7.84 kB         116 kB
+├ ƒ /member/favorites                                                           6.83 kB         115 kB
+├ ƒ /member/notifications                                                       6.06 kB         114 kB
+├ ƒ /member/profile                                                             6.88 kB         119 kB
+├ ƒ /member/profile/[memberProfileId]                                            6.2 kB         115 kB
+├ ƒ /member/rankings                                                             8.1 kB         113 kB
+├ ƒ /member/repair-activities                                                   3.53 kB         109 kB
+├ ƒ /member/repair-activities/[id]                                              7.67 kB         113 kB
+├ ƒ /member/repairs                                                             4.59 kB         113 kB
+├ ƒ /member/repairs/[id]                                                        7.44 kB         120 kB
+├ ƒ /member/repairs/[id]/edit                                                   7.24 kB         118 kB
+├ ƒ /member/repairs/new                                                         3.34 kB         108 kB
+├ ○ /register/member                                                              445 B         102 kB
+├ ○ /repair-activities                                                          5.59 kB         112 kB
+├ ƒ /repair-activities/[id]                                                     7.22 kB         113 kB
+├ ○ /robots.txt                                                                   445 B         102 kB
+└ ○ /sitemap.xml                                                                  445 B         102 kB
++ First Load JS shared by all                                                    102 kB
+  ├ chunks/1127-64b0a81fc387ef08.js                                             45.5 kB
+  ├ chunks/251bdf5a-4d5c8a054da74568.js                                         54.2 kB
+  └ other shared chunks (total)                                                 1.99 kB
+
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

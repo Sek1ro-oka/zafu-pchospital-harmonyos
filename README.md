@@ -68,7 +68,7 @@
 
 - [12 报修详情、指南详情与案例阅读 #75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75)：本轮实现与模拟器证据见 [验证记录](docs/verification/issue-75.md)。
 - [13 指南目录与知识搜索 #76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76)：目录、搜索、详情续接已实现，HAP/模拟器及相关回归通过，待视觉审查；[验证记录](docs/verification/issue-76.md)、[接口说明](backend/docs/knowledge-browse-api.md)。
-- [14 活动详情与我的报名 #77](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/77)：按活动接口与权限另行推进。
+- [14 活动详情与我的报名 #77](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/77)：浅蓝专题详情/报名与暖色本人状态卡已实现，复用 #62 服务；最终包装机截图、状态/分页/重试验收见 [验证记录](docs/verification/issue-77.md)，待维护者视觉审查。
 
 ## 克隆与目录
 
@@ -134,6 +134,8 @@ $env:Path = 'D:/DevEco Studio/tools/node;' + $env:Path
 ```
 
 ## 当前实际进度
+
+2026-10-15（#77 活动页面还原）：从已合入 #74/#78/#79 的 main `6826bc1` 开发，期间普通 Merge 同步 #80 至 `d53f951`。活动详情/报名采用全宽浅蓝主视觉、真实活动信息/条款及独立底部行动区；本人详情采用暖色大标题、联系信息与报名/签到/接待三段状态卡。未知状态明确不可用，已接待不推断维修完成；仅本次成功响应确认真实报名 ID，不以第一页未找到推断未报名，多联系快照用真实姓名/掩码电话区分。保留 #75/#76 导航及阅读/搜索页；566 项单测、lint、HAP 构建及实际模拟器报名/现场状态/26 条分页/账号隔离/精确重试通过，真实 HTTP 27 项与未处理出勤取消/恢复通过。最终包、截图与限制见 [#77 验证](docs/verification/issue-77.md)，未部署共享服务，最终视觉认可交维护者审查。
 
 2026-10-15（#62 收尾）：按新任务书实现本人未处理本场业务时取消出勤、历史处理兼容与取消/现场事务互斥，修复管理员报名删除失败重试误保存另一行、写后刷新及行状态更新，并清理切账号旧数据。最新 main `8129961` 已普通 Merge；529 项单测、54 项相关 DB 回归、lint、后端/HAP 构建通过。最终包关键链路与系统选图上传证据见 [本轮收尾验收](docs/verification/issue-62-completion.md)，此前保留缺口安排已被新任务取代。未部署共享后端、未合并或关闭 #62。
 
