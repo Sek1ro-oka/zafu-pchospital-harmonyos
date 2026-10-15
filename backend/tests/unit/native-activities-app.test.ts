@@ -42,6 +42,7 @@ function component<T>(
       ApiRequestError: RequestError,
       isSessionExpiredCode: () => false,
       ROUTE_MY_REGISTRATION: "my-activity-registration",
+      KeyboardAvoidMode: { RESIZE: 1 },
     },
   ) as T;
 }
@@ -636,4 +637,30 @@ test("#77 status stages use server enum, withdrawal hides old timestamps, unknow
   assert.equal(policy.activityStatusLabel("UNKNOWN"), "状态暂不可用");
   assert.ok(policy.registrationStatusLabel("SERVED").includes("已接待"));
   assert.ok(!policy.registrationStatusLabel("SERVED").includes("已完成"));
+});
+
+test("#77 signup scopes keyboard resize to its lifetime and restores the previous page mode", () => {
+  interface KeyboardPage extends Detail77 {
+    signup: boolean;
+    getUIContext(): { getKeyboardAvoidMode(): number; setKeyboardAvoidMode(value: number): void };
+    aboutToAppear(): void;
+    aboutToDisappear(): void;
+  }
+  let mode = 0;
+  const changes: number[] = [];
+  const page = detail77({ detail: async () => event77() }, () => null) as KeyboardPage;
+  page.signup = true;
+  page.getUIContext = () => ({
+    getKeyboardAvoidMode: () => mode,
+    setKeyboardAvoidMode: (value) => {
+      mode = value;
+      changes.push(value);
+    },
+  });
+  page.aboutToAppear();
+  assert.equal(mode, 1);
+  page.aboutToDisappear();
+  assert.equal(mode, 0);
+  page.aboutToDisappear();
+  assert.equal(changes.join(","), "1,0");
 });
