@@ -390,6 +390,7 @@ export struct HomePage {
       } else if (name === ROUTE_PERSONAL_PROFILE) {
         PersonalProfilePage({
           home: this.home, permissions: this.permissions, param: param as PersonalProfileParam | null,
+          onBack: (): void => { this.pathStack.pop(); },
           onSaved: (name: string): void => { this.onProfileSaved(name); },
           onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
           onSessionExpired: (): void => { this.expireSession(); }
@@ -416,6 +417,7 @@ export struct HomePage {
         });
       } else if (name === ROUTE_REPAIR_ORDERS) {
         RepairOrdersPage({
+          onBack: (): void => { this.pathStack.pop(); },
           initialDetailId: param !== null && param !== undefined
             ? (param as RepairOrderFocusParam).orderId
             : '',
@@ -425,6 +427,7 @@ export struct HomePage {
         });
       } else if (name === ROUTE_STAFF_ORDERS) {
         StaffRepairOrdersPage({
+          onBack: (): void => { this.pathStack.pop(); },
           pathStack: this.pathStack,
           onSessionExpired: (): void => { this.expireSession(); }
         });
@@ -480,6 +483,7 @@ export struct HomePage {
         });
       }
     }
+    .hideTitleBar(name === ROUTE_PERSONAL_PROFILE || name === ROUTE_REPAIR_ORDERS || name === ROUTE_STAFF_ORDERS)
     .title(name === ROUTE_LOGIN ? '登录' : routeTitle(name))
     .onShown(() => {
       this.workbenchRevision += 1;
@@ -584,6 +588,7 @@ export struct HomePage {
 
           TabContent() {
             KnowledgeLibraryPage({
+              onBack: (): void => { this.selectNavigation(0); },
               authenticated: this.authenticated, home: this.home, permissions: this.permissions,
               onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
               onSessionExpired: (): void => { this.expireSession(); }

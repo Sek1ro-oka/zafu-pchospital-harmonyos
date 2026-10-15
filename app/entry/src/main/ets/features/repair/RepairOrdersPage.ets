@@ -1,3 +1,4 @@
+import { DetailHeader, DetailNotice, DetailEmptyOrders, DETAIL_BACKGROUND } from '../../core/ui/ReferenceDetail';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
 import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
@@ -55,6 +56,9 @@ export struct RepairOrdersPage {
    * 页面打开后直接展开该单的详情进度；普通入口传空串，行为与原来完全一致。
    */
   initialDetailId: string = '';
+  onBack: () => void = () => {};
+  @State status: string = '';
+  private listGeneration: number = 0;
   /** 会话失效时通知上层回登录页；由 Navigation 调用方注入。 */
   onSessionExpired: () => void = () => {
   };
@@ -109,6 +113,19 @@ export struct RepairOrdersPage {
    * 统一处理会话失效：清掉本地展示状态并让上层回登录页。
    * 网络错误补一句排查引导，业务错误直接用后端信封文案，两类提示可区分。
    */
+  aboutToDisappear(): void {
+    this.listGeneration += 1;
+    this.requesting = false; this.loadingMore = false; this.refreshPending = false;
+    this.closeDetail();
+  }
+
+  private switchStatus(status: string): void {
+    if (this.status === status) return;
+    this.status = status;
+    this.closeDetail();
+    this.load(true);
+  }
+
   private handleError(error: Object): void {
     if (error instanceof ApiRequestError) {
       if (isSessionExpiredCode(error.code)) {
@@ -131,19 +148,26 @@ export struct RepairOrdersPage {
       }
       return;
     }
+    const generation = ++this.listGeneration;
+    const status = this.status;
     this.requesting = true;
+    this.loadingMore = false;
+    this.loadMoreErrorText = '';
     this.state = STATE_LOADING;
     this.errorText = '';
     this.currentPage = 1;
     try {
-      const items = await RepairOrderService.listMine('', 1);
+      const items = await RepairOrderService.listMine(status, 1);
+      if (generation !== this.listGeneration || status !== this.status) return;
       this.orders = items;
       this.hasMore = items.length >= PAGE_SIZE;
       this.state = items.length === 0 ? STATE_EMPTY : STATE_READY;
     } catch (error) {
+      if (generation !== this.listGeneration || status !== this.status) return;
       this.state = STATE_ERROR;
       this.handleError(error);
     } finally {
+      if (generation !== this.listGeneration) return;
       this.requesting = false;
       if (this.refreshPending) {
         this.refreshPending = false;
@@ -157,17 +181,21 @@ export struct RepairOrdersPage {
     if (this.loadingMore || !this.hasMore) {
       return;
     }
+    const generation = this.listGeneration;
+    const status = this.status;
     this.loadingMore = true;
     this.loadMoreErrorText = '';
     try {
       const nextPage: number = this.currentPage + 1;
-      const items = await RepairOrderService.listMine('', nextPage);
+      const items = await RepairOrderService.listMine(status, nextPage);
+      if (generation !== this.listGeneration || status !== this.status) return;
       if (items.length > 0) {
         this.orders = this.orders.concat(items);
         this.currentPage = nextPage;
       }
       this.hasMore = items.length >= PAGE_SIZE;
     } catch (error) {
+      if (generation !== this.listGeneration || status !== this.status) return;
       // 加载更多失败保留现有列表，就地提示失败原因，用户可再点一次重试。
       if (error instanceof ApiRequestError) {
         if (isSessionExpiredCode(error.code)) {
@@ -181,7 +209,7 @@ export struct RepairOrdersPage {
         this.loadMoreErrorText = '加载更多失败，请重试';
       }
     } finally {
-      this.loadingMore = false;
+      if (generation === this.listGeneration) this.loadingMore = false;
     }
   }
 
@@ -428,19 +456,7 @@ export struct RepairOrdersPage {
 
   @Builder
   emptyView() {
-    Column({ space: GAP_SM }) {
-      Text('还没有报修记录')
-        .fontSize(FONT_SUBTITLE)
-        .fontColor($r('app.color.text_primary'))
-      Text('点击上方「我要报修」提交第一条。')
-        .fontSize(FONT_NOTE)
-        .fontColor($r('app.color.text_secondary'))
-    }
-    .width('100%')
-    .padding(CARD_PADDING_LG)
-    .backgroundColor($r('app.color.surface'))
-    .borderRadius(CARD_RADIUS)
-    .alignItems(HorizontalAlign.Center)
+    DetailEmptyOrders({ text: this.status === '' ? '您还没有报修单' : '暂无此状态的报修单' })
   }
 
   @Builder
@@ -475,79 +491,61 @@ export struct RepairOrdersPage {
     }
   }
 
+  @Builder
+  filterTab(label: string, status: string) {
+    Column({ space: 7 }) {
+      Text(label).fontSize(17).fontColor(this.status === status ? '#0764E9' : '#666D72')
+        .fontWeight(this.status === status ? FontWeight.Medium : FontWeight.Normal)
+      Rect().width(30).height(2).fill(this.status === status ? '#0764E9' : Color.Transparent).borderRadius(1)
+    }.height(46).justifyContent(FlexAlign.End).padding({ left: 10, right: 10 })
+      .onClick(() => { this.switchStatus(status); })
+  }
+
   build() {
-    Column({ space: GAP_LG }) {
-      // 工具栏：页面标题在 NavDestination 标题栏，这里只放报修入口，固定不随列表滚动。
-      Row({ space: CARD_GAP }) {
-        Blank()
-        Button(this.showForm ? '取消' : '我要报修')
-          .fontSize(FONT_TEXT)
-          .height(CONTROL_HEIGHT_SM)
-          .backgroundColor($r('app.color.brand_soft'))
-          .fontColor($r('app.color.brand'))
-          .onClick(() => {
-            this.showForm = !this.showForm;
-            this.noticeText = '';
-          })
-      }
-      .width('100%')
-
-      if (this.noticeText !== '') {
-        Text(this.noticeText)
-          .fontSize(FONT_NOTE)
-          .fontColor($r('app.color.ok'))
-          .width('100%')
-          .textAlign(TextAlign.Start)
-      }
-
-      // 可滚动内容区：表单、详情、列表都在这里
+    Column({ space: 0 }) {
+      DetailHeader({ title: '我的报修', onBack: this.onBack, refresh: true,
+        onRefresh: (): void => { this.load(true); } })
       Scroll() {
-        Column({ space: GAP_LG }) {
-          if (this.showForm) {
-            RepairOrderForm({
-              onSubmitted: () => this.afterSubmit(),
-              submit: (request: RepairOrderSubmitRequest, idempotencyKey: string) => this.submitOrder(request, idempotencyKey),
-              onSessionExpired: () => this.onSessionExpired()
-            })
-          }
-
-          if (this.detailOpen) {
-            this.detailPanel(this.selected)
-          }
-
-          if (this.state === STATE_LOADING) {
-            this.loadingView();
-          } else if (this.state === STATE_ERROR) {
-            this.errorView();
-          } else if (this.state === STATE_EMPTY) {
-            this.emptyView();
-          } else {
-            ForEach(this.orders, (order: RepairOrderView) => {
-              this.orderCard(order);
-            }, (order: RepairOrderView) => order.id)
-
-            if (this.loadMoreErrorText !== '') {
-              Text(this.loadMoreErrorText)
-                .fontSize(FONT_NOTE)
-                .fontColor($r('app.color.danger'))
-                .width('100%')
-                .textAlign(TextAlign.Center)
-            }
-
-            this.loadMoreButton();
-          }
-        }
-        .width('100%')
-        .alignItems(HorizontalAlign.Start)
+        Row() {
+          this.filterTab('全部', '')
+          this.filterTab('待受理', 'SUBMITTED')
+          this.filterTab('已受理', 'ACCEPTED')
+          this.filterTab('维修中', 'REPAIRING')
+          this.filterTab('已完成', 'COMPLETED')
+          this.filterTab('已取消', 'CANCELLED')
+        }.padding({ left: 16, right: 16 })
+      }.width('100%').height(56).scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off)
+      Column() {
+        DetailNotice({ text: '提交报修后，工作人员受理并更新进度。请以报修单中的最新状态为准。' })
+      }.width('100%').padding({ left: 18, right: 18, top: 14, bottom: 14 })
+      if (this.noticeText !== '') {
+        Text(this.noticeText).fontSize(13).fontColor('#288050').padding({ left: 18, right: 18, bottom: 10 })
       }
-      .layoutWeight(1)
-      .scrollBar(BarState.Auto)
-      .align(Alignment.Top)
-    }
-    .width('100%')
-    .height('100%')
-    .padding(PAGE_PADDING)
-    .alignItems(HorizontalAlign.Start)
-    .backgroundColor($r('app.color.start_window_background'))
+      if (this.state === STATE_EMPTY && !this.showForm && !this.detailOpen) {
+        Column() { this.emptyView() }.width('100%').layoutWeight(1)
+      } else {
+        Scroll() {
+          Column({ space: 16 }) {
+            if (this.showForm) {
+              RepairOrderForm({ onSubmitted: () => this.afterSubmit(),
+                submit: (request: RepairOrderSubmitRequest, idempotencyKey: string) => this.submitOrder(request, idempotencyKey),
+                onSessionExpired: () => this.onSessionExpired() })
+            }
+            if (this.detailOpen) { this.detailPanel(this.selected) }
+            if (this.state === STATE_LOADING) { this.loadingView() }
+            else if (this.state === STATE_ERROR) { this.errorView() }
+            else if (this.state === STATE_EMPTY) { Text('暂无报修单').fontColor('#969EA4').padding(24) }
+            else {
+              ForEach(this.orders, (order: RepairOrderView) => { this.orderCard(order); }, (order: RepairOrderView) => order.id)
+              if (this.loadMoreErrorText !== '') { Text(this.loadMoreErrorText).fontSize(13).fontColor($r('app.color.danger')) }
+              this.loadMoreButton()
+            }
+          }.width('100%').padding({ left: 18, right: 18, bottom: 16 }).alignItems(HorizontalAlign.Start)
+        }.layoutWeight(1).width('100%').scrollBar(BarState.Off).align(Alignment.Top)
+      }
+      Button(this.showForm ? '收起报修表单' : '我要报修').fontSize(16).height(44).width(184)
+        .backgroundColor('#0755FF').fontColor(Color.White).borderRadius(24).margin({ top: 8, bottom: 18 })
+        .onClick(() => { this.showForm = !this.showForm; this.noticeText = ''; })
+    }.width('100%').height('100%').backgroundColor(DETAIL_BACKGROUND)
   }
 }
