@@ -54,6 +54,7 @@ export struct MyRegistrationsPage {
           ListItem() {
             Column({ space: 10 }) {
               Text(item.activity.title).fontSize(19).fontWeight(FontWeight.Bold).width('100%')
+              Text(`${item.name} · ${item.phoneMasked}`).fontSize(14).fontColor('#697786').width('100%')
               Text(registrationStatusLabel(item.status)).fontColor('#1676E5').width('100%')
               Text(`活动：${activityTime(item.activity.activityAt)}\n报名：${activityTime(item.createdAt)}\n${activityIssueLabel(item.issueType)} · ${item.deviceModel === null ? '机型未填写' : item.deviceModel}`)
                 .fontSize(14).lineHeight(23).width('100%')

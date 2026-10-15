@@ -55,6 +55,27 @@ class RequestError extends Error {
     super(message);
   }
 }
+
+test("#77 multiple contacts for one event navigate to the selected real registration, never the first match", () => {
+  interface ListChoice {
+    open(item: { id: string; activityId: string }): void;
+    onOpen: (route: string, target: object | null) => void;
+  }
+  const page = component<ListChoice>("MyRegistrationsPage", {}, () => null);
+  const targets: object[] = [];
+  page.onOpen = (_route, target) => {
+    if (target) targets.push(target);
+  };
+  page.open({ id: "first-contact", activityId: "same-event" });
+  page.open({ id: "second-contact", activityId: "same-event" });
+  assert.equal(
+    JSON.stringify(targets),
+    JSON.stringify([
+      { activityId: "same-event", registrationId: "first-contact" },
+      { activityId: "same-event", registrationId: "second-contact" },
+    ]),
+  );
+});
 interface Mine {
   load(reset: boolean): Promise<void>;
   refresh(): void;
