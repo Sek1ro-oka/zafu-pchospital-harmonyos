@@ -57,7 +57,7 @@ $env:Path='D:/DevEco Studio/tools/node;'+$env:Path
 & 'D:/DevEco Studio/tools/hvigor/bin/hvigorw.bat' --mode module -p product=default assembleHap
 ```
 
-HAP **BUILD SUCCESSFUL**，已用 `hdc install -r` 安装并实际操作。未签名产物 3,168,739 字节，SHA-256：`83ce4545ce0cf89d9087a5ddb1c274b17a8d2d40b533042cd8449d42d1671855`。保留原有四处 PromptAction 异常警告，没有新增警告。过程中清除旧搜索字段时曾漏一处主页面引用导致编译失败，补齐后上述最终构建通过。
+HAP **BUILD SUCCESSFUL**，已用 `hdc install -r` 安装并实际操作。未签名产物 3,170,302 字节，SHA-256：`3f75c7121ba62d89af9b4245e709a4afd7f63c82783768c7288e7e3a76dc95ba`。保留原有四处 PromptAction 异常警告，没有新增警告。过程中清除旧搜索字段时曾漏一处主页面引用导致编译失败，补齐后上述最终构建通过。
 
 ## 边界与后续
 

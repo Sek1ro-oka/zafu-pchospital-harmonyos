@@ -135,6 +135,9 @@ export struct PublicGuidesPage {
             Text(this.selectedCategory).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#12171A').layoutWeight(1)
           }.width('100%').margin({ top: 12, bottom: 7 })
           Text('按指南标题粗分').fontSize(11).fontColor('#959DA2').width('100%').margin({ bottom: 9 })
+          if (this.guides.length === 0 && this.selectedCategory === '全部指南') {
+            Text('暂无公开指南').fontSize(13).fontColor('#949DA3').width('100%').padding({ top: 14, bottom: 20 })
+          }
           ForEach(this.directoryGroups(), (group: GuideGroup) => {
             if (this.selectedCategory === '全部指南') {
               Text(group.title).fontSize(18).fontWeight(FontWeight.Bold).fontColor('#11171A').width('100%').margin({ top: 14, bottom: 4 })
