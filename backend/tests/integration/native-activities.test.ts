@@ -36,6 +36,7 @@ import { POST as uploadRecordPhoto } from "../../src/app/api/v1/repairs/[id]/pho
 import { GET as recordDetail } from "../../src/app/api/v1/repairs/[id]/route";
 import { repairActivityConsentVersion } from "../../src/config/repair-activities";
 import { disconnectDb, getDb } from "../../src/lib/db/client";
+import { getServerEnv } from "../../src/lib/env";
 import { resetRateLimitsForTests } from "../../src/lib/api/rate-limit";
 import { bearerFor } from "./staff-repair-harness";
 import { integrationTestsEnabled } from "./db-guard";
@@ -968,7 +969,7 @@ dbTest("C09/C10 取消只定位本人，鉴权/Origin/native 与活动存在校�
   assert.equal((await cancel(randomUUID())).status, 404);
   const cookie = {
     Cookie: "pc_hospital_session=" + staff2.authorization.slice(7),
-    Origin: "http://localhost:13082",
+    Origin: getServerEnv().APP_BASE_URL,
   };
   assert.equal((await cancel(id, cookie)).status, 200);
 });
