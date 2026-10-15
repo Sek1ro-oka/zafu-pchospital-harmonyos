@@ -309,3 +309,21 @@ test("R04 失败后切账号/离开不重放旧提交；迟到结果不覆盖新
   assert.equal((later.items[0] as { id: string }).id, "latest");
   assert.equal(later.busy, false);
 });
+
+test("账号切换后列表刷新失败也清除上一账号的报名与编辑草稿", async () => {
+  let identity: object = { id: "A" };
+  const page = adminPage(
+    {
+      adminRegistrations: async () => {
+        throw Error("offline");
+      },
+    },
+    () => identity,
+  );
+  page.items = [{ id: "private-A" }];
+  identity = { id: "B" };
+  await page.load();
+  assert.equal(page.items.length, 0);
+  assert.equal(page.selectedId, "");
+  assert.equal(page.name, "");
+});

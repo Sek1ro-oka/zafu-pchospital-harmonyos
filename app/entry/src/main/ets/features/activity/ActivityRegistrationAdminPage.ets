@@ -22,6 +22,7 @@ export struct ActivityRegistrationAdminPage {
   @State busy: boolean = false;
   @State errorText: string = '';
   private guard: ActivityRequestGuard = new ActivityRequestGuard();
+  private loadedIdentity: SessionIdentity | null = SessionService.current();
   private retryKind: string = '';
   private retryId: string = '';
   private retryInput: AdminRegistrationUpdate | null = null;
@@ -36,6 +37,9 @@ export struct ActivityRegistrationAdminPage {
   }
   private async load(): Promise<void> {
     if (this.loading || this.busy) return;
+    if (this.loadedIdentity !== SessionService.current()) {
+      this.loadedIdentity = SessionService.current(); this.items = []; this.selectedId = ''; this.name = ''; this.phone = ''; this.retryKind = '';
+    }
     const ticket = this.guard.begin(); this.loading = true; this.errorText = ''; this.retryKind = '';
     try { const items = await ActivityService.adminRegistrations(this.param.activityId); if (this.guard.current(ticket)) this.items = items; }
     catch (error) {
@@ -115,7 +119,7 @@ export struct ActivityRegistrationAdminPage {
               }
             }.width('100%').padding(16).backgroundColor(Color.White).borderRadius(18)
           }
-        }, (item: AdminRegistration) => item.id)
+        }, (item: AdminRegistration) => `${item.id}:${item.name}:${item.phoneMasked}:${item.issueType}:${item.status}:${item.deletedAt}`)
         if (!this.loading && this.errorText === '' && this.visible().length === 0) { ListItem() { Text('暂无匹配的报名').padding(24) } }
       }.width('100%').layoutWeight(1)
     }.width('100%').height('100%').padding(16).backgroundColor('#F0F5F8')

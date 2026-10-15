@@ -1,3 +1,5 @@
+import { SessionIdentity } from '../../core/auth/AuthContract';
+import { SessionService } from '../../core/auth/SessionService';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
 import { LoadingPanel, ErrorPanel } from '../../core/ui/StatePanel';
 import { ROUTE_STAFF_RECORD } from '../../core/ui/Routes';
@@ -22,6 +24,7 @@ export struct ActivityBoardPage {
   @State loading: boolean = false;
   @State busy: boolean = false;
   @State errorText: string = '';
+  private loadedIdentity: SessionIdentity | null = SessionService.current();
   private retryCancellation: boolean = false;
   private guard: ActivityRequestGuard = new ActivityRequestGuard();
   aboutToAppear(): void { this.load(); }
@@ -33,6 +36,9 @@ export struct ActivityBoardPage {
   }
   private async load(): Promise<void> {
     if (this.loading || this.busy) return;
+    if (this.loadedIdentity !== SessionService.current()) {
+      this.loadedIdentity = SessionService.current(); this.board = null; this.query = '';
+    }
     const ticket = this.guard.begin(); this.loading = true; this.errorText = ''; this.retryCancellation = false;
     this.phoneId = ''; this.phoneText = ''; this.selectedId = '';
     try { const board = await ActivityService.board(this.param.activityId); if (this.guard.current(ticket)) this.board = board; }
@@ -45,6 +51,7 @@ export struct ActivityBoardPage {
   }
   private async action(kind: string, id: string = ''): Promise<void> {
     if (this.busy || this.loading) return;
+    if (this.loadedIdentity !== SessionService.current()) { await this.load(); return; }
     const ticket = this.guard.begin(); this.busy = true; this.errorText = ''; this.retryCancellation = false;
     try {
       if (kind === 'attendance') await ActivityService.attend(this.param.activityId);
