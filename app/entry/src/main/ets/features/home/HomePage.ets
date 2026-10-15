@@ -13,6 +13,9 @@ import { accessibility } from '@kit.AccessibilityKit';
 import { curves } from '@kit.ArkUI';
 import { ActivityPage } from '../activity/ActivityPage';
 import { KnowledgeLibraryPage } from '../knowledge/KnowledgeLibraryPage';
+import { KnowledgeSearchPage } from '../knowledge/KnowledgeSearchPage';
+import { KnowledgeSearchParam } from '../knowledge/KnowledgeBrowse';
+import { ROUTE_KNOWLEDGE_SEARCH } from '../../core/ui/Routes';
 import { TAB_SLIDE_DURATION } from '../../core/ui/ReferencePage';
 import { SessionIdentity, HOME_CUSTOMER, PasswordChangeData } from '../../core/auth/AuthContract';
 import { LoginIntent, routeAfterLogin } from '../../core/auth/LoginIntent';
@@ -94,6 +97,7 @@ export struct HomePage {
   private loginIntent: LoginIntent = new LoginIntent();
   private loginBusy: boolean = false;
   private customerOrderBackHandler: () => boolean = () => false;
+  @State knowledgeSearchRevision: number = 0;
   private registerBusy: boolean = false;
   private expiring: boolean = false;
   @State sessionTransition: boolean = false;
@@ -293,11 +297,11 @@ export struct HomePage {
     // 强制改密账号：契约规定只能访问 session / logout / 原生改密 / Web 改密，
     // 其余业务路由一律不放进栈（否则用户点进去只会看到 403 PASSWORD_CHANGE_REQUIRED）。
     // 公开维修指南对游客也开放，属于公共浏览，不拦。
-    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP) {
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_KNOWLEDGE_SEARCH && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP) {
       this.openPasswordChange(true);
       return;
     }
-    if (!this.authenticated && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP) {
+    if (!this.authenticated && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_KNOWLEDGE_SEARCH && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP) {
       const intent = new LoginIntent();
       intent.route = route;
       intent.param = param;
@@ -448,9 +452,18 @@ export struct HomePage {
           onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
           onSessionExpired: (): void => { this.expireSession(); }
         });
+      } else if (name === ROUTE_KNOWLEDGE_SEARCH) {
+        KnowledgeSearchPage({ authenticated: this.authenticated && !this.mustChangePassword, home: this.home, permissions: this.permissions,
+          initialQuery: param === null || param === undefined ? '' : (param as KnowledgeSearchParam).query,
+          refreshVersion: this.knowledgeSearchRevision, onBack: (): void => { this.pathStack.pop(); },
+          onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+          onLogin: (): void => { if (this.mustChangePassword) this.openPasswordChange(true); else this.requestLogin(new LoginIntent()); },
+          onSessionExpired: (): void => { this.expireSession(); } });
       } else if (name === ROUTE_PUBLIC_GUIDES) {
         PublicGuidesPage({
           onBack: (): void => { this.pathStack.pop(); },
+          onSearch: (): void => { this.openRoute(ROUTE_KNOWLEDGE_SEARCH, null); },
+          onOpenGuide: (id: string): void => { const focus: GuideFocusParam = { guideId: id }; this.openRoute(ROUTE_PUBLIC_GUIDES, focus); },
           authenticated: this.authenticated, home: this.home,
           onSessionExpired: (): void => { this.expireSession(); },
           initialGuideId: param !== null && param !== undefined ? (param as GuideFocusParam).guideId : '',
@@ -537,9 +550,10 @@ export struct HomePage {
     }
     .hideTitleBar(name === ROUTE_PERSONAL_PROFILE || name === ROUTE_REPAIR_ORDERS || name === ROUTE_STAFF_ORDERS
       || name === ROUTE_STAFF_ORDER_DETAIL || name === ROUTE_PUBLIC_GUIDES || name === ROUTE_CASE_DETAIL
-      || name === ROUTE_CASE_LIBRARY || name === ROUTE_PUBLIC_CASES || name === ROUTE_PUBLIC_CASE_DETAIL)
+      || name === ROUTE_CASE_LIBRARY || name === ROUTE_PUBLIC_CASES || name === ROUTE_PUBLIC_CASE_DETAIL || name === ROUTE_KNOWLEDGE_SEARCH)
     .title(name === ROUTE_LOGIN ? '登录' : routeTitle(name))
     .onShown(() => {
+      if (name === ROUTE_KNOWLEDGE_SEARCH) this.knowledgeSearchRevision += 1;
       this.workbenchRevision += 1;
       if (name.indexOf('activity') >= 0 || name === ROUTE_STAFF_ACTIVITIES) this.activityRevision += 1;
       if (name === ROUTE_REPAIR_RECORDS) this.recordsRevision += 1;

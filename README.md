@@ -4,6 +4,8 @@
 
 ## 页面映射与参考图
 
+2026-10-15：第 13 模块 [#76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76) 已实现指南左右分类目录与独立知识搜索，复用 #75 阅读详情；搜索支持全部/指南/案例、关键词强调及按权限查询有效案例。[参考图、截图与验证](docs/verification/issue-76.md)。新增案例搜索后端尚未部署共享服务器，本轮模拟器使用本机 13089。
+
 2026-10-15：第 12 模块 [#75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75) 已实现报修详情、指南详情、案例详情与案例库的参考图布局；HAP 构建与双角色模拟器操作通过，最终视觉效果待维护者审查。[四组参考图、实际截图与验证范围](docs/verification/issue-75.md)。
 
 新增子页面参考见 [PR #70 的 11 张图片索引与三个推荐映射](docs/reference/my-huawei/README.md#三个优先推荐映射)：账号资料 → 我的/个人资料，订单空态 → 报修列表，检测与帮助 → 知识分类与 AI 问诊入口。2026-10-14 已按维护者要求实施这三个映射并在模拟器验证，见 [页面还原记录与截图](docs/verification/three-reference-pages-20261014.md)；原五页基线如下。
@@ -65,7 +67,7 @@
 ## 后续页面还原
 
 - [12 报修详情、指南详情与案例阅读 #75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75)：本轮实现与模拟器证据见 [验证记录](docs/verification/issue-75.md)。
-- [13 指南目录与知识搜索 #76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76)：后续复用本轮阅读入口。
+- [13 指南目录与知识搜索 #76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76)：目录、搜索、详情续接已实现，HAP/模拟器及相关回归通过，待视觉审查；[验证记录](docs/verification/issue-76.md)、[接口说明](backend/docs/knowledge-browse-api.md)。
 - [14 活动详情与我的报名 #77](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/77)：按活动接口与权限另行推进。
 
 ## 克隆与目录

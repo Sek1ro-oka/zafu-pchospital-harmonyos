@@ -46,6 +46,15 @@
 
 ## 页面映射与开发基线
 
+### 第 13 模块：目录与搜索（2026-10-15）
+
+| 参考原图 | 本项目页面 | 实施状态 |
+| --- | --- | --- |
+| [全部圈子](community-circles-category-list.jpg) | 全部维修指南目录 | 左分类、右分组、图标、查看按钮；按标题粗分，空分类如实展示 |
+| [社区搜索结果](search-community-results.jpg) | 知识搜索结果 | 搜索框、全部/指南/案例、关键词强调、分组结果；使用真实来源及权限 |
+
+[Issue #76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76) 本轮实现及模拟器证据见 [验证记录](../../verification/issue-76.md)，案例接口见 [契约](../../../backend/docs/knowledge-browse-api.md)。新增案例查询尚未部署共享服务器；不引入成员、话题或联网搜索。最终视觉效果待维护者确认。
+
 ### 第 12 模块：阅读链路（2026-10-15）
 
 | 参考原图 | 当前对应页面 | 实施状态 |

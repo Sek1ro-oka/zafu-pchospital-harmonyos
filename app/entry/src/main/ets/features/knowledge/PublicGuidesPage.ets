@@ -5,6 +5,7 @@ import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { isSessionExpiredCode } from '../../core/network/ApiClient';
 import { CommunityService } from '../profile/CommunityService';
+import { GUIDE_CATEGORIES, guideCategory } from './GuideCategory';
 
 interface PublicGuide {
   id: string;
@@ -14,6 +15,7 @@ interface PublicGuide {
 interface PublicGuideList { guides: PublicGuide[]; }
 interface PublicGuideSection { title: string; content: string; }
 interface PublicGuideDetail { title: string; revision: string | null; sections: PublicGuideSection[]; }
+interface GuideGroup { title: string; guides: PublicGuide[]; }
 
 /** 公开指南目录/详情子页；分类主页面由 KnowledgeLibraryPage 负责。 */
 @Component
@@ -26,10 +28,12 @@ export struct PublicGuidesPage {
   @Prop initialGuideId: string = '';
   onConsult: () => void = () => {};
   onBack: () => void = () => {};
+  onSearch: () => void = () => {};
+  onOpenGuide: (id: string) => void = () => {};
   private guideScroller: Scroller = new Scroller();
   @State guides: PublicGuide[] = [];
   @State detail: PublicGuideDetail | null = null;
-  @State query: string = '';
+  @State selectedCategory: string = '全部指南';
   @State loading: boolean = false;
   @State errorText: string = '';
   private selectedId: string = '';
@@ -76,10 +80,89 @@ export struct PublicGuidesPage {
     } finally { if (generation === this.generation) this.favoriting = false; }
   }
 
+  private directoryGroups(): GuideGroup[] {
+    return GUIDE_CATEGORIES.filter((category: string) => category !== '全部指南' &&
+      (this.selectedCategory === '全部指南' || category === this.selectedCategory))
+      .map((category: string): GuideGroup => ({ title: category,
+        guides: this.guides.filter((guide: PublicGuide) => guideCategory(guide.title) === category) }))
+      .filter((group: GuideGroup) => this.selectedCategory !== '全部指南' || group.guides.length > 0);
+  }
+
+  private categoryIcon(category: string): Resource {
+    if (category === '开机故障') return $r('app.media.detail_power');
+    if (category === '系统软件') return $r('app.media.ref_system');
+    if (category === '网络') return $r('app.media.detail_network');
+    if (category === '磁盘') return $r('app.media.detail_disk');
+    if (category === '散热') return $r('app.media.detail_cooling');
+    if (category === '硬件外设') return $r('app.media.detail_device');
+    return $r('app.media.ref_document');
+  }
+
+  @Builder
+  directoryRow(guide: PublicGuide) {
+    Row({ space: 10 }) {
+      Image(this.categoryIcon(guideCategory(guide.title))).width(44).height(46).padding(5)
+        .objectFit(ImageFit.Contain).backgroundColor(Color.White).borderRadius(12)
+      Column({ space: 5 }) {
+        Text(guide.title).fontSize(15).lineHeight(21).fontColor('#151B20').fontWeight(FontWeight.Medium).width('100%')
+        Text('公开指南 · ' + (guide.revision === null ? '版本未记录' : guide.revision.substring(0, 8)))
+          .fontSize(10).lineHeight(15).fontColor('#929A9F').width('100%')
+      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+      Button('查看').height(29).width(46).padding(0).fontSize(13).fontWeight(FontWeight.Medium)
+        .backgroundColor('#E8EDF0').fontColor('#0877E0').onClick(() => { this.onOpenGuide(guide.id); })
+    }.width('100%').padding({ top: 13, bottom: 13 }).alignItems(VerticalAlign.Center)
+      .onClick(() => { this.onOpenGuide(guide.id); })
+  }
+
+  @Builder
+  directory() {
+    Row({ space: 0 }) {
+      Scroll() {
+        Column({ space: 0 }) {
+          ForEach(GUIDE_CATEGORIES, (category: string) => {
+            Button({ type: ButtonType.Normal }) {
+              Text(category).fontSize(14).lineHeight(21).fontWeight(this.selectedCategory === category ? FontWeight.Bold : FontWeight.Medium)
+                .fontColor(this.selectedCategory === category ? '#0877E0' : '#737C82').width('100%')
+                .maxLines(2).textAlign(TextAlign.Start)
+            }.width('100%').constraintSize({ minHeight: 51 }).padding({ left: 18, right: 8, top: 10, bottom: 10 })
+              .backgroundColor(Color.Transparent).onClick(() => { this.selectedCategory = category; })
+          }, (category: string) => category)
+        }.width('100%').alignItems(HorizontalAlign.Start)
+      }.width(82).height('100%').scrollBar(BarState.Off).align(Alignment.Top)
+      Scroll() {
+        Column({ space: 6 }) {
+          Row() {
+            Text(this.selectedCategory).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#12171A').layoutWeight(1)
+          }.width('100%').margin({ top: 12, bottom: 7 })
+          Text('按指南标题粗分').fontSize(11).fontColor('#959DA2').width('100%').margin({ bottom: 9 })
+          ForEach(this.directoryGroups(), (group: GuideGroup) => {
+            if (this.selectedCategory === '全部指南') {
+              Text(group.title).fontSize(18).fontWeight(FontWeight.Bold).fontColor('#11171A').width('100%').margin({ top: 14, bottom: 4 })
+            }
+            if (group.guides.length === 0) {
+              Text('暂无该分类指南').fontSize(13).fontColor('#949DA3').width('100%').padding({ top: 14, bottom: 20 })
+            } else {
+              ForEach(group.guides, (guide: PublicGuide, index: number) => {
+                if (index > 0) { Divider().color('#D6DDE1').margin({ left: 54 }).width('80%') }
+                this.directoryRow(guide)
+              }, (guide: PublicGuide) => guide.id)
+            }
+          }, (group: GuideGroup) => group.title)
+        }.width('100%').padding({ left: 10, right: 16, bottom: 28 }).alignItems(HorizontalAlign.Start)
+      }.layoutWeight(1).height('100%').scrollBar(BarState.Off).align(Alignment.Top)
+    }.width('100%').layoutWeight(1).alignItems(VerticalAlign.Top)
+  }
+
   build() {
     Column() {
-      DetailHeader({ title: this.detail === null ? '公开维修指南' : '维修指南', onBack: this.onBack, refresh: true,
-        onRefresh: (): void => { this.load(this.selectedId); } })
+      Row() {
+        DetailHeader({ title: this.selectedId === '' ? '全部指南' : '维修指南', onBack: this.onBack, refresh: true,
+          onRefresh: (): void => { this.load(this.selectedId); } }).layoutWeight(1)
+        if (this.selectedId === '') {
+          Button({ type: ButtonType.Circle }) { Image($r('app.media.home_search')).width(23).height(23) }
+            .width(42).height(42).margin({ right: 16 }).backgroundColor(Color.White).accessibilityText('搜索知识').onClick(this.onSearch)
+        }
+      }.width('100%')
       if (this.loading) { LoadingPanel({ text: '正在加载公开指南…' }) }
       else if (this.errorText !== '') {
         ErrorPanel({ message: this.errorText, onRetry: (): void => { this.load(this.selectedId); } })
@@ -156,17 +239,7 @@ export struct PublicGuidesPage {
         }.width('100%').layoutWeight(1).padding({ left: 18, right: 18, top: 12 }).scrollBar(BarState.Off)
           .backgroundColor(Color.White)
       } else {
-        Scroll() {
-          Column({ space: 14 }) {
-            TextInput({ text: $$this.query, placeholder: '按标题查找指南' }).height(44)
-            if (this.guides.length === 0) { Text('暂无公开指南').padding(24) }
-            ForEach(this.guides.filter((guide: PublicGuide) => guide.title.toLowerCase().includes(this.query.trim().toLowerCase())), (guide: PublicGuide) => {
-              Button({ type: ButtonType.Normal }) {
-                Text(guide.title + '  ›').fontSize(16).fontColor('#17242D').width('100%').textAlign(TextAlign.Start)
-              }.width('100%').padding(18).backgroundColor(Color.White).borderRadius(18).onClick(() => { this.load(guide.id); })
-            }, (guide: PublicGuide) => guide.id)
-          }.width('100%').padding(18)
-        }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
+        this.directory()
       }
     }.width('100%').height('100%').backgroundColor(DETAIL_BACKGROUND)
   }

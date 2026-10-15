@@ -5,11 +5,16 @@ import { materialHashOf, materialOf } from "@/features/knowledge-cases/case-mate
 
 /** 公开浏览复用 #40 的状态/版本/可见范围与客户裁剪；不调用工作人员详情。 */
 export async function publicCaseDetail(id: string) {
+  return readBrowsableCaseDetail(id, false);
+}
+
+/** 浏览搜索复用同一套来源有效性检查；includeStaff 仅由服务端权限决定。 */
+export async function readBrowsableCaseDetail(id: string, includeStaff: boolean) {
   const row = await getDb().knowledgeCase.findUnique({
     where: { id },
     include: { sources: { include: { record: { include: { category: true } } } } },
   });
-  if (!row || row.status !== "PUBLISHED" || row.visibility !== "PUBLIC") throw notFound();
+  if (!row || row.status !== "PUBLISHED" || (!includeStaff && row.visibility !== "PUBLIC")) throw notFound();
   const sources = row.sources.filter((source) => source.status === "PUBLISHED");
   // 即使外部尚未重整完成也不暴露不再有效的正文；每份参与生成的材料必须仍有效。
   if (
@@ -24,7 +29,7 @@ export async function publicCaseDetail(id: string) {
   )
     throw notFound();
   const detail = await getCaseCitationDetail(id, row.contentVersion, {
-    includeStaff: false,
+    includeStaff,
     userId: null,
   });
   if (!detail) throw notFound();
