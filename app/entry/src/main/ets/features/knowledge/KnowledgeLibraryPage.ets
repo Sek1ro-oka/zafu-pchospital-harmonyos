@@ -8,6 +8,7 @@ import { CaseDetailParam, CaseListItem, CaseListQuery } from './KnowledgeCaseCon
 import { KnowledgeCaseService } from './KnowledgeCaseService';
 import { guideCategory } from './GuideCategory';
 import { ROUTE_PUBLIC_CASES } from '../../core/ui/Routes';
+import { ROUTE_KNOWLEDGE_SEARCH } from '../../core/ui/Routes';
 
 interface GuideItem { id: string; title: string; revision: string | null; }
 interface GuideList { guides: GuideItem[]; }
@@ -22,8 +23,6 @@ export struct KnowledgeLibraryPage {
   onSessionExpired: () => void = () => {};
   onBack: () => void = () => {};
   @State expanded: string = '';
-  @State searchOpen: boolean = false;
-  @State query: string = '';
   @State category: string = '全部指南';
   @State guides: GuideItem[] = [];
   @State loading: boolean = false;
@@ -97,8 +96,7 @@ export struct KnowledgeLibraryPage {
 
   private visibleGuides(): GuideItem[] {
     return this.guides.filter((guide: GuideItem) =>
-      (this.category === '全部指南' || guideCategory(guide.title) === this.category) &&
-      guide.title.toLowerCase().includes(this.query.trim().toLowerCase()));
+      this.category === '全部指南' || guideCategory(guide.title) === this.category);
   }
 
   private openGuide(guide: GuideItem): void {
@@ -136,7 +134,7 @@ export struct KnowledgeLibraryPage {
       } else if (this.cases.length === 0) {
         Text('暂无已发布案例').fontSize(14).fontColor('#77848D').width('100%').padding(20).backgroundColor(Color.White).borderRadius(18)
       } else {
-        ForEach(this.cases.filter((item: CaseListItem) => item.title.toLowerCase().includes(this.query.trim().toLowerCase())), (item: CaseListItem) => {
+        ForEach(this.cases, (item: CaseListItem) => {
           Button({ type: ButtonType.Normal }) {
             Column({ space: 8 }) {
               Text(item.title).fontSize(16).fontWeight(FontWeight.Medium).fontColor('#17242E')
@@ -175,6 +173,7 @@ export struct KnowledgeLibraryPage {
         }.width('100%').padding({ left: 17, right: 17 })
       }.width('100%').height(57).backgroundColor(Color.White).borderRadius(22)
         .accessibilityText(item.title).onClick(() => {
+          if (item.title === '全部指南') { this.onOpen(ROUTE_PUBLIC_GUIDES, null); return; }
           this.expanded = this.expanded === item.title ? '' : item.title;
           this.category = item.title;
         })
@@ -211,14 +210,9 @@ export struct KnowledgeLibraryPage {
             Text('获取帮助').fontSize(16).fontWeight(FontWeight.Medium).fontColor('#626B71').layoutWeight(1)
             Button({ type: ButtonType.Circle }) {
               Image($r('app.media.home_search')).width(19).height(19)
-            }.width(28).height(28).backgroundColor(Color.Transparent).accessibilityText('搜索指南')
-              .onClick(() => { this.searchOpen = !this.searchOpen; })
+            }.width(28).height(28).backgroundColor(Color.Transparent).accessibilityText('搜索知识')
+              .onClick(() => { this.onOpen(ROUTE_KNOWLEDGE_SEARCH, null); })
           }.width('100%').margin({ bottom: 12 })
-          if (this.searchOpen) {
-            TextInput({ text: this.query, placeholder: '搜索维修指南标题' }).height(44).fontSize(16)
-              .backgroundColor(Color.White).borderRadius(22).margin({ bottom: 12 })
-              .onChange((value: string) => { this.query = value; this.expanded = '全部指南'; this.category = '全部指南'; })
-          }
           Column({ space: 14 }) {
             ForEach(this.categories(), (item: CategoryItem) => { this.categoryRow(item); }, (item: CategoryItem) => item.title)
             this.casesSection()

@@ -1,4 +1,6 @@
 /** 标题分类只用于浏览过滤，不代表模型诊断或后端已有分类字段。 */
+export const GUIDE_CATEGORIES: string[] = ['全部指南', '开机故障', '系统软件', '网络', '磁盘', '散热', '硬件外设', '使用技巧'];
+
 export function guideCategory(title: string): string {
   if (/风扇|散热|清灰|温度|硅脂/.test(title)) return '散热';
   if (/临时桌面|操作系统|软件|驱动|系统/.test(title)) return '系统软件';

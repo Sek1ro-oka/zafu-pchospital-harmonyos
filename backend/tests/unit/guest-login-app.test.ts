@@ -74,6 +74,7 @@ function shell(): HomeShell {
     ROUTE_REPAIR_ORDERS: "repair-orders",
     ROUTE_STAFF_ORDERS: "staff-repair-orders",
     ROUTE_PUBLIC_GUIDES: "public-guides",
+    ROUTE_KNOWLEDGE_SEARCH: "knowledge-search",
     ROUTE_KNOWLEDGE: "knowledge",
     ROUTE_ACTIVITY_DETAIL: "activity-detail",
     ROUTE_ACTIVITY_LOOKUP: "activity-lookup",
@@ -88,6 +89,12 @@ test("游客公开指南不登录；受保护操作只压入一次登录页", ()
   page.openRoute("repair-orders", null);
   page.openRoute("knowledge", null);
   assert.equal(page.pathStack.names.join(","), "public-guides,login");
+});
+
+test("游客知识搜索可直接打开，案例登录意图不替换当前搜索路由", () => {
+  const page = shell();
+  page.openRoute("knowledge-search", null);
+  assert.equal(page.pathStack.names.join(","), "knowledge-search");
 });
 test("取消登录保留原页，下一次登录不执行取消的意图", () => {
   const page = shell();

@@ -1,4 +1,5 @@
 export const ROUTE_PUBLIC_GUIDES: string = 'public-guides';
+export const ROUTE_KNOWLEDGE_SEARCH: string = 'knowledge-search';
 export const ROUTE_PERSONAL_PROFILE: string = 'personal-profile';
 export const ROUTE_MEMBER_DIRECTORY: string = 'member-directory';
 export const ROUTE_FAVORITES: string = 'favorites';
@@ -63,6 +64,7 @@ export const ROUTE_CASE_DETAIL: string = 'knowledge-case-detail';
  * 标题从这里取，保证所有子页的系统标题栏与返回按钮样式一致（Issue #41）。
  */
 export function routeTitle(name: string): string {
+  if (name === ROUTE_KNOWLEDGE_SEARCH) return '知识搜索';
   if (name === ROUTE_ACTIVITY_DETAIL) return '活动详情';
   if (name === ROUTE_ACTIVITY_SIGNUP) return '活动报名';
   if (name === ROUTE_ACTIVITY_LOOKUP) return '旧匿名报名查询';

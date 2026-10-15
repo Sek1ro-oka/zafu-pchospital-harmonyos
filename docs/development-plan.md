@@ -103,6 +103,8 @@ flowchart LR
 
 ## 页面映射与交互要求
 
+2026-10-15，第 13 模块 [#76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76)：[全部圈子](reference/my-huawei/community-circles-category-list.jpg) → 全部维修指南左右分类目录，[社区搜索](reference/my-huawei/search-community-results.jpg) → 知识搜索结果。保留知识主页面的 AI 主按钮和折叠分类；全部指南进入目录，搜索图标进入独立结果页。指南按完整快照标题本地匹配，分类仍为标题粗分；案例通过最小鉴权接口搜索完整有效可见集合，过滤后分页，不把最近一页冒充全库。客户/工作人员继续打开 #75 对应详情，原始备案不混成 AI 案例。实际实现、截图、检查及未部署共享后端的范围见 [验证记录](verification/issue-76.md)。
+
 2026-10-15，第 12 模块 [#75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75) 实施：以 [权益查询](reference/my-huawei/service-device-benefits.jpg) 还原客户/工作人员报修详情，以 [升级指南](reference/my-huawei/harmonyos-upgrade-guide.jpg) 还原维修指南阅读，以 [帖子详情](reference/my-huawei/community-event-post-detail.jpg) 还原案例阅读，以 [圈子信息流](reference/my-huawei/community-circle-detail-feed.jpg) 还原公开/工作人员案例库。保留真实状态、服务端权限、来源版本、章节定位、收藏和已有操作，设备/计数/正文只取实际接口。已构建并在模拟器操作，截图与未验证项见 [Issue #75 验证记录](verification/issue-75.md)，最终视觉效果待维护者确认。后续 #76 处理指南目录/知识搜索，#77 处理活动详情/报名，本轮未扩展这两批布局。
 
 2026-10-14 实施补充：维护者已确认实施下列三个子页面映射。个人资料改为账号面板，报修列表改为状态筛选/说明条/空态布局，知识页改为故障分类折叠卡与 AI 问诊入口。已构建并在模拟器操作，具体范围、截图和未验证项见 [本轮验证记录](verification/three-reference-pages-20261014.md)；其他主页面、五栏导航和角色权限保持现有规则。
