@@ -222,9 +222,27 @@
       "sha256": "25712a4104a1629af14a5b7e555bd9cbeba701b27576c5f72a60b4d2664ba93e",
       "bytes": 391349,
       "capturedAtUtc": "2026-10-15T13:51:10.596831+00:00"
+    },
+    {
+      "file": "review-handoff-20261016.png",
+      "sha256": "03cc177153c57f3e5f0e711b0f9df0f124b9012cfa5a476abbd748b0e92f99ef",
+      "bytes": 377217,
+      "capturedAtUtc": "2026-10-16T01:04:30.838525+00:00"
     }
   ],
   "visualApproval": "pending maintainer review",
   "sharedDeployment": false,
-  "physicalDeviceValidated": false
+  "physicalDeviceValidated": false,
+  "reviewHandoff": {
+    "date": "2026-10-16",
+    "apiHealth": {
+      "status": "ok",
+      "database": "reachable"
+    },
+    "activityStatusNow": "ENDED",
+    "registrationStatusShown": "SERVED",
+    "sameFinalHapReinstalled": true,
+    "screenshot": "review-handoff-20261016.png",
+    "servicesKeptRunning": true
+  }
 }
