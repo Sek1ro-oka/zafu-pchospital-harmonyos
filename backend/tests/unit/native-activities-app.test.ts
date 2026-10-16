@@ -22,7 +22,11 @@ function component<T>(
     "../app/entry/src/main/ets/features/activity/ActivityRequestGuard.ets",
     "utf8",
   );
-  const source = (guard + "\n" + file.slice(0, end) + "\n}\nnew " + name + "();")
+  const contract = readFileSync(
+    "../app/entry/src/main/ets/features/activity/ActivityContract.ets",
+    "utf8",
+  );
+  const source = (contract + "\n" + guard + "\n" + file.slice(0, end) + "\n}\nnew " + name + "();")
     .replace(/import[\s\S]*?from\s+['"][^'"]+['"];\s*/g, "")
     .replace(/@Watch\('[^']+'\)\s*/g, "")
     .replace(/@(Component|State|Prop)\s*/g, "")
@@ -35,11 +39,43 @@ function component<T>(
     {
       SessionService: { current: session },
       ActivityService: services,
-      ApiRequestError: Error,
+      ApiRequestError: RequestError,
       isSessionExpiredCode: () => false,
+      ROUTE_MY_REGISTRATION: "my-activity-registration",
+      KeyboardAvoidMode: { RESIZE: 1 },
     },
   ) as T;
 }
+class RequestError extends Error {
+  constructor(
+    public code: string,
+    message: string,
+    public fieldErrors?: Record<string, string[]>,
+  ) {
+    super(message);
+  }
+}
+
+test("#77 multiple contacts for one event navigate to the selected real registration, never the first match", () => {
+  interface ListChoice {
+    open(item: { id: string; activityId: string }): void;
+    onOpen: (route: string, target: object | null) => void;
+  }
+  const page = component<ListChoice>("MyRegistrationsPage", {}, () => null);
+  const targets: object[] = [];
+  page.onOpen = (_route, target) => {
+    if (target) targets.push(target);
+  };
+  page.open({ id: "first-contact", activityId: "same-event" });
+  page.open({ id: "second-contact", activityId: "same-event" });
+  assert.equal(
+    JSON.stringify(targets),
+    JSON.stringify([
+      { activityId: "same-event", registrationId: "first-contact" },
+      { activityId: "same-event", registrationId: "second-contact" },
+    ]),
+  );
+});
 interface Mine {
   load(reset: boolean): Promise<void>;
   refresh(): void;
@@ -152,7 +188,7 @@ test("报名失败保留填写与同意选择，重复点击只发一次", async
     },
     () => identity,
   );
-  page.detail = { consent: { version: "current" } };
+  page.detail = { id: "", status: "OPEN", consent: { version: "current" } };
   page.name = "合成机主";
   page.phone = "13800138000";
   page.consentAccepted = true;
@@ -326,4 +362,326 @@ test("账号切换后列表刷新失败也清除上一账号的报名与编辑�
   assert.equal(page.items.length, 0);
   assert.equal(page.selectedId, "");
   assert.equal(page.name, "");
+});
+interface Detail77 {
+  param: { activityId: string };
+  detail: { id: string; status: string; consent: { version: string } } | null;
+  name: string;
+  phone: string;
+  deviceModel: string;
+  consentAccepted: boolean;
+  submittedId: string;
+  actionText: string;
+  errorText: string;
+  loading: boolean;
+  busy: boolean;
+  onOpen: (route: string, param: object | null) => void;
+  load(): Promise<void>;
+  submit(): Promise<void>;
+  refresh(): void;
+  retry(): Promise<void>;
+  openSubmitted(): void;
+  primaryEnabled(): boolean;
+  primaryLabel(): string;
+  fieldError(field: string): string;
+}
+function detail77(services: Record<string, unknown>, session: () => object | null) {
+  const page = component<Detail77>("ActivityDetailPage", services, session);
+  page.param = { activityId: "event" };
+  return page;
+}
+const event77 = (status = "OPEN", version = "v1") => ({
+  id: "event",
+  status,
+  consent: { version },
+});
+for (const status of ["UPCOMING", "FULL", "CLOSED", "ENDED", "UNRECOGNIZED"]) {
+  test(
+    "#77 server " + status + " disables CTA and direct submit, regardless of local counts/time",
+    async () => {
+      let writes = 0;
+      const page = detail77(
+        {
+          detail: async () => event77(status),
+          signup: async () => {
+            writes++;
+          },
+        },
+        () => null,
+      );
+      await page.load();
+      page.consentAccepted = true;
+      assert.equal(page.primaryEnabled(), false);
+      await page.submit();
+      assert.equal(writes, 0);
+      assert.notEqual(page.primaryLabel(), "报名参加");
+    },
+  );
+}
+test("#77 consent required; version change reloads actual terms, resets consent and preserves contact draft", async () => {
+  const identity = {};
+  let version = "v1",
+    writes = 0;
+  const page = detail77(
+    {
+      detail: async () => event77("OPEN", version),
+      signup: async () => {
+        writes++;
+        version = "v2";
+        throw new RequestError("ACTIVITY_CONSENT_VERSION_CHANGED", "updated");
+      },
+    },
+    () => identity,
+  );
+  await page.load();
+  page.name = "合成长姓名";
+  page.phone = "13800770001";
+  page.deviceModel = "保留机型";
+  await page.submit();
+  assert.equal(writes, 0);
+  page.consentAccepted = true;
+  await page.submit();
+  assert.equal(writes, 1);
+  assert.equal(page.detail?.consent.version, "v2");
+  assert.equal(page.consentAccepted, false);
+  assert.equal(page.name, "合成长姓名");
+  assert.equal(page.phone, "13800770001");
+  assert.equal(page.deviceModel, "保留机型");
+});
+test("#77 field errors remain attached to inputs; failed refresh removes stale OPEN but preserves draft and consent version", async () => {
+  let fail = false;
+  const page = detail77(
+    {
+      detail: async () => {
+        if (fail) throw Error("offline");
+        return event77();
+      },
+      signup: async () => {
+        throw new RequestError("VALIDATION_FAILED", "bad phone", { phone: ["格式错误"] });
+      },
+    },
+    () => null,
+  );
+  await page.load();
+  page.phone = "123";
+  page.consentAccepted = true;
+  await page.submit();
+  assert.equal(page.fieldError("phone"), "格式错误");
+  fail = true;
+  await page.load();
+  assert.equal(page.detail, null);
+  assert.equal(page.primaryEnabled(), false);
+  assert.equal(page.phone, "123");
+  fail = false;
+  await page.load();
+  assert.equal(page.consentAccepted, true);
+});
+test("#77 successful signup keeps real ID through failed refresh; retry reads only; account switch clears personal draft/ID", async () => {
+  let identity: object = {},
+    writes = 0,
+    reads = 0;
+  const page = detail77(
+    {
+      detail: async () => {
+        if (++reads === 2) throw Error("offline");
+        return event77();
+      },
+      signup: async () => {
+        writes++;
+        return { id: "real-registration" };
+      },
+    },
+    () => identity,
+  );
+  await page.load();
+  page.consentAccepted = true;
+  await page.submit();
+  assert.equal(page.submittedId, "real-registration");
+  assert.equal(page.primaryLabel(), "查看本次报名");
+  assert.equal(page.primaryEnabled(), true);
+  let target: object | null = null;
+  page.onOpen = (_r, p) => {
+    target = p;
+  };
+  page.openSubmitted();
+  assert.equal(
+    JSON.stringify(target),
+    JSON.stringify({ activityId: "event", registrationId: "real-registration" }),
+  );
+  await page.load();
+  await page.submit();
+  assert.equal(writes, 1);
+  identity = {};
+  await page.load();
+  assert.equal(page.submittedId, "");
+  assert.equal(page.phone, "");
+});
+interface Mine77 {
+  param: { activityId: string; registrationId: string };
+  item: { id: string; activityId: string; issueType: string; canEditIssueType: boolean } | null;
+  issueType: string;
+  errorText: string;
+  actionText: string;
+  loading: boolean;
+  busy: boolean;
+  load(): Promise<void>;
+  save(): Promise<void>;
+  retry(): Promise<void>;
+  refresh(): void;
+  aboutToDisappear(): void;
+}
+const row77 = (issueType = "OTHER", canEditIssueType = true) => ({
+  id: "reg",
+  activityId: "event",
+  issueType,
+  canEditIssueType,
+});
+function mine77(services: Record<string, unknown>, session: () => object | null) {
+  const page = component<Mine77>("MyRegistrationPage", services, session);
+  page.param = { activityId: "event", registrationId: "reg" };
+  return page;
+}
+test("#77 saving retry retains original activity/registration/type snapshot after selection changes", async () => {
+  const writes: string[] = [];
+  let fail = true;
+  const page = mine77(
+    {
+      registration: async () => row77(),
+      updateMine: async (activity: string, id: string, issue: string) => {
+        writes.push([activity, id, issue].join("/"));
+        if (fail) {
+          fail = false;
+          throw Error("offline");
+        }
+      },
+    },
+    () => null,
+  );
+  await page.load();
+  page.issueType = "CLEAN_ONLY";
+  await page.save();
+  assert.equal(page.issueType, "CLEAN_ONLY");
+  page.issueType = "OTHER";
+  await page.retry();
+  assert.equal(writes.join(","), "event/reg/CLEAN_ONLY,event/reg/CLEAN_ONLY");
+});
+test("#77 write success + refresh failure retries only read; canEditIssueType false prevents direct write", async () => {
+  let writes = 0,
+    reads = 0;
+  const page = mine77(
+    {
+      registration: async () => {
+        if (++reads === 2) throw Error("offline");
+        return row77("OTHER", reads < 3);
+      },
+      updateMine: async () => {
+        writes++;
+      },
+    },
+    () => null,
+  );
+  await page.load();
+  await page.save();
+  assert.equal(page.item, null);
+  await page.retry();
+  assert.equal(writes, 1);
+  assert.equal(reads, 3);
+  await page.save();
+  assert.equal(writes, 1);
+});
+test("#77 account switch / wrong params clears old data; failed read never retries a previous user's write", async () => {
+  let identity: object = {},
+    writes = 0,
+    rejectRead = false;
+  const page = mine77(
+    {
+      registration: async () => {
+        if (rejectRead) throw Error("404");
+        return row77();
+      },
+      updateMine: async () => {
+        writes++;
+        throw Error("offline");
+      },
+    },
+    () => identity,
+  );
+  await page.load();
+  await page.save();
+  identity = {};
+  rejectRead = true;
+  await page.retry();
+  assert.equal(page.item, null);
+  assert.equal(page.actionText, "");
+  await page.retry();
+  assert.equal(writes, 1);
+});
+test("#77 late detail/error/finally cannot overwrite a different activity or registration request", async () => {
+  const old = deferred<object>(),
+    newer = deferred<object>();
+  let calls = 0;
+  const page = mine77(
+    { registration: () => (++calls === 1 ? old.promise : newer.promise) },
+    () => null,
+  );
+  const first = page.load();
+  page.aboutToDisappear();
+  page.param = { activityId: "event-B", registrationId: "reg-B" };
+  const second = page.load();
+  old.resolve(row77());
+  await first;
+  assert.equal(page.item, null);
+  assert.equal(page.loading, true);
+  newer.resolve({ ...row77(), id: "reg-B", activityId: "event-B" });
+  await second;
+  assert.equal(page.item?.id, "reg-B");
+  assert.equal(page.loading, false);
+});
+test("#77 status stages use server enum, withdrawal hides old timestamps, unknown is neutral, SERVED never means repaired", () => {
+  const source = readFileSync(
+    "../app/entry/src/main/ets/features/activity/ActivityContract.ets",
+    "utf8",
+  ).replace(/export /g, "");
+  const policy = runInNewContext(
+    ts.transpileModule(
+      source +
+        "\n({ registrationStageReached, registrationStageTime, registrationStatusLabel, activityStatusLabel });",
+      { compilerOptions: { target: ts.ScriptTarget.ES2022 } },
+    ).outputText,
+  );
+  assert.equal(policy.registrationStageReached("REGISTERED", 1), false);
+  assert.equal(policy.registrationStageTime("REGISTERED", 1, "2026-10-15T01:00:00Z"), "尚未签到");
+  assert.equal(policy.registrationStageReached("CHECKED_IN", 2), false);
+  assert.equal(policy.registrationStageTime("SERVED", 2, null), "暂无时间");
+  assert.equal(policy.registrationStageReached("UNKNOWN", 0), false);
+  assert.equal(policy.registrationStatusLabel("UNKNOWN"), "状态暂不可用");
+  assert.equal(policy.activityStatusLabel("UNKNOWN"), "状态暂不可用");
+  assert.ok(policy.registrationStatusLabel("SERVED").includes("已接待"));
+  assert.ok(!policy.registrationStatusLabel("SERVED").includes("已完成"));
+});
+
+test("#77 signup scopes keyboard resize to its lifetime and restores the previous page mode", () => {
+  interface KeyboardPage extends Detail77 {
+    signup: boolean;
+    getUIContext(): { getKeyboardAvoidMode(): number; setKeyboardAvoidMode(value: number): void };
+    aboutToAppear(): void;
+    aboutToDisappear(): void;
+  }
+  let mode = 0;
+  const changes: number[] = [];
+  const page = detail77({ detail: async () => event77() }, () => null) as KeyboardPage;
+  page.signup = true;
+  page.getUIContext = () => ({
+    getKeyboardAvoidMode: () => mode,
+    setKeyboardAvoidMode: (value) => {
+      mode = value;
+      changes.push(value);
+    },
+  });
+  page.aboutToAppear();
+  assert.equal(mode, 1);
+  page.aboutToDisappear();
+  assert.equal(mode, 0);
+  page.aboutToDisappear();
+  assert.equal(changes.join(","), "1,0");
 });

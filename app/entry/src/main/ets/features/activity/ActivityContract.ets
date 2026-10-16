@@ -56,12 +56,35 @@ export function activityStatusLabel(value: string): string {
   if (value === 'FULL') return '已报满';
   if (value === 'CLOSED') return '报名截止';
   if (value === 'ENDED') return '已结束';
-  return '未开始';
+  if (value === 'UPCOMING') return '未开始';
+  return '状态暂不可用';
 }
 export function registrationStatusLabel(value: string): string {
   if (value === 'CHECKED_IN') return '已签到 · 排队中';
   if (value === 'SERVED') return '已接待（维修状态请联系成员）';
-  return '已报名 · 待签到';
+  if (value === 'REGISTERED') return '已报名 · 待签到';
+  return '状态暂不可用';
+}
+/** Only the server's OPEN status permits a new signup. No clock/count inference. */
+export function activityActionLabel(value: string): string {
+  if (value === 'OPEN') return '报名参加';
+  if (value === 'UPCOMING') return '报名尚未开始';
+  if (value === 'FULL') return '名额已满';
+  if (value === 'CLOSED') return '报名已截止';
+  if (value === 'ENDED') return '活动已结束';
+  return '状态暂不可用';
+}
+/** A withdrawn check-in is REGISTERED again; historical timestamps cannot light up the queue. */
+export function registrationStageReached(status: string, stage: number): boolean {
+  if (status === 'REGISTERED') return stage === 0;
+  if (status === 'CHECKED_IN') return stage <= 1;
+  if (status === 'SERVED') return stage <= 2;
+  return false;
+}
+export function registrationStageTime(status: string, stage: number, time: string | null): string {
+  if (status !== 'REGISTERED' && status !== 'CHECKED_IN' && status !== 'SERVED') return '状态待确认';
+  if (!registrationStageReached(status, stage)) return stage === 1 ? '尚未签到' : '尚未接待';
+  return time === null || time === '' ? '暂无时间' : activityTime(time);
 }
 export function activityTime(value: string | null): string {
   if (value === null || value === '') return '暂无';

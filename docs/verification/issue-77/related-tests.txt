@@ -1,0 +1,46 @@
+✔ 游客公开指南不登录；受保护操作只压入一次登录页 (166.2453ms)
+✔ 游客知识搜索可直接打开，案例登录意图不替换当前搜索路由 (39.0919ms)
+✔ 取消登录保留原页，下一次登录不执行取消的意图 (20.9298ms)
+✔ 报修登录成功按服务器角色续接目标，不遗留登录页 (45.1534ms)
+✔ 游客我的触发登录；退出清导航并回游客首页 (22.0028ms)
+✔ 滑动进入我的也被登录守卫拦截；取消留在原知识页 (19.6378ms)
+✔ 服务器登录成功后可跨过 Prop 更新的一帧；退出作废临时通行 (22.2502ms)
+✔ 退出请求进行中拦截切页，完成后回游客首页，避免落在空我的页面 (19.9537ms)
+✔ 新安装采用共享地址，已有开发地址保留 (23.2046ms)
+✔ 没有会话或恢复断网时进入游客首页，不授予身份 (11.6218ms)
+✔ 活动详情游客可读；报名登录/注册后保留活动目标，取消回详情 (18.4158ms)
+✔ 改密页强制标记只在自愿进入时复位；强制账号引导仍保持 true (35.8415ms)
+✔ 改密成功后复位强制标记：强制状态随改密结束 (18.3332ms)
+✔ #77 multiple contacts for one event navigate to the selected real registration, never the first match (143.7067ms)
+✔ 报名分页取真实 meta；失败不前进页码，重试仍请求原下一页 (30.4592ms)
+✔ 离开重进时旧 finally 不能清新请求的忙状态或覆盖新列表 (24.9577ms)
+✔ 账号切换后旧会话结果不能回写，刷新读取新账号 (18.3944ms)
+✔ 报名失败保留填写与同意选择，重复点击只发一次 (25.0079ms)
+✔ R01 编辑 A 删除 B 失败，重试仍只删除 B，保留 A 未保存输入 (22.2771ms)
+✔ R02 保存重试使用原目标和提交快照，与当前表单保存分开 (18.2095ms)
+✔ R03 save 成功但刷新失败，重试只读取 (17.5163ms)
+✔ R03 delete 成功但刷新失败，重试只读取 (21.31ms)
+✔ R04 失败后切账号/离开不重放旧提交；迟到结果不覆盖新页面 (33.4037ms)
+✔ 账号切换后列表刷新失败也清除上一账号的报名与编辑草稿 (15.9258ms)
+✔ #77 server UPCOMING disables CTA and direct submit, regardless of local counts/time (21.0917ms)
+✔ #77 server FULL disables CTA and direct submit, regardless of local counts/time (15.5506ms)
+✔ #77 server CLOSED disables CTA and direct submit, regardless of local counts/time (11.6726ms)
+✔ #77 server ENDED disables CTA and direct submit, regardless of local counts/time (13.1213ms)
+✔ #77 server UNRECOGNIZED disables CTA and direct submit, regardless of local counts/time (12.7992ms)
+✔ #77 consent required; version change reloads actual terms, resets consent and preserves contact draft (16.8099ms)
+✔ #77 field errors remain attached to inputs; failed refresh removes stale OPEN but preserves draft and consent version (13.1641ms)
+✔ #77 successful signup keeps real ID through failed refresh; retry reads only; account switch clears personal draft/ID (13.3452ms)
+✔ #77 saving retry retains original activity/registration/type snapshot after selection changes (11.9558ms)
+✔ #77 write success + refresh failure retries only read; canEditIssueType false prevents direct write (8.9318ms)
+✔ #77 account switch / wrong params clears old data; failed read never retries a previous user's write (11.4172ms)
+✔ #77 late detail/error/finally cannot overwrite a different activity or registration request (11.1557ms)
+✔ #77 status stages use server enum, withdrawal hides old timestamps, unknown is neutral, SERVED never means repaired (8.9038ms)
+✔ #77 signup scopes keyboard resize to its lifetime and restores the previous page mode (13.9979ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1930.0766

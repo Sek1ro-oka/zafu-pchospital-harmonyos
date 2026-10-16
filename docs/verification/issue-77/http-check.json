@@ -1,0 +1,167 @@
+{
+  "environment": "isolated local MySQL 3310 / pchospital_exp_issue62",
+  "checks": [
+    {
+      "name": "current account sees its real registration",
+      "actual": "be6e7eb4-37ef-4360-976c-447c4748e28d",
+      "expected": "be6e7eb4-37ef-4360-976c-447c4748e28d",
+      "passed": true
+    },
+    {
+      "name": "retry saved original selected type",
+      "actual": "SOFTWARE_SYSTEM",
+      "expected": "SOFTWARE_SYSTEM",
+      "passed": true
+    },
+    {
+      "name": "phone remains masked",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "name": "no internal repairRecordId",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "customer status served is separate from repair completion",
+      "actual": "SERVED",
+      "expected": "SERVED",
+      "passed": true
+    },
+    {
+      "name": "served cannot edit",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "staff-created record is still DRAFT, not repair completion",
+      "actual": "DRAFT",
+      "expected": "DRAFT",
+      "passed": true
+    },
+    {
+      "name": "other account denied",
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "name": "wrong activity denied",
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "name": "missing registration denied",
+      "actual": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "name": "full server state",
+      "actual": "FULL",
+      "expected": "FULL",
+      "passed": true
+    },
+    {
+      "name": "upcoming server state",
+      "actual": "UPCOMING",
+      "expected": "UPCOMING",
+      "passed": true
+    },
+    {
+      "name": "closed server state",
+      "actual": "CLOSED",
+      "expected": "CLOSED",
+      "passed": true
+    },
+    {
+      "name": "ended server state",
+      "actual": "ENDED",
+      "expected": "ENDED",
+      "passed": true
+    },
+    {
+      "name": "real pagination has later page",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "name": "earlier contact registration absent from first page",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "earlier contact registration found on second page",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "name": "older synthetic activity absent from first page",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "older synthetic activity found on second page",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "name": "old anonymous not claimed by A",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    },
+    {
+      "name": "second customer empty",
+      "actual": 0,
+      "expected": 0,
+      "passed": true
+    },
+    {
+      "name": "member attendance cancellation still blocked after actual processing",
+      "actual": 409,
+      "expected": 409,
+      "passed": true
+    },
+    {
+      "name": "multiple contacts for one event are preserved",
+      "actual": true,
+      "expected": true,
+      "passed": true
+    },
+    {
+      "name": "no consent rejects signup",
+      "actual": "ACTIVITY_CONSENT_REQUIRED",
+      "expected": "ACTIVITY_CONSENT_REQUIRED",
+      "passed": true
+    },
+    {
+      "name": "outdated consent rejects signup",
+      "actual": "ACTIVITY_CONSENT_VERSION_CHANGED",
+      "expected": "ACTIVITY_CONSENT_VERSION_CHANGED",
+      "passed": true
+    },
+    {
+      "name": "legacy anonymous lookup stays independent",
+      "actual": "887ebb28-0f28-48af-bfe9-95e26ba7a050",
+      "expected": "887ebb28-0f28-48af-bfe9-95e26ba7a050",
+      "passed": true
+    },
+    {
+      "name": "account signup cannot use public phone lookup",
+      "actual": false,
+      "expected": false,
+      "passed": true
+    }
+  ]
+}
