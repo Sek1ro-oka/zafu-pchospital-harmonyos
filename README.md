@@ -1,74 +1,62 @@
 # 鸿蒙电脑医院
 
-四人课程项目，前后端放在同一公开仓库。ArkTS / ArkUI 原生 App 的界面参考“我的华为”，Next.js 后端连接独立课设 MySQL，不使用 Docker；App 默认使用共享实验服务器，后端开发可选本地环境。功能范围见 [开发方案](docs/development-plan.md)，使用模块 Issue 记录目标与进度，由团队认领和安排，不设固定周计划或成员审批。
+四人 HarmonyOS 原生课程项目，以“我的华为”为参考，围绕校园电脑服务建设 **服务、选购、活动与论坛** 的小型平台。前后端同仓：ArkTS / ArkUI App，Next.js API，独立课设 MySQL；不使用 Docker。
 
-## 页面映射与参考图
+## 当前目标与工作状态
 
-2026-10-15：第 13 模块 [#76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76) 已实现指南左右分类目录与独立知识搜索，复用 #75 阅读详情；搜索支持全部/指南/案例、关键词强调及按权限查询有效案例。[参考图、截图与验证](docs/verification/issue-76.md)。新增案例搜索后端尚未部署共享服务器，本轮模拟器使用本机 13089。
+**2026-10-19 已确认：后续重点是参考 App 的功能与视觉还原、操作完成度和业务复杂度，暂停全面移植 Web 功能及继续扩展 AI/Agent。** 保留已完成的维修、知识、账号与活动能力；新增小型选购交易和论坛，统一打磨用户能连续操作的流程。
 
-2026-10-15：第 12 模块 [#75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75) 已实现报修详情、指南详情、案例详情与案例库的参考图布局；HAP 构建与双角色模拟器操作通过，最终视觉效果待维护者审查。[四组参考图、实际截图与验证范围](docs/verification/issue-75.md)。
+**本轮只更新目标、文档与模块 Issues，尚未开始本轮业务开发。组员收到维护者开工通知后再认领。** 任务文档中的规划默认值与现有接口事实分开记录；完整范围、需求分析和验收见 [当前目标](docs/current-goals.md)。旧开发方案、旧“选购→知识”映射及旧 Web 迁移任务书的冲突部分以当前目标为准。
 
-新增子页面参考见 [PR #70 的 11 张图片索引与三个推荐映射](docs/reference/my-huawei/README.md#三个优先推荐映射)：账号资料 → 我的/个人资料，订单空态 → 报修列表，检测与帮助 → 知识分类与 AI 问诊入口。2026-10-14 已按维护者要求实施这三个映射并在模拟器验证，见 [页面还原记录与截图](docs/verification/three-reference-pages-20261014.md)；原五页基线如下。
+### 页面映射与参考图
 
-**以下为 2026-10-12 确认的页面开发基线。** 开发每一页前先打开该行参考图片，再阅读 [开发方案中的页面映射与交互要求](docs/development-plan.md#页面映射与交互要求)。五张图参考布局、层级和材质，内容改为电脑医院业务，不照搬购物或社交功能。
+客户：**首页｜活动｜服务｜选购｜我的**。工作人员：**首页｜活动｜工作台｜选购｜我的**。
 
-| 截图 | 我的华为页面 / 参考图片 | 电脑医院页面 | 开发时按此改造 |
-| --- | --- | --- | --- |
-| ① | [首页](docs/reference/my-huawei/home-navigation.jpg) | **首页** | 保留大标题、搜索框、主视觉卡片和快捷服务布局。主卡文案为「电脑出问题？先问诊或预约维修」；快捷入口为 **AI 问诊、我要报修、进度查询、近期活动** |
-| ② | [我的](docs/reference/my-huawei/my-account-service-record-entry.jpg) | **我的** | 保留头像信息卡和「我的信息」宫格，内容为 **我的报修、维修记录、活动报名、收藏、消息、个人资料**；工作人员账号提供 **进入工作台** 入口 |
-| ③ | [选购](docs/reference/my-huawei/shopping-category-navigation.jpg) | **知识（知识库）** | 保留搜索框、横幅和分类宫格的组织方式；分类改为 **开机故障、系统软件、网络、磁盘、散热等**，下方展示维修指南及已审核备案形成的有效案例；不实现购物 |
-| ④ | [服务](docs/reference/my-huawei/service-my-products-repair-entry.jpg) | **服务 / 工作台** | **最重要的仿照页面。** 客户侧「我的产品」改为 **当前报修设备／我的电脑**；「检测与帮助」对应 **AI 故障问诊**，「维修服务」对应 **预约报修**，「服务进度」对应 **报修进度**；工作人员侧组织为工作台 |
-| ⑤ | [花粉](docs/reference/my-huawei/community-huafen-feed.jpg) | **活动** | 保留顶部分类、活动横幅和信息流，内容为 **社团维修活动、服务公告、维修经验分享**；首版由社团发布，不实现人人发帖的社区 |
-
-### 双角色导航与权限
-
-- **客户： 首页｜活动｜服务｜知识｜我的**。「服务」是报修主入口，「我的」查看本人记录；知识只展示客户有权访问的指南与公开案例。
-- **工作人员： 首页｜活动｜工作台｜知识｜我的**。保持相近外观，中间「服务」改为「工作台」，组织待处理报修、处理中、维修备案及审核相关入口；「我的」也提供进入工作台入口，知识可展示其有权查看的内部案例。
-- 工作台中的「待审核案例」按现有业务口径衔接**维修备案审核**：审核入口只向服务端授权的人员展示，不因工作人员身份就授予审核权限。已审核备案被标记典型后仍按 #40 自动整理、合并并发布，**不新增典型案例二次审核**。
-- 导航名称统一为「知识」，页面内容可以称知识库；截图③选购 → 知识、截图⑤花粉 → 活动，图片编号不是底部导航顺序。
-
-### 设计目标与已实现范围
-
-2026-10-12：五个独立主页面已按对应参考图完成布局改造，底栏点击与左右手势使用原生横向滑动，液态玻璃底栏保持悬浮。服务/工作台、我的复用已有业务；知识新增公开指南分类浏览，工作人员可查看授权案例；活动读取真实维修活动接口。
-
-2026-10-12 的主页面改造范围是布局与既有真实接口；当时资料、收藏、消息等入口尚未接入。后续 #61 三批及 #62 活动链路接入情况见下方「当前实际进度」。服务公告、经验分享、客户原始维修备案记录仍未完成；不能因为入口可点击就宣称功能完成。
-
-五栏顺序固定为首页、活动、服务/工作台、知识、我的；切换时长 260ms，支持系统减少动态效果设置（关闭切换动画和横向手势，保留底栏点击）。游客点击或滑动进入「我的」均触发登录，取消留在原页。AI 问答仍是独立子页，离开后销毁本次对话。
-
-预约时段仍是后续能力。本轮按维护者确认，服务入口实际显示「我要报修」并复用已有报修流程，不把当前接口标成已实现预约。设备卡目前由本人报修记录派生，不代表已有独立设备绑定功能。入口未接入时明确提示，不能用假数据或仅能点击的占位页宣称完成。
-
-四页截图、构建与模拟器操作见 [四页验证记录](docs/verification/four-reference-pages-20261012.md)。首页历史记录见 [首页与导航验证](docs/verification/home-reference-20261012.md)，参考图片见 [图片索引](docs/reference/my-huawei/README.md)。未接入功能按真实接口继续开发。
-
-## 模块任务
-
-- [01 基础联通与登录验收 #36](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/36)：代码已完成，设备验证待补。
-- [02 客户报修与进度查询 #37](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/37)
-- [03 工作人员处理与维修备案 #38](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/38)
-- [04 知识检索与 AI 问答 #39](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/39)
-- [05 典型案例自动整理与知识回流 #40](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/40)：代码已完成待审查，设备验证待补（PR 待技术主线审查）。
-- [06 界面与交互完善 #41](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/41)
-- [07 完整联调与课程演示 #42](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/42)：本地环境与演示账号就绪，设备之外的完整链路与构建已实测（PR #53 待合入）；设备装机验收与模型链路待补。
-
-### Web 功能迁移与客户扩展（2026-10-12 已确认，待开发）
-
-| 顺序 | 可认领 Issue | 范围与任务书 |
+| 页面 | 参考图片 | 当前目标 |
 | --- | --- | --- |
-| 08 | [公共接口与账号 #60](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/60) | [客户自主注册、邀请码工作人员注册、原生写通道、改密/强制改密、保持登录](docs/tasks/web-migration/01-public-api-account.md) |
-| 09 | [个人中心与备案 #61](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/61) | [客户资料/指南与公开案例收藏/报修消息，成员资料/通知/收藏、独立备案、评论与备案案例库](docs/tasks/web-migration/02-personal-records.md) |
-| 10 | [活动闭环 #62](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/62) | [登录报名、账号关联与我的报名、旧匿名查询、工作人员签到接待、活动管理](docs/tasks/web-migration/03-activities.md) |
-| 11 | [统计与管理 #63](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/63) | [统计排行榜、成员/客户账号/邀请/招新/备案/字典/审计管理、导出、关于与手册、维护工具](docs/tasks/web-migration/04-analytics-admin.md) |
+| **首页** | [首页](docs/reference/my-huawei/home-navigation.jpg) | 大标题、搜索、主视觉、快捷服务与液态玻璃底栏，聚合真实服务/活动/选购入口 |
+| **活动** | [花粉](docs/reference/my-huawei/community-huafen-feed.jpg)、[信息流](docs/reference/my-huawei/community-circle-detail-feed.jpg)、[帖子详情](docs/reference/my-huawei/community-event-post-detail.jpg) | 同一 Tab 内组织 **活动＋论坛**；保留社团活动/报名，新增登录用户发帖与评论 |
+| **服务／工作台** | [服务](docs/reference/my-huawei/service-my-products-repair-entry.jpg)、[检测与帮助](docs/reference/my-huawei/service-diagnostics-help.jpg) | **知识库迁入服务**，保留 AI 问诊、指南/案例/搜索、报修与进度；工作人员保留处理、备案、审核与现场能力 |
+| **选购** | [选购](docs/reference/my-huawei/shopping-category-navigation.jpg)、[订单筛选与空态](docs/reference/my-huawei/shopping-orders-empty-state.jpg) | **恢复选购语义**，提供二手商品、硅脂等维修耗材、真实下单和买卖双方订单管理 |
+| **我的** | [我的](docs/reference/my-huawei/my-account-service-record-entry.jpg)、[账号资料](docs/reference/my-huawei/account-profile-sheet.jpg) | 原资料/报修/报名/收藏/消息，加购物订单、本人商品、卖家订单和我的帖子入口 |
 
-先读 [四模块公共基线与开工说明](docs/tasks/web-migration/README.md)，再认领对应 Issue；每份任务书含代码起点、交付清单、依赖、权限、必要验收和写手提示词。未预分配负责人，一个模块可分几个 PR 交付。#60 先提供基础契约，其他模块按所需接口接入，不必等待整个模块关闭。
+以上是目标导航，当前代码尚未完成本轮迁移；不能只改标签或做占位页宣称完成。全部 16 张参考图见 [图片索引](docs/reference/my-huawei/README.md)。商品详情/下单等缺失参考图需补齐或记录设计依据，不宣称已有完整参考流程。
 
-客户自主注册产生客户身份；邀请码用于工作人员注册。客户收藏指南和有效公开 AI 案例，消息为站内报修通知。游客可看活动，App 报名先登录，新报名绑定账号；旧匿名报名仍用手机号查询，不自动认领。**原 Web 数据库数据不迁移**，只复用代码/规则和必要结构，保留现有课设数据。以上为新增目标，未接通入口继续如实标注。
+### 已确认规则
 
-依赖和必要验收写在各模块内。接口就绪后可以并行推进，不必等前一个 Issue 全部关闭。测试与审查只覆盖本次改动及受影响链路。
+- **交易**：线下付款取货，App 内完成商品、下单、库存、取消、交付完成与订单查询，不接线上支付和配送，不伪造支付成功。
+- **二手发布**：登录用户可发布；卖家编辑/下架本人商品、处理本人订单；管理员可下架商品。游客可浏览，写操作及本人记录按需登录。
+- **活动＋论坛**：社团发布活动；登录用户可发帖/评论，作者可删除本人内容，管理员可管理。首版不做私信、关注、积分和推荐算法。
+- **服务与权限**：知识迁入服务但不删除已有指南、搜索、引用和问答；公开/内部知识及成员/管理员边界保持。购物订单、客户报修单和工作人员维修备案分别建模。
+- **规划默认值**：首版单商品直接下单；二手库存1、耗材支持数量并由授权工作人员维护；待取货→完成/取消。具体角色表、取消/库存规则和可调整项见 [当前目标](docs/current-goals.md#选购二手商品与维修耗材)，开工在 Issue 记录，不额外加审批流程。
 
-## 后续页面还原
+## 当前模块任务
 
-- [12 报修详情、指南详情与案例阅读 #75](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/75)：本轮实现与模拟器证据见 [验证记录](docs/verification/issue-75.md)。
-- [13 指南目录与知识搜索 #76](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/76)：目录、搜索、详情续接已实现，HAP/模拟器及相关回归通过，待视觉审查；[验证记录](docs/verification/issue-76.md)、[接口说明](backend/docs/knowledge-browse-api.md)。
-- [14 活动详情与我的报名 #77](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/77)：浅蓝专题详情/报名与暖色本人状态卡已实现，复用 #62 服务；最终包装机截图、状态/分页/重试验收见 [验证记录](docs/verification/issue-77.md)，待维护者视觉审查。
+只保留以下 **4 个当前模块任务**，不预分配负责人、不设固定排期。一个模块可分几个 PR 交付，状态在同一 Issue 内更新；各模块同时负责其真实功能与参考样式。
+
+| 顺序 | Issue | 任务书与依赖 |
+| --- | --- | --- |
+| 当前01 | [#83 五栏导航调整与知识迁入服务](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/83) | [任务书](docs/tasks/current-goals/01-navigation-service.md)；优先约定路由、服务知识入口及首页/我的接线 |
+| 当前02 | [#84 选购平台：二手、耗材与交易闭环](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/84) | [任务书](docs/tasks/current-goals/02-shopping.md)；与 #83 约定入口后可独立推进 |
+| 当前03 | [#85 活动＋论坛：报名整合与发帖评论](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/85) | [任务书](docs/tasks/current-goals/03-activities-forum.md)；复用已有活动，与 #84 可并行 |
+| 当前04 | [#42 统一还原打磨、联调与课程演示](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/issues/42) | [任务书](docs/tasks/current-goals/04-polish-demo.md)；提前整理差距，完整联调依赖前三项 |
+
+先确认 #83 的入口与公共边界，#84/#85 分别交付真实闭环，再由 #42 收齐跨模块一致性与演示。旧 #36–#41、#60–#63、#75–#77 属于历史任务；保留已有交付与问题记录，未做的无关 Web 管理/统计/导出扩展不继续追着移植。
+
+## 当前实际进度
+
+2026-10-19 只读盘点起点为 `main 774145d`。此处描述源码与历史证据，不代表共享服务器已部署同版本。
+
+| 范围 | 当前情况 |
+| --- | --- |
+| 原生底座与账号 | 已有游客先浏览、按需登录/注册、会话与双角色入口，保留现有改密/权限规则 |
+| 维修服务与知识 | 已有报修、进度、工作人员处理、备案审核、指南/案例阅读与搜索、AI 问答/知识回流；知识当前仍为顶层 Tab，迁移待 #83 |
+| 个人功能 | 已有资料、收藏、消息及相关成员功能；购物/卖家订单/本人商品/帖子入口待新模块 |
+| 活动 | #62/#77 对应改动已合入，已有活动报名、本人状态、现场与管理；论坛尚未实现 |
+| 选购交易与论坛 | 本轮待开发，当前商品/购物订单/论坛模型与页面尚未实现 |
+| 视觉与设备 | 多轮 HAP 构建和模拟器证据已归档；新目标的还原与完整演示仍待完成，真机结果以实际记录为准 |
+
+已有证据：[三个页面还原](docs/verification/three-reference-pages-20261014.md)、[阅读详情 #75](docs/verification/issue-75.md)、[知识目录/搜索 #76](docs/verification/issue-76.md)、[活动详情/本人状态 #77](docs/verification/issue-77.md)、[活动闭环收尾](docs/verification/issue-62-completion.md)、[个人资料/备案修复](docs/verification/issue-61-review-fixes.md)。无需因方向调整重跑这些模块的全部旧测试。
 
 ## 克隆与目录
 
@@ -77,53 +65,27 @@ git clone https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos.git E:/codes
 cd E:/codes/pchospital-harmonyos
 ```
 
-请使用英文路径，中文父目录会触发 Hvigor `Invalid project path`。
+使用英文路径，避免 Hvigor 的中文父目录限制。DevEco 打开 `app/`，后端命令在 `backend/` 执行。
 
 ```text
-app/                     HarmonyOS 原生工程，DevEco 打开此目录
-  entry/src/main/ets/    core 会话/网络/导航/主题，features 业务模块
-backend/                 Next.js API、Prisma 模型/迁移/seed 和测试
-docs/development-plan.md 功能范围与已核实业务基础
-docs/reference/my-huawei/ 16 张参考截图与页面映射索引
-AGENTS.md                项目开发规则
+app/                         HarmonyOS 原生工程：core 公共层、features 业务
+backend/                     Next.js API、Prisma/MySQL、迁移及必要测试
+docs/current-goals.md         当前需求分析、页面映射、范围及验收
+docs/tasks/current-goals/     当前四个模块任务书
+docs/reference/my-huawei/     16 张参考截图与索引
+docs/verification/            实际验证与截图，按当次版本/设备阅读
+AGENTS.md                    编码与协作规则
 ```
 
-## App 开发默认使用共享后端
+## 运行与开发
 
-默认 API 地址为 **https://harmony-api.pczafu.cn**。组员只需用 DevEco 打开 `app/`、构建运行，不必安装 MySQL 或每次启动本地后端。修改后端接口/数据库结构时仍在本机独立库验证，再统一部署稳定版本；不要将清库测试指向共享库。
+### 仅开发 App
 
-App 未登录直接进入游客首页，服务介绍、活动列表/详情和公开维修指南可浏览；点击报名、报修、进度、AI 问诊或「我的」再登录。登录成功继续原操作，工作人员按服务器角色进入工作台；取消登录返回原页面，退出回游客首页。#62 已接入账号报名和本人查询，使用前需部署相应后端版本。公开指南按标题粗分并提供原文浏览，完整阅读体验及新增个人功能按各模块实际交付记录。
+DevEco Studio 打开 `app/`，安装工程所需 SDK/依赖，选择模拟器或连接设备后运行 `entry`。当前工程使用 **HarmonyOS 6.1.1 / API 24**；实体设备需配置本机签名。
 
-课设测试账号为客户 `100001/customer123`、工作人员 `100002/staff123`、管理员 `100003/admin123`；组员联调尽量使用各自账号，避免操作同一张单。服务器地址已内置，新安装无需填写；已有自定义地址保留，可在登录页的「连接设置」切换为共享地址或本机地址。数据库密码和模型 Key 只在后端配置。
+App 默认 API：**https://harmony-api.pczafu.cn**。组员通常无需启动数据库；新增功能必须部署相应后端后共享环境才可用。地址内置不代表服务器已经包含最新功能，版本缺失时用独立本地后端联调。
 
-维护与部署见 [共享后端说明](backend/docs/shared-deployment.md)，游客接口见 [公开指南与登录入口契约](backend/docs/guest-access.md)。
-
-## 本地启动后端（接口开发时使用）
-
-安装 Node.js 24、Corepack 和本机 MySQL。进入 `backend/`，按 [后端快速开始](backend/README.md)完成首次配置、迁移和 seed 后启动。完整配置见 [本地开发说明](backend/docs/local-development.md)。数据库账号各自在电脑上配置，组员无需访问旧服务器或原维护者的数据库。
-
-```powershell
-cd backend
-corepack pnpm accounts:prepare   # 准备 App 登录测试账号（只操作课设库，可重复执行）
-corepack pnpm dev --port 13080
-```
-
-健康接口为 `http://localhost:13080/api/v1/health`。手机联调时使用电脑局域网 IP 和端口，同一网络内访问 API；手机的 `localhost` 指向手机自身。原生登录接口与角色说明见 [原生客户端接口](backend/docs/native-client-api.md)。
-
-## 手机连接步骤（App ↔ 本机后端）
-
-1. 电脑启动后端（上节），确认 `http://localhost:13080/api/v1/health` 返回 `success: true`；手机与电脑连同一 Wi-Fi。
-2. 查电脑局域网 IPv4（`ipconfig`，如 `192.168.1.20`），放行防火墙 13080 端口。
-3. 手机安装 App（DevEco 运行；注意工程路径需为英文，中文父目录会触发 Hvigor `Invalid project path`）。
-4. App 默认先进入首页；点击「我的」打开登录页，在「连接设置」填服务器地址 `http://192.168.1.20:13080`（点“保存地址并检测”，状态显示“后端可达”），
-   用测试账号登录：客户 `100001 / customer123`，工作人员 `100002 / staff123`。
-5. 启动时验证已有会话：有效恢复身份，无会话/失效则进入游客首页；恢复遇到网络问题保留令牌并以游客浏览，受保护功能需重新登录。退出后清除本地会话，并尽力吊销服务端令牌。
-
-客户端不伪造 Origin，走独立的 `X-Client-Type: native` 通道；HTTP 明文访问在真机上的具体策略尚未验证（无设备），详见接口说明。
-
-## 构建 App
-
-工程使用 HarmonyOS 6.1.1 / API 24，用 DevEco Studio 打开 `app/`，安装依赖，构建 `entry`。连接设备并配置本机签名后运行。当前电脑的 DevEco Studio 位于 `D:/DevEco Studio`，命令行示例：
+原测试账号：客户 `100001/customer123`、工作人员 `100002/staff123`、管理员 `100003/admin123`；各环境需实际准备账号。交易/论坛开发尽量使用独立课设账号，避免多人操作同一笔数据。
 
 ```powershell
 cd app
@@ -133,79 +95,36 @@ $env:Path = 'D:/DevEco Studio/tools/node;' + $env:Path
 & 'D:/DevEco Studio/tools/hvigor/bin/hvigorw.bat' --mode module -p product=default assembleHap
 ```
 
-## 当前实际进度
+本机 DevEco 路径仅为示例，按成员安装位置调整。模拟器可用 `hdc list targets` 检查连接；安装和真实操作结果与单纯构建通过分开记录。
 
-2026-10-15（#77 活动页面还原）：从已合入 #74/#78/#79 的 main `6826bc1` 开发，期间普通 Merge 同步 #80 至 `d53f951`。活动详情/报名采用全宽浅蓝主视觉、真实活动信息/条款及独立底部行动区；本人详情采用暖色大标题、联系信息与报名/签到/接待三段状态卡。未知状态明确不可用，已接待不推断维修完成；仅本次成功响应确认真实报名 ID，不以第一页未找到推断未报名，多联系快照用真实姓名/掩码电话区分。保留 #75/#76 导航及阅读/搜索页；566 项单测、lint、HAP 构建及实际模拟器报名/现场状态/26 条分页/账号隔离/精确重试通过，真实 HTTP 27 项与未处理出勤取消/恢复通过。最终包、截图与限制见 [#77 验证](docs/verification/issue-77.md)，未部署共享服务，最终视觉认可交维护者审查。
+### 修改后端时
 
-2026-10-15（#62 收尾）：按新任务书实现本人未处理本场业务时取消出勤、历史处理兼容与取消/现场事务互斥，修复管理员报名删除失败重试误保存另一行、写后刷新及行状态更新，并清理切账号旧数据。最新 main `8129961` 已普通 Merge；529 项单测、54 项相关 DB 回归、lint、后端/HAP 构建通过。最终包关键链路与系统选图上传证据见 [本轮收尾验收](docs/verification/issue-62-completion.md)，此前保留缺口安排已被新任务取代。未部署共享后端、未合并或关闭 #62。
+要求 Node.js 24、Corepack、本机 MySQL。先按 [后端 README](backend/README.md) 和 [本地开发](backend/docs/local-development.md)配置独立开发/测试库，保留已有 `.env` 与课设数据。
 
-首轮历史：2026-10-15（#62 活动闭环，功能分支待审查）：基于最新 main `9ac3226` 完成游客详情/实际条款、登录/注册/改密续接账号报名、本人分页/修改和旧匿名查询；接入成员出勤、签到类型调整、授权电话、排队撤回、接待真实草稿与原备案提交，以及管理员活动/报名管理，提供 #63 复用路由。521 项单测、44 项相关 DB 回归、lint、后端与 HAP 构建通过，模拟器已实际操作三角色链路；照片经真实本机 API 上传后在 App 展示/提交，**系统选图上传与实体手机未验证**。用户确认保留成员取消出勤缺口，#62 不关闭；未部署共享后端。接口及路由见 [活动契约](backend/docs/native-activities-api.md)，完整证据与额外 tsc 基线失败见 [验证记录](docs/verification/issue-62-activities.md)。#60 的 PR #65/#69、#61 的 PR #66–#68 已合并，下方待审查状态为各批当时记录。
+```powershell
+cd backend
+corepack pnpm install --frozen-lockfile
+corepack pnpm setup:local
+corepack pnpm accounts:prepare
+corepack pnpm dev --port 13080
+```
 
-2026-10-13（#61 审查修复）：三批已修复页面离开/返回的忙状态；恢复关联报修备案机型只读，并拒绝独立建档回放报修/活动来源键。492 项单测、16 项相关 DB 回归、9 项真实 HTTP、后端和三批 HAP 构建通过；最终模拟器完成延迟请求返回/重试及关联机型只读操作。详情和范围见 [审查修复记录](docs/verification/issue-61-review-fixes.md)，三 PR 等待复审，不自行合并。
+健康接口 `http://localhost:13080/api/v1/health`；App 登录页“连接设置”可切换 API。模拟器访问本机通常使用 `http://10.0.2.2:13080`，手机使用电脑局域网 IP；设备上的 localhost 指向设备自身。
 
-2026-10-13（#61 第三批，完整备案与工作摘要）：接入独立备案列表/筛选/新建/本人草稿与退回编辑/照片/提交、机主字段与电话权限、原评论/回复/@成员通知、内部已审核备案库和工作台真实摘要；保留 #40 典型回流守卫。维护者确认保留课设正文/照片等提交规则，只同步机主字段和权限。482 项单测、6 项新增 DB 回归、8 项关联备案回归、25 项真实 HTTP 检查、后端与 HAP 构建通过；模拟器已操作备案提交/退回重提/审核只读、评论/@/回复、库筛选与摘要。**系统相册选图上传和真机仍未验证**，照片由真实 API 上传后在 App 预览；无收费模型调用，未部署共享服务器。契约见 [完整备案 API](backend/docs/personal-records-api.md)，截图和限制见 [第三批验证](docs/verification/issue-61-records.md)。三批按 [PR #66](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/pull/66) → [PR #67](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/pull/67) → [PR #68](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/pull/68) 顺序交技术主线审查，#61 保持开放；“我的报名”预留等待 #62。
+App 只访问 API，原生通道使用 `X-Client-Type: native` 和 Bearer，会话/权限由服务端认定。数据库密码和模型 Key 只放后端；不接原 Web 生产库、不迁移其数据。
 
-2026-10-13（#61 第二批，收藏与消息）：客户指南/有效公开案例收藏、取消恢复与公开浏览，报修实际事件的本人站内消息、已读/删除/详情跳转，以及成员备案收藏和原通知已接通；消息与状态同事务，失效收藏不返回旧内容。lint、478 项单测、5 项最小 DB 回归、26 项真实 HTTP 检查、后端及 HAP 构建通过；模拟器已操作双角色收藏/消息和案例转内部后的不可访问状态。案例权限测试使用明确标名的合成资料，没有本批模型调用或真实手机验收。契约见 [收藏/消息 API](backend/docs/customer-community-api.md)，截图与限制见 [验证记录](docs/verification/issue-61-community.md)。依赖第一批 PR #66，分批交技术主线审查；该批不包含完整备案/摘要，第三批见上方记录；共享部署仍待技术主线安排。
+### 必要检查与提交
 
-2026-10-13（#61 第一批，个人资料）：客户本人昵称/联系电话与默认头像、成员昵称/技能、授权成员目录及只读资料已接真实接口；昵称保存后更新「我的」卡片。客户档案独立于成员，版本冲突不覆盖他人更新，历史报修联系电话保持原快照。后端 lint、必要单测/独立库回归、后端及 HAP 构建通过，DevEco 模拟器已操作客户/成员资料、保存/返回/重启/网络失败重试，未验证实体手机。接口见 [个人资料契约](backend/docs/personal-profile-api.md)，结果及截图见 [验证记录](docs/verification/issue-61-profile.md)。本批待技术主线审查，未部署共享服务器；收藏、消息、完整独立备案与工作摘要在第二/三批交付，#61 保持开放。
+只检查本次改动及受影响链路：文档检查链接/范围；ArkTS 构建 HAP并实际模拟器操作；新增交易/论坛接口检查真实返回、相关权限与必要状态/库存回归。无关全仓审计、全库测试和收费模型评测不作为常规步骤。
 
-App 已接入真实登录与会话：登录页、启动恢复会话、退出、按服务端返回的角色进入客户服务/工作人员入口；客户报修（我的报修：提交、列表、进度时间线，#37）与工作人员处理链路（报修队列、受理、推进/取消、维修备案草稿/照片/提交、App 内备案审核，#38）已接入真实接口；知识问答已接入真实语料与模型：混合检索、带引用回答、追问与引用详情（[说明](backend/docs/knowledge-ai.md)），本次对话只存页面内存。后端提供原生 Bearer 会话通道（`/api/v1/auth/native/*`，[接口说明](backend/docs/native-client-api.md)）与报修处理/备案接口（[说明](backend/docs/native-repairs-api.md)），Web Cookie 登录行为保持原样。`RepairRecord` 是工作人员维修备案，不等于客户报修单。
+功能分支与 PR 提交，普通 Merge；不直接推 main、不强推、不要求另一位成员批准。CI `backend-check` 仍按仓库规则执行。组员交付提供页面对照、实际截图、检查结果及未验证项，不能以假数据或占位页面宣称完成。
 
-2026-10-11（#40 典型案例自动整理与知识回流）：新增典型案例模型/迁移、备案典型标记（作者/审核人员）、
-真实模型整理与自动去重/相似合并（并发不丢来源）、来源失效与管理员撤回控制、案例并入混合检索与引用详情
-（客户脱敏）、案例库页面与备案页典型面板；lint 0 警告、单测 424/424、数据库集成测试 193/193、
-后端构建与未签名 HAP 构建通过；在开发库用真实 DeepSeek/bge-m3 跑通「建单→建档→真实审核→标记→
-整理→换措辞命中案例引用并打开」，其中真实合并样本（D 并入 B）保留两来源。**无设备：App 的典型面板、
-案例库与引用案例分支均未装机验证**；真实模型两次未达预期（A×B 判为不同故障、客户问答判资料不足）
-如实记录在 [验证记录](docs/verification/issue-40.md)，接口说明见 [典型案例接口](backend/docs/knowledge-cases-api.md)。
+共享服务只接收本机 WSL/Linux 构建产物，不在服务器 install/build 或清库测试。部署需按 [共享后端说明](backend/docs/shared-deployment.md)记录代码/迁移版本，避免打满服务器资源。
 
-2026-10-11（#38 工作人员处理与维修备案）：新增工作人员队列/受理/推进/取消、报修单→备案关联建档、备案编辑走原生通道、App 内管理员审核与照片链路；后端 lint、生产构建通过，单测 397 项、数据库集成测试 175 项全部通过；在本机开发库跑通「客户建单 → 受理 → 处理中 → 完成未建档 → 建档 → 真照片上传 → 提交 → 退回 → 修改重提 → 通过」24 项断言的真实 API 链路；未签名 HAP 构建成功。**无设备（`hdc list targets` 为 `[Empty]`）：受理、备案、照片与审核页面均未装机验证**，详见 [验证记录](docs/verification/issue-38.md)。
+## 文档索引
 
-2026-10-09（登录里程碑）：在英文路径副本重新构建未签名 HAP 成功；后端 lint、生产构建通过，327 项单测、150 项数据库集成测试全部通过（含新增 22 项鉴权用例）；在 13080 端口以真实开发库验证 health → 客户/工作人员原生登录 → 会话查询 → 退出后令牌失效，以及错误密码、缺失令牌、缺失客户端标识、伪造角色无效、客户/工作人员越权访问均被拒。`hdc list targets` 仍为 `[Empty]`：App 的 health → 登录 → 重启恢复 → 退出链路**未真机验证**（构建成功不等于装机成功）。
-
-2026-10-09 主线修正：启动恢复成功时返回服务器身份；本地令牌保存失败则尽力撤销新令牌并报 `LOCAL_STORAGE_ERROR`，不进入主页。临时 TypeScript 转译配合平台/网络模拟依赖的 5 项行为检查通过（有效恢复、失效清理、断网保留、保存失败、撤销失败），修改后的工程在 `E:/codes/pchospital-native-auth-check-20261009/app` 构建未签名 HAP 成功。模拟依赖检查不等于系统 Asset Store 或真机验证，设备会话链路仍待验证。
-
-2026-10-11（Issue #41 界面统一与状态处理完善）：在写手A 已统一主题令牌（`core/ui/Theme.ets`）、子页标题与防重复入栈（`core/ui/Routes.ets`）的基础上，本轮补齐各页的加载 / 空数据 / 失败 / 重试 / 防重复交互。
-
-- 新增共用状态组件 `core/ui/StatePanel.ets`（`LoadingPanel` / `ErrorPanel`），列表与详情的整块加载区、失败重试区只定义一次；未新增 `EmptyPanel`（各页空态文案与引导各不相同，包一层共用组件只会增加间接层）。
-- 登录页：服务器地址「保存 + 检测」全程加 `checking` 标志防连点；登录按钮改为内嵌 `LoadingProgress` 的复合按钮，请求期间禁用；网络错误与业务错误分开提示，失败后按钮文案变为「重试登录」。
-- 我的报修：列表首次加载加请求中标志，防重试连点并发；列表错误态复用 `ErrorPanel`（保留卡片底色与前手外观一致）；网络错误补排查引导，与业务错误提示可区分；提交表单失败后按钮文案变为「重试提交」，网络与业务错误分开提示。
-- 知识问答：发送按钮改为内嵌加载指示的复合按钮，发送中禁用；失败卡复用 `ErrorPanel` 并保留重试；资料不足 / 追问回答补空数据引导文案，引导文案按回答状态展示，澄清追问不从无引用推断检索无命中；发送失败区分网络错误（补排查引导）与业务错误（后端信封文案）。
-- 引用详情：加载态复用 `LoadingPanel`、失败态复用 `ErrorPanel`，重试加请求中标志防连点；「引用已过期或不存在」（404）仍与网络失败分开提示。
-- 会话过期统一走 `HomePage.expireSession`（清空导航栈再回登录页）；本轮改动未发现新增遗漏页面。
-
-未签名 HAP 构建通过（`hvigorw assembleHap` 结束为 `BUILD SUCCESSFUL`，仅签名步骤按预期跳过）。`hdc list targets` 仍为 `[Empty]`，本轮交互状态改动**未真机验证**（构建成功不等于装机与运行时行为正确）。
-
-2026-10-11（PR #49 审查修复）：提交成功时若首次列表仍在请求，将刷新排队到当前请求结束后执行，保留普通点击防重；问答页依据 clarify / insufficient_evidence 状态展示追问或资料不足提示，通用说明使用当前账号可访问的资料范围。实际页面方法配合模拟网络的时序回归及既有问答状态测试共 4 项通过，测试文件 lint 通过，未签名 HAP 构建成功；无设备，未做真机验证。
-
-2026-10-11（#42 完整联调与课程演示）：分支 `feat/issue-42-demo-integration` 基于含 #40 的 `upstream/main @ 2c60449`，PR #53 以 `Refs #42` 打开（**未合并、未关闭 Issue**）。本轮在开发库与测试库应用 #40 迁移 `20261011130000_p2_issue40_knowledge_cases`，`db:health` 通过（MySQL 9.6.0 @ `127.0.0.1:3308`）；演示账号用 `corepack pnpm accounts:prepare`（幂等）准备就绪：客户 `100001/customer123`、工作人员 `100002/staff123`（MEMBER + 有效成员档案）、管理员 `100003/admin123`（ADMIN，含 `repair:review`/`repair:flag`，**刻意无成员档案 → 不能受理报修单**）。设备之外的真实链路在开发库跑通：55 次 HTTP 请求无一 5xx，主链 22 步、失败场景 12 项 —— 报修 → 受理 → 推进 → 客户看到变化 → 建档 → 旧版本号写入 409 → 真实照片上传 → 提交审核 → 管理员审核通过，且报修处理状态与备案审核状态相互独立；失败场景含纯管理员受理 `403 MEMBER_REQUIRED`、跳过状态 `409 REPAIR_ORDER_STATE_INVALID`、非法 `toStatus` `400 VALIDATION_FAILED`、空草案提交 `400 REPAIR_SUBMISSION_INCOMPLETE`。演示数据由本轮链路真实产生：报修单 `a60bd281-960c-450b-ab37-f2c6b3d55db9`（COMPLETED）、维修备案 `36fb4958-e7f7-43d3-9af4-ca09577459bb`（APPROVED v4）、照片 `bb37b964-5802-44c7-9556-5efe0b81725b`（image/png 70B）。检查：`pnpm lint` exit 0、`pnpm test:unit` 441/441、`pnpm test:db` 197/197、`pnpm build` exit 0；HAP `hvigorw assembleHap` 以 `BUILD SUCCESSFUL in 1 min 20 s 971 ms` 结束，产物 `app/entry/build/default/outputs/default/entry-default-unsigned.hap`（1 197 149 字节，SHA256 `7D434C01C00FB4971B9E08E2FEF485FCA071C04E9C915AD33C63B62D629C38D2`，**未签名**）。**三项未完成如实记录**：① **未装机** —— 本机 `hdc list targets` 为 `[Empty]`，DevEco 已部署 4 个模拟器机型但无系统镜像、无签名材料（`~/.ohos` 不存在），#42 验收要求的「完整业务链在设备上跑通」目前不成立，**构建成功不等于装机运行正确**；② **模型链路（阶段2b）未执行** —— 本机 `backend/.env` 无 `AI_API_KEY`/`EMBEDDING_API_KEY`，「标记典型 → AI 自动整理/去重或相似合并 → 发布 → 换一种问法检索命中新案例并打开多来源证据」与「无依据问答」已交由具备 Key 的一方接力；③ 演示截图/录像、设备型号与系统版本、四人贡献说明依赖设备，待补。详见 [演示指引](docs/demo/issue-42-demo-guide.md) 与 [验证记录](docs/verification/issue-42.md)。
-
-2026-09-30 合仓后已在英文路径从新克隆的 `app/` 构建未签名 HAP；新 `backend/` 安装依赖、生产构建通过，并临时在 13081 端口启动验证健康接口 HTTP 200、数据库可达。迁移前后端的 318 项单测与 137 项数据库测试已通过；初始化命令另做首次配置与重复运行验证。旧云端实验服务已停用，数据卷保留。
-
-2026-10-12（共享后端与游客入口）：新增共享 HTTPS 默认地址、游客首页/服务介绍/公开指南浏览，受保护功能触发登录并续接目标，取消与退出回公共页面。部署与实际验证见 [本轮记录](docs/verification/shared-backend-guest-login-20261012.md)。
-
-## 协作与来源
-
-前后端接口变更可在同一提交中完成。提交前运行相关检查，分别记录构建、接口和真机结果。克隆公开仓库不需要邀请；向本仓库推送功能分支需要写入权限，由维护者添加 Collaborator，也可从个人 fork 提交 PR。
-
-`main` 已启用 [main-protection](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/rules/24866387)：必须通过 PR，且仅使用普通 Merge（Create a merge commit）；禁止直接推送、强推和删除主分支，无绕过名单。合入前解决审查讨论并通过 `backend-check`，不要求另一位成员批准或每次同步最新 `main`；不使用 Squash 或 Rebase，未启用与普通 Merge 冲突的线性历史要求。
-
-[最简 CI](.github/workflows/ci.yml) 在每个指向 `main` 的 PR 创建、更新或重新打开时运行，使用 Ubuntu / Node.js 24 和仓库锁定的 pnpm 依赖，依次执行后端 `pnpm lint`、`pnpm test:unit`。不按文件路径跳过，不需要数据库、服务器或额外凭证。CI 通过仅表示这两项检查通过；HAP/后端构建、数据库集成测试和真机验证仍按改动需要在本机执行。
-
-- [开发方案](docs/development-plan.md)
-- [Web 功能迁移四模块基线与开工说明](docs/tasks/web-migration/README.md)（#60–#63，每份任务书含开工提示词）
-- [Issue #38 工作人员处理与维修备案任务书](docs/tasks/issue-38-staff-repair-records.md) · [写手开工提示词](docs/tasks/issue-38-writer-prompt.md)
-- [Issue #38 验证记录：工作人员处理与维修备案](docs/verification/issue-38.md) · [原生工作人员处理与备案接口](backend/docs/native-repairs-api.md)
-- [Issue #39 知识问答任务书](docs/tasks/issue-39-knowledge-ai.md) · [写手开工提示词](docs/tasks/issue-39-writer-prompt.md)
-- [Issue #40 典型案例自动整理与知识回流任务书](docs/tasks/issue-40-typical-case-feedback.md) · [写手开工提示词](docs/tasks/issue-40-writer-prompt.md)
-- [Issue #40 验证记录：典型案例自动整理与知识回流](docs/verification/issue-40.md) · [典型案例与知识回流接口](backend/docs/knowledge-cases-api.md)
-- [Issue #42 验证记录：完整联调与课程演示](docs/verification/issue-42.md) · [Issue #42 课程演示指引](docs/demo/issue-42-demo-guide.md)
-- [知识问答配置与验证记录](backend/docs/knowledge-ai.md)（知识快照、混合检索、引用与命令）
-- [五张参考截图](docs/reference/my-huawei/README.md)
-- [Agent 开发规则](AGENTS.md)
-
-业务基础由原维护者授权复用 [电脑医院 Web 项目](https://github.com/ZAFU-PCHospital/zafu-pchospital-web)。后端导入基点为 `6f2ec0c188e8afbe60401b16f7c3634286f14749`，App 原提交历史保留；迁移前两仓库另有本机 Git bundle 备份。原项目许可证由维护者决定，未添加扩大授权范围的许可证。
-
-2026-10-12（初版 UI 重设计，历史记录）：当时采用首页 / 服务 / 我的三页 Tab 和彩色图标砖；后续导航以本文上方的五栏方案为准。首页展示快捷入口及最近报修预览，服务页从最近 20 条本人报修按机型合并设备卡，我的页展示真实身份和最近一页报修统计；工作人员保留工作台与权限控制的审核入口。新数据区具备加载、空态、失败重试与刷新。未签名 HAP 构建成功，页面状态模拟检查与 4 项既有回归通过，未真机验证。详情见 [验证记录](docs/verification/ui-redesign-20261012.md)。
-
-2026-10-12（首页与导航对照调整）：按维护者新映射，导航外观为「首页 / 活动 / 服务 / 知识 / 我的」，工作人员中间为「工作台」。仅调整首页与导航，其他页面未重构；首页保留真实报修数据，活动尚未接入，知识导航暂复用现有问答页。HAP 构建、模拟器装机及双角色导航已检查，未验证实体手机。见 [本次验证与截图](docs/verification/home-reference-20261012.md)。
+- [当前目标与需求分析](docs/current-goals.md)、[当前四个模块任务](#当前模块任务)
+- [开发方案与历史基线](docs/development-plan.md)、[旧 Web 迁移任务](docs/tasks/web-migration/README.md)（保留历史，冲突处以当前目标为准）
+- [参考图索引](docs/reference/my-huawei/README.md)、[项目规则](AGENTS.md)
+- [后端快速开始](backend/README.md)、[本地配置](backend/docs/local-development.md)、[共享部署](backend/docs/shared-deployment.md)
+- [原生鉴权](backend/docs/native-client-api.md)、[维修接口](backend/docs/native-repairs-api.md)、[活动接口](backend/docs/native-activities-api.md)、[知识浏览接口](backend/docs/knowledge-browse-api.md)
