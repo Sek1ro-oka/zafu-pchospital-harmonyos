@@ -1,6 +1,6 @@
 # #83 Demo V2 终态验证 · 2026-10-19
 
-分支 `feat/issue-83-navigation-demo-20261019`，基线 `upstream/main` `774145d`。本页记录 V2 返修（V2-F1～V2-F8）完成后的最终 Demo，随 Draft PR 提交上游审查：**这是离线演示，不是正式业务实现，也不代表用户已确认满意**，项目未到验收阶段。
+分支 `feat/issue-83-navigation-demo-20261019`，基线 `upstream/main` `774145d`，已合并 PR #86 合入后的文档更新（`upstream/main` `d358571`，仅 `docs/` 与 `AGENTS.md`）。本页记录 V2 返修（V2-F1～V2-F8）完成后的最终 Demo，随 Draft PR 提交上游审查：**这是离线演示，不是正式业务实现，也不代表用户已确认满意**，项目未到验收阶段。
 
 ## 构建与设备
 
