@@ -6,7 +6,7 @@
 
 校园用户需要修电脑、查知识、参加活动、交易闲置配件与维修耗材。客户五栏为首页、活动、服务、选购、我的；工作人员第三栏为工作台。知识收进服务，保留公开/内部边界、引用和收藏消息深链。工作人员保留处理、备案、审核与现场入口，审核需要单独权限。
 
-本轮仅在 features/navigationDemo 集中模拟数据和身份，Index 为隔离启动壳，不接 API、数据库、鉴权或模型。原正式 Index 可从 git show d356297f:app/entry/src/main/ets/pages/Index.ets 查看。不得将 Demo 壳直接合入生产。商品/论坛不造样本、不伪造计数，明确 #84/#85 尚未接入。
+本轮仅在 features/navigationDemo 集中模拟数据和身份，Demo 入口为独立的 `pages/NavigationDemoEntry.ets`（在 `main_pages.json` 注册，`EntryAbility.loadContent` 指向该页），不接 API、数据库、鉴权或模型。生产 `pages/Index.ets` 保持 `upstream/main` 原样、未改动，上游入口守卫单测继续通过；上线前把 `loadContent` 指回 `pages/Index` 并删除 Demo 页。商品/论坛不造样本、不伪造计数，明确 #84/#85 尚未接入。
 
 ## 原图→目标→入口→差异
 

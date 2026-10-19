@@ -22,7 +22,8 @@ export default class EntryAbility extends UIAbility {
     // Main window is created, set main page for this ability
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
 
-    windowStage.loadContent('pages/Index', (err) => {
+    // Demo 包入口：生产页 pages/Index 保持上游原样，仅由本 Ability 指向 Demo 页
+    windowStage.loadContent('pages/NavigationDemoEntry', (err) => {
       if (err.code) {
         hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
         return;

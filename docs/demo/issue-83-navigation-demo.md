@@ -4,9 +4,10 @@
 
 ## 审阅与运行
 
-- 原生主成果：模拟器（hdc `127.0.0.1:5555`）已安装独立包 `cn.zafu.pchospital.navigationdemo`，保留运行，未动正式 App 数据。API24 unsigned HAP：`app/entry/build/default/outputs/default/entry-default-unsigned.hap`，293,782 字节，SHA256 `AFC630F4BF18DDCE14082F0259538DEA442E81513FB5011FCB156157378F4A0A`。
+- 原生主成果：模拟器（hdc `127.0.0.1:5555`）已安装独立包 `cn.zafu.pchospital.navigationdemo`，保留运行，未动正式 App 数据。API24 unsigned HAP：`app/entry/build/default/outputs/default/entry-default-unsigned.hap`，3,500,625 字节，SHA256 `EF58E3B5A84ED1865B47A7CDFF58213A93054D96326C3E6D15F3C8D1C96F9CEF`。
+- 入口：本版新增 `app/entry/src/main/ets/pages/NavigationDemoEntry.ets` 并在 `main_pages.json` 注册，`EntryAbility` 的 `loadContent` 指向 `pages/NavigationDemoEntry`；生产 `pages/Index.ets` 与 `upstream/main` 完全一致、未改动，上游入口守卫单测保持通过。上线前把 `loadContent` 指回 `pages/Index` 并删除 Demo 页。HAP 因此由 293,782 字节增至 3,500,625 字节（生产入口与其页面、资源仍在编译范围内）。
 - 辅助 [浏览器预览](http://127.0.0.1:18483/docs/demo/issue-83-preview.html) 与原生构图同步，**非 HAP 画面**。仓库根运行 `python -m http.server 18483 --bind 127.0.0.1`，仅本机静态服务。无外部框架或业务请求。
-- 构建：在 app/ 设置 `DEVECO_SDK_HOME=E:/DevEco Studio/sdk`，PATH 前置 `E:/DevEco Studio/tools/node`，执行 `E:/DevEco Studio/tools/hvigor/bin/hvigorw.bat --mode module -p product=default assembleHap`；终态构建 `BUILD SUCCESSFUL in 5 s 195 ms`，日志在任务目录 `hap-build-v2r1b.log`。未读取/复制主树签名配置。
+- 构建：在 app/ 设置 `DEVECO_SDK_HOME=E:/DevEco Studio/sdk`，PATH 前置 `E:/DevEco Studio/tools/node`，执行 `E:/DevEco Studio/tools/hvigor/bin/hvigorw.bat` `--mode module -p product=default assembleHap`；终态构建 `BUILD SUCCESSFUL in 43 s 864 ms`（33 tasks，20 executed），日志在任务目录 `hap-build-v3.log`。未读取/复制主树签名配置。
 - 顶部圆形宫格按钮是“演示设置”；可切游客/客户/工作人员/管理员、减少动态效果。身份/登录/收藏/指南均为内存演示，重启或刷新清空。正式用户、API、DB、模型未接入。
 
 ## 当前检查清单
