@@ -157,6 +157,17 @@ export struct PasswordChangePage {
           this.onSessionExpired();
           return;
         }
+        // `SESSION_CHANGED`：响应本身没错，是**归属**变了（请求在途期间退出 / 换账号 /
+        // 恢复了会话），SessionService 因此丢弃了这份响应里的令牌。但服务端在返回之前
+        // 就已经提交了改密：**密码已经是新的**，旧口令在服务端不复存在，本地也不再持有
+        // 属于当前会话的令牌。所以它和 `LOCAL_STORAGE_ERROR` 是同一类终态 —— 停在原页让
+        // 用户「原样重试」或者拿旧密码重登都是错的，必须导回登录页用**新**密码登录。
+        // 它刻意不进 `isSessionExpiredCode`（那是「令牌失效」语义，与「归属已变」不同），
+        // 故这里显式分支。注意仍然不得走 onChanged：否则会收起登录栈、续接到别人的意图上。
+        if (error.code === 'SESSION_CHANGED') {
+          this.onSessionExpired();
+          return;
+        }
         if (error.code === 'VALIDATION_FAILED') {
           this.fieldErrors = this.readServerFieldErrors(error);
         }

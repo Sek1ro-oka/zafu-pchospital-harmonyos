@@ -275,7 +275,10 @@ export class SessionService {
     // 「界面与内存身份是 B、后续请求头却是 A 的令牌」的账号串用。所以先比对再落库。
     if (!(await SessionService.stillCurrentSession(epoch, token))) {
       await SessionService.revokeAbandonedSession(baseUrl, data.token);
-      throw new ApiRequestError('SESSION_CHANGED', '登录状态已变更，本次修改结果未采用，请重新登录', 0, '');
+      // 文案必须写明**密码已经改成功**：服务端在返回之前就已提交改密（更新口令、吊销该账号
+      // 全部未吊销会话、发出新会话），丢弃的只是这份响应里的令牌归属。写成「本次修改结果
+      // 未采用」会诱导用户拿**旧**密码重登，而旧口令在服务端已经不存在了 —— 必然失败。
+      throw new ApiRequestError('SESSION_CHANGED', '密码已修改成功，但登录状态已变更，请用新密码重新登录', 0, '');
     }
     const persisted = await SessionStore.writeToken(data.token);
     if (!persisted) {
@@ -292,8 +295,14 @@ export class SessionService {
       SessionService.advanceEpoch();
       throw new ApiRequestError('LOCAL_STORAGE_ERROR', '无法保存新的登录凭证，请检查设备存储后重试', 0, '');
     }
-    // 令牌已轮换 = 会话归属又变了一代：此后任何**更早发起**的发令牌写请求迟到时都会被丢弃，
-    // 不会再把上一代的令牌盖回来（并发重复提交也由这条封口）。
+    // 令牌已轮换 = 会话归属又变了一代：此后任何**更早发起**的认证写请求迟到时都会被丢弃，
+    // 不会再把上一代的令牌盖回来。
+    //
+    // 这里封的是**已发生的归属变更**（退出 / 换账号 / 恢复会话），**不是**并发写入本身的
+    // 串行化：归属校验是 check-then-act，`writeToken` 内部还有 await，两次改密同时在途时
+    // 这个窗口内没有二次校验。真正阻止重复提交的是界面侧（`PasswordChangePage.submit`
+    // 的 `if (this.busy) return`、提交按钮与档位开关的 `.enabled(!this.busy)`，以及
+    // `HomePage.interceptBack` 对改密页返回键的拦截）。
     SessionService.advanceEpoch();
     // 新会话的 mustChangePassword 恒为 false（初始密码已改）；其余身份字段沿用内存值。
     if (SessionService.identity !== null) {
