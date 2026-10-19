@@ -108,6 +108,8 @@ function homeShell(): BackShell {
 interface SessionSvc {
   login(qq: string, password: string, rememberMe?: boolean): Promise<unknown>;
   changePassword(request: object): Promise<unknown>;
+  /** 重启恢复（Issue #60 封口语义用例需要它：`restore()` 开头会推进会话代次）。 */
+  restore(): Promise<{ identity: unknown; unavailableReason: string }>;
   current(): unknown;
 }
 
@@ -460,21 +462,30 @@ test("改密挂起时离开页面：本地 busy 受代次保护，父级上报�
   assert.deepEqual(reported, [true, false]);
 });
 
-test("改密响应被丢弃（SESSION_CHANGED）：页面不当作成功，交回上层处理", async () => {
+test("改密响应被丢弃（SESSION_CHANGED）：不走 onChanged，与 LOCAL_STORAGE_ERROR 同类终态导回登录页", async () => {
   const page = changePage({
     changePassword: () =>
-      Promise.reject(new ApiRequestError("SESSION_CHANGED", "登录状态已变更，本次修改结果未采用", 0, "")),
+      Promise.reject(
+        new ApiRequestError("SESSION_CHANGED", "密码已修改成功，但登录状态已变更，请用新密码重新登录", 0, "")
+      ),
   });
   let changed = 0;
+  let expired = 0;
   page.onChanged = () => {
     changed += 1;
+  };
+  page.onSessionExpired = () => {
+    expired += 1;
   };
   fillChange(page);
   await page.submit();
   // 迟到响应被 SessionService 丢弃后不能再走 onChanged（否则会收起登录栈、续接到别人的意图上）。
   assert.equal(changed, 0);
-  assert.equal(page.failed, true);
-  assert.match(page.errorText, /登录状态已变更/);
+  // 服务端已经提交了改密：密码是新的、本地不再持有属于当前会话的令牌，
+  // 停在原页「原样重试」是错的 —— 与 LOCAL_STORAGE_ERROR 同一出口（onSessionExpired）。
+  assert.equal(expired, 1);
+  assert.equal(page.errorText, "");
+  assert.equal(page.failed, false);
 });
 
 for (const name of ["RegisterCustomerPage", "RegisterStaffPage"] as const) {
@@ -615,6 +626,9 @@ for (const logoutFails of [false, true]) {
     assert.equal((race.service.current() as { userId: string }).userId, "B");
     assert.ok(outcome instanceof ApiRequestError, "迟到响应必须按错误丢弃，不能走成功路径");
     assert.equal(outcome.code, "SESSION_CHANGED");
+    // 文案不得说成「本次修改结果未采用」：服务端返回前就已经提交了改密，密码是新的，
+    // 用户拿旧密码重登必然失败（F1）。
+    assert.match(outcome.message, /密码已修改成功/);
     // 服务端那个「活着但没人持有」的新会话被尽力撤销 —— 用**新**令牌，不是已死的旧令牌。
     assert.deepEqual(race.revoked, ["token-A", "token-A-new"]);
   });
@@ -684,6 +698,109 @@ test("同一账号的改密响应未被抢占时照常写回新令牌（归属�
   assert.equal(data.token, "token-A-new");
   assert.equal(token, "token-A-new");
   assert.deepEqual(revoked, []);
+});
+
+/**
+ * 错误码分类的源码守卫（F5a）：**加载真实的 `ApiClient.ets`**，不用桩。
+ *
+ * 背景：`SESSION_CHANGED` 是**客户端侧**「归属已变」错误码，语义上不是「令牌失效」；
+ * 页面层靠显式分支把它导回登录页，而不是靠 `isSessionExpiredCode`。若将来有人图省事
+ * 把它加进那个列表，这条用例会红。
+ */
+test("错误码分类：SESSION_CHANGED 不是令牌失效码，真·失效码仍为 true", () => {
+  const source = readFileSync(`${ETS}/core/network/ApiClient.ets`, "utf8");
+  // 同一套「读真实源码 → 剥 import/装饰器 → 转译 → 沙箱执行」手法；
+  // ApiClient 的 http / util 依赖只在方法体内出现，模块顶层不执行，故不需要桩。
+  const isSessionExpiredCode = run(ets(source) + "\nisSessionExpiredCode;", {}) as (code: string) => boolean;
+  // 归属已变 ≠ 令牌失效：不加进列表，页面层走显式分支（见 PasswordChangePage）。
+  assert.equal(isSessionExpiredCode("SESSION_CHANGED"), false);
+  // 顺带钉住真·失效码：将来即使有人重排那个列表，语义边界也不会被悄悄改掉。
+  assert.equal(isSessionExpiredCode("UNAUTHENTICATED"), true);
+  assert.equal(isSessionExpiredCode("AUTH_SESSION_INVALID"), true);
+  assert.equal(isSessionExpiredCode("AUTH_SESSION_EXPIRED"), true);
+  assert.equal(isSessionExpiredCode("ACCOUNT_DISABLED"), true);
+  assert.equal(isSessionExpiredCode("MEMBER_PROFILE_INACTIVE"), true);
+  // 普通业务错误码不能被误判为会话失效。
+  assert.equal(isSessionExpiredCode("VALIDATION_FAILED"), false);
+});
+
+/**
+ * `restore()` 的封口语义（F5b）：`restore()` 开头新增的 `advanceEpoch()` 此前零覆盖。
+ *
+ * 语义：恢复会话会**重建本地会话归属**，所以即便服务端确认的还是同一个账号、本地令牌
+ * 一个字都没变，恢复动作之后，此前发起的认证写请求也已经**不再属于当前会话** —— 它的
+ * 迟到响应必须被丢弃，不得把令牌写回去。这正是「epoch 比对」在令牌比对之外多做的那件事。
+ */
+test("restore() 推进会话代次：恢复期间在途的改密响应迟到时不写回令牌", async () => {
+  let token = "token-A";
+  const revoked: string[] = [];
+  const first = deferred<unknown>();
+  let firstIssued = false;
+  const service = sessionService({
+    ApiConfig: { getBaseUrl: () => "https://x" },
+    SessionStore: {
+      readToken: async () => token,
+      writeToken: async (next: string) => {
+        token = next;
+        return true;
+      },
+      clearToken: async () => {
+        token = "";
+      },
+    },
+    ApiClient: {
+      post: async (_url: string, path: string, _body: string, bearer: string) => {
+        if (path.includes("/native/password/change")) {
+          firstIssued = true;
+          return first.promise;
+        }
+        if (path.includes("/native/logout")) {
+          revoked.push(bearer);
+          return { loggedOut: true };
+        }
+        throw new ApiRequestError("UNEXPECTED_RESPONSE", path, 0, "");
+      },
+      // restore() 唯一的读接口：确认的还是**同一个账号、同一个令牌**。
+      get: async (_url: string, path: string) => {
+        if (path.includes("/native/session")) {
+          return sessionPayload("A", "token-A");
+        }
+        throw new ApiRequestError("UNEXPECTED_RESPONSE", path, 0, "");
+      },
+    },
+    ApiRequestError,
+    isSessionExpiredCode: () => false,
+    hilog: { warn() {}, error() {}, info() {}, debug() {} },
+  });
+
+  const pending = service.changePassword({
+    currentPassword: "a",
+    newPassword: "b",
+    newPasswordConfirmation: "b",
+  });
+  // 立刻接住结果：丢弃路径会 reject，晚一步挂 handler 会先触发 unhandledRejection。
+  const settled = pending.then(
+    () => "resolved",
+    (error: unknown) => error
+  );
+  await tick();
+  assert.equal(firstIssued, true);
+
+  // 恢复会话（重启 / 回前台）：服务端确认的还是 A、令牌也没变。
+  const restored = await service.restore();
+  assert.equal((restored.identity as { userId: string }).userId, "A");
+  assert.equal(restored.unavailableReason, "");
+  // 令牌没变 —— 所以这条用例只能靠**代次**判定归属，令牌比对在这里不足以封口。
+  assert.equal(token, "token-A");
+
+  // 改密响应此刻才到：服务端已轮换令牌，但这次写请求属于恢复之前的那一代会话。
+  first.resolve(sessionPayload("A", "token-A-new"));
+  const outcome = await settled;
+  assert.ok(outcome instanceof ApiRequestError, "迟到响应必须按错误丢弃，不能写回令牌");
+  assert.equal(outcome.code, "SESSION_CHANGED");
+  assert.equal(token, "token-A", "被放弃的那一代的响应不得覆盖令牌");
+  // 服务端那个「活着但没人持有」的新会话被尽力撤销。
+  assert.deepEqual(revoked, ["token-A-new"]);
 });
 
 test("注册/改密页不把 $$ 双向绑定传进自定义组件（模拟器 ReferenceError 回归守卫）", () => {
