@@ -1,6 +1,6 @@
 {
   "app": {
-    "bundleName": "cn.zafu.pchospital.course",
+    "bundleName": "cn.zafu.pchospital.navigationdemo",
     "vendor": "ZAFU PCHospital Course",
     "versionCode": 1000000,
     "versionName": "0.1.0",
