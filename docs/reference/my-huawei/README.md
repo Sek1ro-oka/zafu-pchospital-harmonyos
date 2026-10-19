@@ -1,5 +1,21 @@
 # “我的华为”参考截图
 
+## 当前页面映射（2026-10-19）
+
+当前目标已调整，先读 [根 README](../../../README.md#页面映射与参考图)和 [当前需求](../../current-goals.md)。本轮只规划，尚未实施新导航/交易/论坛。客户五栏为 **首页｜活动｜服务｜选购｜我的**，工作人员中间改为 **工作台**。
+
+| 参考图 | 当前目标 |
+| --- | --- |
+| [首页](home-navigation.jpg) | 首页及导航、服务/活动/选购入口 |
+| [花粉](community-huafen-feed.jpg)、[圈子信息流](community-circle-detail-feed.jpg)、[帖子详情](community-event-post-detail.jpg) | 活动＋论坛：社团活动/报名，用户发帖/评论 |
+| [服务](service-my-products-repair-entry.jpg)、[检测与帮助](service-diagnostics-help.jpg) | 服务/工作台，知识目录/搜索/问答迁入服务子页，原维修业务保留 |
+| [选购](shopping-category-navigation.jpg)、[订单空态](shopping-orders-empty-state.jpg) | 二手与维修耗材选购，商品/买卖双方购物订单；不再映射为知识首页 |
+| [我的](my-account-service-record-entry.jpg)、[账号面板](account-profile-sheet.jpg) | 我的及个人资料，补购物订单/本人发布/卖家订单/帖子入口 |
+
+原生页面使用真实用户、商品和业务状态，缺失的商品详情/下单参考图在开工补齐或说明依据。以下保留图片来源及旧映射/实现记录；旧“选购→知识”、旧五栏顺序和“不做用户发帖”只属于历史，当前执行以上映射。
+
+## 图片来源与历史映射
+
 本目录共有 16 张项目组提供的参考截图：最初五张主页面图，及 [PR #70](https://github.com/Xiaoyuan-114/zafu-pchospital-harmonyos/pull/70) 补充的 11 张子页面图。最初五张原文件名日期标记为 2026-09-29；补充图片原始名称为 hash，2026-10-14 按实际画面重命名，图片字节保持原样。用于界面设计参考；App 版本和设备信息未记录。
 
 | 截图 | 本项目参考点 |
