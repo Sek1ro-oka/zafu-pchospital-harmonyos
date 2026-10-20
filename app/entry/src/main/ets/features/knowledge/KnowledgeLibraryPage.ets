@@ -14,6 +14,13 @@ interface GuideItem { id: string; title: string; revision: string | null; }
 interface GuideList { guides: GuideItem[]; }
 interface CategoryItem { title: string; icon: Resource; }
 
+/**
+ * 知识分类 / 目录页（#83：从顶层知识 Tab 迁入「服务 / 工作台」）。
+ *
+ * 现在由 `HomePage` 作为导航子页打开（`ROUTE_KNOWLEDGE_LIBRARY`），
+ * `onBack` 只弹栈，落回打开它的服务页，不再回首页 Tab；
+ * 因此底部不留常驻底栏的 96vp 空位。业务逻辑、权限与数据来源未改。
+ */
 @Component
 export struct KnowledgeLibraryPage {
   @Prop @Watch('authChanged') authenticated: boolean = false;
@@ -217,7 +224,7 @@ export struct KnowledgeLibraryPage {
             ForEach(this.categories(), (item: CategoryItem) => { this.categoryRow(item); }, (item: CategoryItem) => item.title)
             this.casesSection()
           }.width('100%')
-        }.width('100%').padding({ left: 18, right: 18, bottom: 96 }).alignItems(HorizontalAlign.Start)
+        }.width('100%').padding({ left: 18, right: 18, bottom: 24 }).alignItems(HorizontalAlign.Start)
       }.layoutWeight(1).width('100%').scrollBar(BarState.Off)
     }.width('100%').height('100%').backgroundColor(DETAIL_BACKGROUND)
   }

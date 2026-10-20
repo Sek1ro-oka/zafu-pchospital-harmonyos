@@ -26,7 +26,7 @@ import { RegisterStaffPage } from '../auth/RegisterStaffPage';
 import { PasswordChangePage } from '../auth/PasswordChangePage';
 import { PublicGuidesPage } from '../knowledge/PublicGuidesPage';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
-import { NavPusher, GuideFocusParam, RepairOrderFocusParam, routeTitle, ROUTE_SERVICE, ROUTE_PUBLIC_GUIDES, ROUTE_CASE_DETAIL, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_KNOWLEDGE_SOURCE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_ORDER_DETAIL, ROUTE_STAFF_RECORD, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
+import { NavPusher, GuideFocusParam, RepairOrderFocusParam, routeTitle, ROUTE_SERVICE, ROUTE_PUBLIC_GUIDES, ROUTE_CASE_DETAIL, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE, ROUTE_KNOWLEDGE_LIBRARY, ROUTE_KNOWLEDGE_SOURCE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_ORDER_DETAIL, ROUTE_STAFF_RECORD, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import { HomeReferenceTabBar } from './HomeReferenceVisuals';
 import { CaseDetailPage } from '../knowledge/CaseDetailPage';
 import { CaseLibraryPage } from '../knowledge/CaseLibraryPage';
@@ -43,6 +43,7 @@ import { RepairRecordsPage, RecordListParam } from '../repair/RepairRecordsPage'
 import { ROUTE_REPAIR_RECORDS } from '../../core/ui/Routes';
 import { StaffRepairRecordPage } from '../repair/StaffRepairRecordPage';
 import { ServicePage } from '../service/ServicePage';
+import { ShoppingPage } from '../shopping/ShoppingPage';
 import { HomeTab } from './HomeTab';
 import { ProfilePage } from '../profile/ProfilePage';
 import { PersonalProfilePage } from '../profile/PersonalProfilePage';
@@ -56,7 +57,10 @@ import { PublicCasesPage } from '../profile/PublicCasesPage';
 import { PublicCaseDetailPage } from '../profile/PublicCaseDetailPage';
 import { PublicCaseParam } from '../profile/CommunityContract';
 
-/** 五个真实根页面；AI 对话仍是离开即销毁的导航子页。 */
+/**
+ * 五个真实根页面：首页｜活动｜服务（工作人员：工作台）｜选购｜我的。
+ * 知识分类、搜索、指南、案例与 AI 对话都是离开即销毁的导航子页（#83）。
+ */
 const TAB_INDEX_HOME: number = 0;
 const ROUTE_LOGIN: string = 'login';
 const ROUTE_REGISTER_CUSTOMER: string = 'register-customer';
@@ -71,6 +75,21 @@ const ROUTE_PASSWORD_CHANGE: string = 'password-change';
  * 否则栈底会残留一个登录页，用户每次返回都会再看到它。
  */
 const AUTH_ROUTES: string[] = [ROUTE_LOGIN, ROUTE_REGISTER_CUSTOMER, ROUTE_REGISTER_STAFF, ROUTE_PASSWORD_CHANGE];
+
+/**
+ * 知识目录（#83 从顶层 Tab 迁入服务）在**游客放行条件**里用的路由值。
+ *
+ * 为什么写字面量而不是引用 `core/ui/Routes.ets` 的 `ROUTE_KNOWLEDGE_LIBRARY`：
+ * `backend/tests/unit/guest-login-app.test.ts` 用「源码切片 + eval」转译本类，
+ * 然后**真实调用** `openRoute('public-guides' / 'repair-orders' / 'knowledge')`，
+ * 而它注入沙箱的符号表只有几个旧路由常量（没有本常量，也没有 `LoginIntent` 之外的新符号）；
+ * 条件里多引用一个未注入的标识符，这条回归就会在 `openRoute` 处抛 ReferenceError，
+ * 与业务行为无关（同 `needsPasswordChange` 的处理思路）。
+ * 另一个 eval 用例 `native-auth-app.test.ts` 只调用 `interceptBack`，不会走到这里，
+ * 但它同样整段求值本文件，所以这里只能是字面量，不能是模块级表达式。
+ * 改 `Routes.ets` 里该路由值时必须同步本行；不一致时退化为「要求登录」，是安全方向。
+ */
+const GUEST_KNOWLEDGE_ROUTE: string = 'knowledge-library';
 
 /**
  * `routeAfterLogin` 的兜底身份：只在内存身份缺失（理论上不会发生）时使用。
@@ -303,12 +322,18 @@ export struct HomePage {
     if (this.sessionTransition) return;
     // 强制改密账号：契约规定只能访问 session / logout / 原生改密 / Web 改密，
     // 其余业务路由一律不放进栈（否则用户点进去只会看到 403 PASSWORD_CHANGE_REQUIRED）。
-    // 公开维修指南对游客也开放，属于公共浏览，不拦。
+    // 公开维修指南 / 知识搜索 / 活动详情对这类账号也放行，属于公共浏览，不拦。
+    // 知识目录（#83 迁入服务）刻意**不**在这个放行名单里：先把账号送到改密页。
+    // 注意这里没有写 `loginIntent`，所以改密成功后不会自动打开知识目录，
+    // 而是回到 tab 根页（安全行为：半受限账号不直接进入知识页撞 403）。
     if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_KNOWLEDGE_SEARCH && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP) {
       this.openPasswordChange(true);
       return;
     }
-    if (!this.authenticated && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_KNOWLEDGE_SEARCH && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP) {
+    // 游客只能浏览公开页面；其余路由压登录页并记住目标，登录成功后续接。
+    // `GUEST_KNOWLEDGE_ROUTE` 是 `ROUTE_KNOWLEDGE_LIBRARY` 的字面量镜像，原因见该常量注释。
+    if (!this.authenticated && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_KNOWLEDGE_SEARCH
+      && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP && route !== GUEST_KNOWLEDGE_ROUTE) {
       const intent = new LoginIntent();
       intent.route = route;
       intent.param = param;
@@ -533,6 +558,15 @@ export struct HomePage {
             this.expireSession();
           }
         });
+      } else if (name === ROUTE_KNOWLEDGE_LIBRARY) {
+        // #83：知识分类 / 目录从顶层 Tab 迁入服务与工作台。
+        // 返回键与页内返回按钮都只弹栈，落回打开它的服务页，不再跳回首页。
+        KnowledgeLibraryPage({
+          onBack: (): void => { this.pathStack.pop(); },
+          authenticated: this.authenticated, home: this.home, permissions: this.permissions,
+          onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
       } else if (name === ROUTE_KNOWLEDGE_SOURCE) {
         CitationDetailPage({
           param: param as KnowledgeSourceParam,
@@ -560,7 +594,8 @@ export struct HomePage {
     }
     .hideTitleBar(name === ROUTE_PERSONAL_PROFILE || name === ROUTE_REPAIR_ORDERS || name === ROUTE_STAFF_ORDERS
       || name === ROUTE_STAFF_ORDER_DETAIL || name === ROUTE_PUBLIC_GUIDES || name === ROUTE_CASE_DETAIL
-      || name === ROUTE_CASE_LIBRARY || name === ROUTE_PUBLIC_CASES || name === ROUTE_PUBLIC_CASE_DETAIL || name === ROUTE_KNOWLEDGE_SEARCH)
+      || name === ROUTE_CASE_LIBRARY || name === ROUTE_PUBLIC_CASES || name === ROUTE_PUBLIC_CASE_DETAIL || name === ROUTE_KNOWLEDGE_SEARCH
+      || name === ROUTE_KNOWLEDGE_LIBRARY)
     .title(name === ROUTE_LOGIN ? '登录' : routeTitle(name))
     .onShown(() => {
       if (name === ROUTE_KNOWLEDGE_SEARCH) this.knowledgeSearchRevision += 1;
@@ -667,11 +702,11 @@ export struct HomePage {
           }
 
           TabContent() {
-            KnowledgeLibraryPage({
-              onBack: (): void => { this.selectNavigation(0); },
-              authenticated: this.authenticated, home: this.home, permissions: this.permissions,
-              onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
-              onSessionExpired: (): void => { this.expireSession(); }
+            // #83：第四栏由「知识」改为「选购」。交易模块（#84）尚未交付，
+            // 这里只放诚实的建设中页面：无示例商品、价格与订单；游客可直接进入。
+            ShoppingPage({
+              onService: (): void => { this.selectNavigation(2); },
+              staff: this.home === HOME_STAFF
             })
           }
 

@@ -49,6 +49,17 @@ export interface RepairOrderFocusParam {
 export const ROUTE_REPAIR_ORDERS: string = 'repair-orders';
 export const ROUTE_KNOWLEDGE: string = 'knowledge';
 export const ROUTE_KNOWLEDGE_SOURCE: string = 'knowledgeSource';
+
+/**
+ * 知识分类 / 目录页（#83 从顶层知识 Tab 迁入「服务 / 工作台」）。
+ *
+ * 迁移后本页是导航子页：从服务页压栈打开，返回即弹回服务页，
+ * 不再作为常驻 Tab，也不需要「返回首页」的跳转。
+ * 游客可浏览它：`features/home/HomePage.ets` 的 `openRoute` 用同值常量
+ * `GUEST_KNOWLEDGE_ROUTE` 放行，原因见该常量注释
+ * （受后端「源码切片 + eval」的回归限制，不能直接引用本常量）。
+ */
+export const ROUTE_KNOWLEDGE_LIBRARY: string = 'knowledge-library';
 export const ROUTE_STAFF_ORDERS: string = 'staff-repair-orders';
 export const ROUTE_STAFF_ORDER_DETAIL: string = 'staff-repair-order-detail';
 export const ROUTE_REPAIR_RECORDS: string = 'repair-records';
@@ -107,6 +118,9 @@ export function routeTitle(name: string): string {
   }
   if (name === ROUTE_KNOWLEDGE) {
     return '知识问答';
+  }
+  if (name === ROUTE_KNOWLEDGE_LIBRARY) {
+    return '知识与帮助';
   }
   if (name === ROUTE_KNOWLEDGE_SOURCE) {
     return '引用详情';
