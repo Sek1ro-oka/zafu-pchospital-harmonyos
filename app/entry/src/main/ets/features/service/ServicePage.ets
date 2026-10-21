@@ -2,7 +2,7 @@ import { WorkbenchSummary } from '../repair/WorkbenchSummary';
 import { ROUTE_STAFF_ACTIVITIES, ROUTE_MANAGEMENT } from '../../core/ui/Routes';
 import { HOME_STAFF } from '../../core/auth/AuthContract';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
-import { RepairOrderFocusParam, ROUTE_CASE_LIBRARY, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
+import { RepairOrderFocusParam, ROUTE_CASE_LIBRARY, ROUTE_KNOWLEDGE_LIBRARY, ROUTE_KNOWLEDGE_SEARCH, ROUTE_PUBLIC_CASES, ROUTE_PUBLIC_GUIDES, ROUTE_KNOWLEDGE, ROUTE_REPAIR_ORDERS, ROUTE_STAFF_ORDERS, ROUTE_STAFF_REVIEW } from '../../core/ui/Routes';
 import { ReferenceBanner, ReferenceTitle, ReferenceShortcut, REFERENCE_BACKGROUND } from '../../core/ui/ReferencePage';
 import { ErrorPanel, LoadingPanel } from '../../core/ui/StatePanel';
 import { isNetworkErrorCode } from '../knowledge/KnowledgeFlow';
@@ -233,6 +233,32 @@ export struct ServicePage {
       .onClick(() => { this.openEntry(entry); })
   }
 
+  /**
+   * 知识与帮助（#83）：知识分类 / 目录、搜索、公开指南与案例从服务进入。
+   *
+   * 这些入口原来挂在顶层「知识」Tab 上；迁入后统一压导航栈，页内返回与系统返回
+   * 都只弹栈，落回本页（客户：服务；工作人员：工作台），不再跳回首页。
+   * 案例入口按角色分流：客户走公开案例，工作人员走典型案例库，权限仍在服务端。
+   */
+  @Builder
+  knowledgeSection() {
+    Text('知识与帮助').fontSize(20).fontWeight(FontWeight.Bold).margin({ top: 10 })
+    Row() {
+      ReferenceShortcut({ title: '分类目录', icon: $r('app.media.ref_grid'),
+        onSelect: (): void => { this.onOpen(ROUTE_KNOWLEDGE_LIBRARY, null); } })
+      ReferenceShortcut({ title: '知识搜索', icon: $r('app.media.home_search'),
+        onSelect: (): void => { this.onOpen(ROUTE_KNOWLEDGE_SEARCH, null); } })
+      ReferenceShortcut({ title: '维修指南', icon: $r('app.media.ref_system'),
+        onSelect: (): void => { this.onOpen(ROUTE_PUBLIC_GUIDES, null); } })
+      ReferenceShortcut({ title: this.home === HOME_STAFF ? '典型案例库' : '公开案例', icon: $r('app.media.ref_document'),
+        onSelect: (): void => {
+          this.onOpen(this.home === HOME_STAFF ? ROUTE_CASE_LIBRARY : ROUTE_PUBLIC_CASES, null);
+        } })
+    }.width('100%')
+    Text('分类、搜索、指南与案例都由本页进入：游客可读公开指南与知识目录，案例按既有权限要求登录，登录成功后自动续接原操作。')
+      .fontSize(10).fontColor('#8C949A').lineHeight(16)
+  }
+
   build() {
     Scroll() {
       Column({ space: 10 }) {
@@ -248,6 +274,7 @@ export struct ServicePage {
         Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
           ForEach(this.entries(), (entry: ServiceEntry) => { this.functionCard(entry); }, (entry: ServiceEntry) => entry.title)
         }.width('100%')
+        this.knowledgeSection()
         Text('精选服务').fontSize(20).fontWeight(FontWeight.Bold).margin({ top: 8 })
         ReferenceBanner({
           title: '电脑医院  校园服务', subtitle: '先排查，再安心维修',

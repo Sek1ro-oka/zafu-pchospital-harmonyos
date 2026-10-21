@@ -157,7 +157,7 @@ export struct HomeReferenceTabBar {
         this.item(0, '首页', $r('app.media.home_nav_home'), $r('app.media.home_nav_home_active'))
         this.item(1, '活动', $r('app.media.home_nav_activity'), $r('app.media.home_nav_activity_active'))
         this.item(2, this.staff ? '工作台' : '服务', $r('app.media.home_headset'), $r('app.media.home_headset_active'))
-        this.item(3, '知识', $r('app.media.home_nav_knowledge'), $r('app.media.home_nav_knowledge_active'))
+        this.item(3, '选购', $r('app.media.home_nav_shopping'), $r('app.media.home_nav_shopping_active'))
         this.item(4, '我的', $r('app.media.home_nav_profile'), $r('app.media.home_nav_profile_active'))
       }
       .width('100%').height('100%')
