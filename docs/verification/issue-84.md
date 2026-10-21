@@ -571,7 +571,7 @@ PORT=13080 npm run dev
 | `delisted.json` / `guest-detail-delisted.json` | 下架后游客仍可读 |
 | `ids.json` | 四个演示对象 ID |
 
-## 10. App 选购页面（第二轮，2026-10-21）
+## 10. App 选购页面（第二轮，2026-10-21 / 22）
 
 ### 10.1 页面与路由
 
@@ -580,10 +580,10 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
 
 | 页面 / 组件 | 文件 | 说明 |
 | --- | --- | --- |
-| 选购首页 | `app/entry/src/main/ets/features/shopping/ShoppingPage.ets` | 真实商品列表、分类筛选、本地搜索、新上架横幅、四个入口（二手配件 / 维修耗材 / 我的购物订单 / 发布商品）、下拉/点击刷新、空态与错误态；商品卡显示真实价格、分类、卖家与库存，`stock=0` 显示红色「已售罄」 |
+| 选购首页 | `app/entry/src/main/ets/features/shopping/ShoppingPage.ets` | 真实商品列表、分类筛选、本地搜索（只过滤已加载商品）、新上架 Swiper 横幅、四个入口（二手配件 / 维修耗材 / 我的购物订单 / 发布商品）、上滑分页加载、返回选购页自动刷新、空态与错误态；商品卡显示真实价格、分类、卖家与库存，`stock=0` 显示红色「已售罄」 |
 | 商品详情 | `features/shopping/ProductDetailPage.ets` | 公开读取；按服务端 `actions` 显示购买 / 编辑 / 下架；购买底部弹窗（数量 1..min(stock,99)、合计、幂等键）；下架弹窗；游客显示「登录后购买」；售罄与已下架有独立文案 |
 | 发布 / 编辑 | `features/shopping/ProductEditPage.ets` | 二手/耗材分类、价格（分转元）、库存、成色、描述、取货备注、0–9 张图片；提交后回详情 |
-| 我的购物订单 | `features/shopping/OrdersPage.ets` | 全部 / 待取货 / 已完成 / 已取消筛选；订单快照、取消订单二次确认 |
+| 我的购物订单 | `features/shopping/OrdersPage.ets` | 全部 / 待取货 / 已完成 / 已取消筛选、加载更多；订单快照、取消订单二次确认 |
 | 卖家订单 | `features/shopping/SellerOrdersPage.ets` | 复用订单列表，按卖家角色取数；确认完成二次确认 |
 | 我发布的商品 | `features/shopping/MyProductsPage.ets` | 在售 + 已下架，入口发布新商品 |
 | 商品图 | `features/shopping/ShoppingImage.ets` | 以公开接口取字节并解码 `PixelMap`，不把 API 基址/令牌拼进 URL |
@@ -599,14 +599,17 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
 游客在详情点「登录后购买」→ `HomePage.requestLogin(new LoginIntent())` → 登录成功后弹栈回到
 原商品详情并刷新（`onShown` 递增 `shoppingRevision`），底部变为「购买」，可继续打开购买弹窗。
 
-### 10.2 本轮修复（交接文档 §5.3 与验收中发现的缺口）
+### 10.2 本轮修复（交接文档 §5.3、验收与审查发现）
 
-| 编号 | 问题 | 处理 | 设备证据 |
+| 编号 | 问题 | 处理 | 验证 / 证据 |
 | --- | --- | --- | --- |
 | A | 游客详情页无购买入口，与任务书「游客点购买 → 登录 → 续接」冲突 | 详情底栏在「在售且有库存、未登录」时显示「登录后购买」；`authenticated` 改为 `@Prop` 保持登录后同步 | `guest-buy-login-cta.jpeg` → `guest-buy-login-page.jpeg` → `guest-buy-after-login.jpeg`，登录后自动回原详情且出现「购买」，弹窗可打开 |
 | B | 商品卡图片区点击被 `ShoppingImage` 的无条件 `onClick` 吞掉，只能点标题进详情 | 移除外层无条件 `onClick`，仅失败态的重试块注册点击 | 点击商品卡图片区成功进入商品详情（`product-detail.jpeg`，11:09） |
 | C | 售罄商品列表仍显示「库存 0」，无售罄标识 | 列表卡显示红色「已售罄」；详情 meta 显示红色「已售罄」chip、底栏显示「该商品已售罄，等待卖家补货」；后端公开列表契约不变（仍返回 `ON_SALE` + `stock=0`） | `shopping-list.jpeg`、`sold-out-detail.jpeg` |
 | D | 详情页无任何操作时渲染空白底栏白条 | A/C 补齐游客与售罄文案后所有详情状态都有内容；不再出现空底栏 | 同 A/C 截图 |
+| E | `PATCH` 枚举在 API 26 才加入，工程 `compatibleSdkVersion` 为 24，旧系统上直接调用会失败 | `ShoppingService.patch` 在 `http.RequestMethod.PATCH === undefined` 时抛 `CLIENT_UNSUPPORTED`，提示升级系统，不发空请求 | API 26 模拟器编辑保存 `PATCH ... 200`（`edit-product.jpeg` → `edit-saved-detail.jpeg`）；API 24 未实测 |
+| F | 逐张上传图片失败后重试会把已成功的图片再传一遍，进度计数恒为 0 | 每成功一张即 `pendingImages = images.slice(i + 1)` 并累计 `uploaded`，重试只处理剩余图片 | 代码修复；模拟器相册为空，未做设备上传复验 |
+| G | 切换分类/刷新时若上一轮「加载更多」未结束，`loadingMore` 会保持 true，之后上滑不再加载 | `reload()` 开头重置 `loadingMore = false` | 代码修复；构建与自动化检查通过 |
 
 ### 10.3 交接文档 §5.3 三个疑点定性
 
@@ -638,6 +641,16 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
    出现「购买」并可打开购买弹窗。
 5. 「我的」三入口（我的购物订单 / 我发布的商品 / 卖家订单）均可达，报修与备案入口未受影响；
    工作人员选购页底栏显示「工作台」，页面与客户一致。
+6. 编辑复验（主机 2026-10-22 00:15–00:28，设备重启后时钟 12:27–12:28）：工作人员从
+   「我的 → 我发布的商品 → 测试打印纸整箱 → 编辑」进入编辑页（`edit-product.jpeg`），
+   未改字段直接保存，后端记录
+   `PATCH /api/v1/shopping/products/6015255a-8f49-4dff-bf04-1c93e687b7d9 200 in 149ms`，
+   App 返回详情且字段一致（`edit-saved-detail.jpeg`）。该步验证编辑通道与详情回显；
+   字段变更持久化由 `shopping.test.ts`「修改与下架」覆盖。
+
+设备链路落库复核（`work/agent-tasks/T84-20261021/http/`）：`app-device-orders.json` 显示
+三笔订单（CANCELLED `d5e62ba0…`、COMPLETED `88e67162…`、CANCELLED `dae5dc07…`）及商品
+`stock=2`；`app-device-edit.log` 为编辑 PATCH 200 的后端日志。
 
 接口错误/幂等分支（curl，原生 `x-client-type: native` + Bearer）：
 
@@ -648,10 +661,11 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
 
 ### 10.5 构建与自动化检查
 
-- HAP（本机签名）`entry-default-signed.hap`：3,820,785 字节，
-  SHA256 `b1aa31efbb0e98094ac5f18a2c63da7db5131955a8ec8e94170ae59eb4fef276`；
+- HAP（本机签名）`entry-default-signed.hap`：3,820,403 字节，
+  SHA256 `75254a8c3d623a8cf2a1a82f3f76b3ea7100611b70460ff44a3de3cde6d365cd`；
   构建命令：`hvigorw clean assembleHap --mode module -p product=default --no-daemon`
-  （`DEVECO_SDK_HOME=E:/DevEco Studio/sdk`），BUILD SUCCESSFUL。
+  （`DEVECO_SDK_HOME=E:/DevEco Studio/sdk`），`BUILD SUCCESSFUL in 1 min 25 s 166 ms`
+  （日志 `work/agent-tasks/T84-20261021/hap-build-app.log`）。
   签名使用主检出 `app/build-profile.json5` 的本地调试证书，构建后已还原该文件，不进入提交。
 - `pnpm lint`：通过（exit 0）。
 - `pnpm test:unit`：**578 pass / 0 fail**。
@@ -662,15 +676,20 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
     `data/knowledge/index/knowledge-index.json`；
   - `native-activities.test.ts` 3 个：测试库成员档案/账号状态导致 403/404 与期望不符；
   - `personal-profile.test.ts` 1 个：成员目录期望 1 实际 20，测试库非干净库。
-- `pnpm build`：通过（exit 0，`✓ Compiled successfully in 31.5s`，Next.js 15.5.25）。
-- 备注：验证顺序为 App 改动后先跑全量 DB 与生产构建，提交前再复跑 lint/单测；本机 dev
-  已停止，未与 `pnpm build` 并行。
+- `pnpm build`：通过（exit 0，`✓ Compiled successfully in 14.0s`，Next.js 15.5.25）。
+- 备注：以上四项在审查修复（§10.2 E/F/G）落地后按最终代码重跑，日志为
+  `work/tmp/lint-final.log`、`unit-final.log`、`test-db-final.log`、`pnpm-build-final.log`；
+  构建前已停止本机 dev，未与 `pnpm build` 并行。
 
 ### 10.6 未完成 / 风险（如实记录）
 
 - **商品图片上传未在设备验证**：模拟器相册为空、拍照瓦片无响应，发布时只能无图提交；
   图片上传/公开读取已由第一轮 curl 与集成测试覆盖，App 端图片选择与预览仍需实体设备或
-  有照片的模拟器复验。
+  有照片的模拟器复验。§10.2 F 的「失败后只重试剩余图片」因此只有代码审查，没有设备复验。
+- **编辑功能依赖 API 26**：`http.RequestMethod.PATCH` 是 API 26 新增，工程
+  `compatibleSdkVersion` 为 6.1.1(24)，构建会给出兼容性告警。已在 API 26 模拟器验证
+  PATCH 200；API 24 及以下设备会收到「当前系统版本不支持编辑商品」的明确提示，
+  需低版本模拟器或真机复验。
 - 共享后端 `native/login` 实测 13.9–21.6 s，超过 App 默认 8 s 超时；设备验收全部走本机 13080。
   dev 模式首次访问新路由需按需编译，发布后首次进详情出现过两次「连接超时」，重试/二次进入即恢复，
   非接口错误。
@@ -695,3 +714,7 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
 | `sold-out-detail.jpeg` | 售罄详情（chip + 底栏文案） | 11:10 |
 | `staff-shopping.jpeg` | 工作人员视角选购页（底栏「工作台」） | 11:12 |
 | `shopping-list-bottom-copy.jpeg` | 列表滚到底部，说明文案完整可见 | 11:13 |
+| `edit-product.jpeg` | 编辑商品页（工作人员，保存前） | 12:27 |
+| `edit-saved-detail.jpeg` | 保存后返回商品详情，字段一致 | 12:28 |
+
+前 13 张为设备时钟 11:0x–11:13；模拟器重启后时钟变为 12:27–12:28，用于编辑复验。

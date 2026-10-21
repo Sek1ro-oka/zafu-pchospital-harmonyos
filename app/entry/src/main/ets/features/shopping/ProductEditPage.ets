@@ -241,11 +241,13 @@ export struct ProductEditPage {
     this.uploading = true;
     this.formError = '';
     const images: PickedImage[] = this.pendingImages.slice();
-    const uploaded: number = 0;
+    let uploaded: number = 0;
     try {
       for (let i = 0; i < images.length; i += 1) {
         this.uploadMessage = `正在上传图片 ${i + 1}/${images.length}`;
         await ShoppingService.uploadImages(id, [images[i]]);
+        uploaded += 1;
+        this.pendingImages = images.slice(i + 1);
       }
       this.pendingImages = [];
       this.uploadMessage = '';

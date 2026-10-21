@@ -184,6 +184,10 @@ export class ShoppingService {
 
   /** 与服务端同语义的 PATCH：路径是已编码的相对路径，body 是 JSON 字符串。 */
   private static async patch<T>(path: string, body: string, token: string): Promise<T> {
+    // PATCH 枚举在 API 26 才加入；compatibleSdkVersion 为 24，旧系统给出明确提示而不是发空请求。
+    if (http.RequestMethod.PATCH === undefined) {
+      throw new ApiRequestError('CLIENT_UNSUPPORTED', '当前系统版本不支持编辑商品，请升级系统后重试', 0, '');
+    }
     const headers: Record<string, string> = {};
     headers['Content-Type'] = 'application/json';
     headers['X-Client-Type'] = 'native';

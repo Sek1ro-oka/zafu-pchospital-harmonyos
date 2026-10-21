@@ -86,6 +86,7 @@ export struct ShoppingPage {
     this.requestGeneration += 1;
     const generation: number = this.requestGeneration;
     this.loading = true;
+    this.loadingMore = false;
     this.failed = false;
     this.errorText = '';
     try {

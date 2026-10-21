@@ -88,6 +88,7 @@ export struct OrdersPage {
     this.generation += 1;
     const generation: number = this.generation;
     this.loading = true;
+    this.loadingMore = false;
     this.failed = false;
     this.errorText = '';
     try {
