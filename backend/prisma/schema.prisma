@@ -41,6 +41,9 @@ model User {
   repairOrders       RepairOrder[]           @relation("RepairOrderSubmitter")
   repairOrderEvents  RepairOrderEvent[]      @relation("RepairOrderEventActor")
   knowledgeCasesWithdrawn KnowledgeCase[]    @relation("KnowledgeCaseWithdrawnBy")
+  products           Product[]               @relation("ProductSeller")
+  shoppingOrdersBought ShoppingOrder[]       @relation("ShoppingOrderBuyer")
+  shoppingOrdersSold ShoppingOrder[]         @relation("ShoppingOrderSeller")
 
   @@index([status, deletedAt], map: "users_status_deleted_idx")
   @@map("users")
@@ -799,4 +802,92 @@ model KnowledgeCaseSource {
   @@index([caseId, status], map: "knowledge_case_sources_case_status_idx")
   @@index([status, updatedAt], map: "knowledge_case_sources_status_updated_idx")
   @@map("knowledge_case_sources")
+}
+
+// ---------------------------------------------------------------------------
+// Issue #84 选购交易：商品、商品图片、订单。
+//
+// 状态与分类一律用字符串（全库无 Prisma enum 先例），合法值/状态转移写在
+// `src/features/shopping/shopping-types.ts`；金额用 Int 整数分，不用 Decimal。
+// 商品与订单不做软删除：下架是商品状态，订单是交易凭证；订单快照写入后不改写。
+// ---------------------------------------------------------------------------
+
+model Product {
+  id           String         @id @db.Char(36)
+  sellerId     String         @map("seller_id") @db.Char(36)
+  title        String         @db.VarChar(120)
+  description  String         @db.Text
+  priceCents   Int            @map("price_cents") @db.Int
+  /// SECONDHAND / CONSUMABLE
+  category     String         @db.VarChar(32)
+  /// 成色/规格的自由文本（如「九成新」「原装硒鼓」），由客户端展示，不做枚举。
+  condition    String         @db.VarChar(32)
+  /// 可售库存。下单在事务里条件扣减，取消时只回补一次。
+  stock        Int            @db.Int
+  /// ON_SALE / DELISTED
+  status       String         @db.VarChar(32)
+  pickupNote   String?        @map("pickup_note") @db.VarChar(255)
+  delistReason String?        @map("delist_reason") @db.VarChar(255)
+  delistedBy   String?        @map("delisted_by") @db.Char(36)
+  delistedAt   DateTime?      @map("delisted_at") @db.DateTime(3)
+  createdAt    DateTime       @map("created_at") @db.DateTime(3)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.DateTime(3)
+  seller       User           @relation("ProductSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+  images       ProductImage[]
+  orders       ShoppingOrder[]
+
+  @@index([status, category, createdAt], map: "products_status_category_created_idx")
+  @@index([sellerId, createdAt], map: "products_seller_created_idx")
+  @@map("products")
+}
+
+/// 商品图片。`url` 是公开读取地址；存储键/类型/长度单独留列，读取时不必猜扩展名。
+///
+/// `deletedAt` 是任务书字段外的扩展：订单快照保存图片 URL，后续若提供删除商品图能力，
+/// 软删可让历史订单的图仍按 ID 读取，避免 404；本轮未提供删除接口。
+model ProductImage {
+  id         String    @id @db.Char(36)
+  productId  String    @map("product_id") @db.Char(36)
+  url        String    @db.VarChar(512)
+  storageKey String    @unique(map: "product_images_storage_key_uq") @map("storage_key") @db.VarChar(255)
+  mimeType   String    @map("mime_type") @db.VarChar(64)
+  sizeBytes  Int       @map("size_bytes") @db.Int
+  sortOrder  Int       @map("sort_order") @db.Int
+  createdAt  DateTime  @map("created_at") @db.DateTime(3)
+  deletedAt  DateTime? @map("deleted_at") @db.DateTime(3)
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([productId, sortOrder], map: "product_images_product_sort_idx")
+  @@map("product_images")
+}
+
+/// 选购订单。商品标题/单价/首图在创建时写入快照，后续商品编辑或下架不回写历史订单。
+model ShoppingOrder {
+  id             String    @id @db.Char(36)
+  productId      String    @map("product_id") @db.Char(36)
+  buyerId        String    @map("buyer_id") @db.Char(36)
+  sellerId       String    @map("seller_id") @db.Char(36)
+  quantity       Int       @db.Int
+  unitPriceCents Int       @map("unit_price_cents") @db.Int
+  totalCents     Int       @map("total_cents") @db.Int
+  titleSnapshot  String    @map("title_snapshot") @db.VarChar(120)
+  imageSnapshot  String?   @map("image_snapshot") @db.VarChar(512)
+  /// PENDING_PICKUP / COMPLETED / CANCELLED
+  status         String    @db.VarChar(32)
+  cancelReason   String?   @map("cancel_reason") @db.VarChar(255)
+  cancelledBy    String?   @map("cancelled_by") @db.Char(36)
+  idempotencyKey String    @map("idempotency_key") @db.VarChar(80)
+  createdAt      DateTime  @map("created_at") @db.DateTime(3)
+  completedAt    DateTime? @map("completed_at") @db.DateTime(3)
+  cancelledAt    DateTime? @map("cancelled_at") @db.DateTime(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.DateTime(3)
+  product        Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+  buyer          User      @relation("ShoppingOrderBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  seller         User      @relation("ShoppingOrderSeller", fields: [sellerId], references: [id], onDelete: Restrict)
+
+  @@unique([buyerId, idempotencyKey], map: "shopping_orders_buyer_idem_uq")
+  @@index([buyerId, createdAt], map: "shopping_orders_buyer_created_idx")
+  @@index([sellerId, createdAt], map: "shopping_orders_seller_created_idx")
+  @@index([productId, createdAt], map: "shopping_orders_product_created_idx")
+  @@map("shopping_orders")
 }

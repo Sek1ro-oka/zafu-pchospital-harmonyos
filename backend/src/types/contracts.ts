@@ -194,6 +194,10 @@ export const Permission = [
   // 客户没有 MEMBER/ADMIN 角色，靠 customerPermissions 拿到这两个码。
   "repair.order:create",
   "repair.order:read",
+  // 选购交易（Issue #84）：二手任何登录用户可发布；耗材属于维修队耗材，
+  // 只有授权工作人员能发布/维护；管理员可下架任意商品（原因必填）。
+  "shopping.consumable:manage",
+  "shopping.product:moderate",
 ] as const;
 export type Permission = ValueOf<typeof Permission>;
 

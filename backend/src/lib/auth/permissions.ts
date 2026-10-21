@@ -40,6 +40,9 @@ export const rolePermissions: Readonly<Record<RoleCode, readonly Permission[]>> 
     // 工作人员需要看客户报修单才能受理（#38）；本 Issue 只用到读。
     "repair.order:create",
     "repair.order:read",
+    // 维修队耗材属于工作人员维护范围（#84）；二手商品任何登录用户都可发布，
+    // 不需要权限码，因此这里只加耗材维护。
+    "shopping.consumable:manage",
   ],
   ADMIN: [
     "join:read",
@@ -79,6 +82,9 @@ export const rolePermissions: Readonly<Record<RoleCode, readonly Permission[]>> 
     // 管理员处理客户报修（#38）；本 Issue 只用到读。
     "repair.order:create",
     "repair.order:read",
+    // 管理员可下架任意商品（#84），并天然拥有耗材维护权限。
+    "shopping.consumable:manage",
+    "shopping.product:moderate",
   ],
 };
 
