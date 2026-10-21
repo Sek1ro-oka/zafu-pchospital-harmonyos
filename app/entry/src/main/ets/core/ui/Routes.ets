@@ -16,6 +16,13 @@ export const ROUTE_ACTIVITY_ADMIN: string = 'activity-admin';
 export const ROUTE_ACTIVITY_EDIT: string = 'activity-edit';
 export const ROUTE_ACTIVITY_REGISTRATION_ADMIN: string = 'activity-registration-admin';
 
+/** 选购（Issue #84 App）：商品详情游客可读；其余子页需登录。 */
+export const ROUTE_SHOPPING_GOODS_DETAIL: string = 'shopping-goods-detail';
+export const ROUTE_SHOPPING_GOODS_EDIT: string = 'shopping-goods-edit';
+export const ROUTE_SHOPPING_ORDERS: string = 'shopping-orders';
+export const ROUTE_SHOPPING_SELLER_ORDERS: string = 'shopping-seller-orders';
+export const ROUTE_SHOPPING_MY_PRODUCTS: string = 'shopping-my-products';
+
 /**
  * 客户自主注册（Issue #60 App 侧第三批）。
  * 与 ROUTE_STAFF_REGISTER 是两个语义完全不同的入口，命名与标题都要区分清楚。
@@ -87,6 +94,11 @@ export function routeTitle(name: string): string {
   if (name === ROUTE_ACTIVITY_ADMIN) return '活动管理';
   if (name === ROUTE_ACTIVITY_EDIT) return '创建 / 编辑活动';
   if (name === ROUTE_ACTIVITY_REGISTRATION_ADMIN) return '活动报名管理';
+  if (name === ROUTE_SHOPPING_GOODS_DETAIL) return '商品详情';
+  if (name === ROUTE_SHOPPING_GOODS_EDIT) return '发布 / 编辑商品';
+  if (name === ROUTE_SHOPPING_ORDERS) return '我的购物订单';
+  if (name === ROUTE_SHOPPING_SELLER_ORDERS) return '卖家订单';
+  if (name === ROUTE_SHOPPING_MY_PRODUCTS) return '我发布的商品';
   if (name === ROUTE_FAVORITES) return '我的收藏';
   if (name === ROUTE_REGISTER_CUSTOMER) return '注册账号';
   if (name === ROUTE_STAFF_REGISTER) return '工作人员注册（需邀请码）';

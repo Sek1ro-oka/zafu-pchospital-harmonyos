@@ -12,6 +12,7 @@ import { RepairOrderService } from '../repair/RepairOrderService';
 import { ROUTE_PERSONAL_PROFILE } from '../../core/ui/Routes';
 import { PersonalProfileService } from './PersonalProfileService';
 import { ROUTE_FAVORITES, ROUTE_MESSAGES } from '../../core/ui/Routes';
+import { ROUTE_SHOPPING_MY_PRODUCTS, ROUTE_SHOPPING_ORDERS, ROUTE_SHOPPING_SELLER_ORDERS } from '../../core/ui/Routes';
 
 /** 统计区块的加载状态（与 StatePanel 配套）。 */
 const STATS_LOADING: number = 0;
@@ -120,6 +121,9 @@ export struct ProfilePage {
       { title: '我的报修', icon: $r('app.media.ref_document'), note: '', route: ROUTE_REPAIR_ORDERS },
       { title: '维修记录', icon: $r('app.media.ref_grid'), note: '暂未接入', route: '' },
       { title: '我的报名', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_MY_REGISTRATIONS },
+      { title: '我的购物订单', icon: $r('app.media.ref_document'), note: '', route: ROUTE_SHOPPING_ORDERS },
+      { title: '我发布的商品', icon: $r('app.media.ref_grid'), note: '', route: ROUTE_SHOPPING_MY_PRODUCTS },
+      { title: '卖家订单', icon: $r('app.media.ref_message'), note: '', route: ROUTE_SHOPPING_SELLER_ORDERS },
       { title: '收藏', icon: $r('app.media.ref_star'), note: '', route: ROUTE_FAVORITES },
       { title: '消息', icon: $r('app.media.ref_message'), note: '', route: ROUTE_MESSAGES },
       { title: '修改密码', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_PASSWORD_CHANGE },
@@ -132,6 +136,9 @@ export struct ProfilePage {
       { title: '本人维修备案', icon: $r('app.media.ref_document'), note: '', route: ROUTE_REPAIR_RECORDS },
       { title: '已审核备案库', icon: $r('app.media.ref_grid'), note: '', route: ROUTE_REPAIR_RECORDS },
       { title: '我的报名', icon: $r('app.media.ref_flag'), note: '', route: ROUTE_MY_REGISTRATIONS },
+      { title: '我的购物订单', icon: $r('app.media.ref_document'), note: '', route: ROUTE_SHOPPING_ORDERS },
+      { title: '我发布的商品', icon: $r('app.media.ref_grid'), note: '', route: ROUTE_SHOPPING_MY_PRODUCTS },
+      { title: '卖家订单', icon: $r('app.media.ref_message'), note: '', route: ROUTE_SHOPPING_SELLER_ORDERS },
       { title: '收藏', icon: $r('app.media.ref_star'), note: '', route: ROUTE_FAVORITES },
       { title: '个人资料', icon: $r('app.media.ref_profile'), note: '', route: ROUTE_PERSONAL_PROFILE },
       { title: '进入工作台', icon: $r('app.media.ref_document'), note: '', route: ROUTE_STAFF_ORDERS },

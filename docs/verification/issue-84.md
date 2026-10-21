@@ -1,12 +1,13 @@
-# Issue #84：选购平台后端（验证记录）
+# Issue #84：选购平台后端 + App（验证记录）
 
 2026-10-21。按 T84 任务书在任务工作树
 `E:\zafu_ph\.worktrees\issue84-shopping-20261021`（分支 `feat/issue-84-shopping-20261021`，
-基线 `main 2870955`）实施，Refs #84。**本轮只交付后端 P1+P2**：数据模型与迁移、游客可读的商品
+基线 `main 2870955`）实施，Refs #84。第一轮交付后端 P1+P2：数据模型与迁移、游客可读的商品
 浏览、商品发布/编辑/下架、商品图上传与公开读取、下单/订单列表/取消/完成、服务端权限与动作计算，
-以及单测、数据库集成测试和真实 HTTP 演示。App 选购页面、HAP 构建与模拟器截图不在本轮范围，
-留待下一轮接入本契约。第三轮（PR #89 审查修复）：编辑接口的库存与旧快照防护（`stock` 可选 +
-`stockBase` 基线、二手订单锁定）、事务内幂等命中分支统一走 `replayOrder` 校验、新增
+以及单测、数据库集成测试和真实 HTTP 演示。第二轮（同日晚）交付 App 选购页面并在模拟器完成
+端到端验收，修复游客购买入口、商品卡图片点击、售罄标识与空底栏四处缺漏；App 部分见 §10。
+第三轮（PR #89 审查修复）：编辑接口的库存与旧快照防护（`stock` 可选 + `stockBase` 基线、
+二手订单锁定）、事务内幂等命中分支统一走 `replayOrder` 校验、新增
 `POST + X-HTTP-Method-Override: PATCH` 兼容入口；本文 §1–§9 已按最终代码同步。
 第四轮（PR #89 审查修复·PWVolcano 第三轮 P2）：把商品图配额复核移入建行事务，堵住并发上传
 绕过每商品图片上限（8→10）的窗口；本文 §1、§5 已同步。
@@ -569,3 +570,128 @@ PORT=13080 npm run dev
 | `me-products.json` | 我发布的商品（在售 + 已下架） |
 | `delisted.json` / `guest-detail-delisted.json` | 下架后游客仍可读 |
 | `ids.json` | 四个演示对象 ID |
+
+## 10. App 选购页面（第二轮，2026-10-21）
+
+### 10.1 页面与路由
+
+App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原生页面，未改
+`backend/src/**` 与 `backend/prisma/**`。
+
+| 页面 / 组件 | 文件 | 说明 |
+| --- | --- | --- |
+| 选购首页 | `app/entry/src/main/ets/features/shopping/ShoppingPage.ets` | 真实商品列表、分类筛选、本地搜索、新上架横幅、四个入口（二手配件 / 维修耗材 / 我的购物订单 / 发布商品）、下拉/点击刷新、空态与错误态；商品卡显示真实价格、分类、卖家与库存，`stock=0` 显示红色「已售罄」 |
+| 商品详情 | `features/shopping/ProductDetailPage.ets` | 公开读取；按服务端 `actions` 显示购买 / 编辑 / 下架；购买底部弹窗（数量 1..min(stock,99)、合计、幂等键）；下架弹窗；游客显示「登录后购买」；售罄与已下架有独立文案 |
+| 发布 / 编辑 | `features/shopping/ProductEditPage.ets` | 二手/耗材分类、价格（分转元）、库存、成色、描述、取货备注、0–9 张图片；提交后回详情 |
+| 我的购物订单 | `features/shopping/OrdersPage.ets` | 全部 / 待取货 / 已完成 / 已取消筛选；订单快照、取消订单二次确认 |
+| 卖家订单 | `features/shopping/SellerOrdersPage.ets` | 复用订单列表，按卖家角色取数；确认完成二次确认 |
+| 我发布的商品 | `features/shopping/MyProductsPage.ets` | 在售 + 已下架，入口发布新商品 |
+| 商品图 | `features/shopping/ShoppingImage.ets` | 以公开接口取字节并解码 `PixelMap`，不把 API 基址/令牌拼进 URL |
+| 服务层 | `features/shopping/ShoppingService.ets` / `ShoppingTypes.ets` | 列表/详情/发布/编辑/下架/下单/取消/完成；金额整数分；动作只读服务端 |
+
+路由常量在 `core/ui/Routes.ets:20-24`：
+`ROUTE_SHOPPING_GOODS_DETAIL`、`ROUTE_SHOPPING_GOODS_EDIT`、`ROUTE_SHOPPING_ORDERS`、
+`ROUTE_SHOPPING_SELLER_ORDERS`、`ROUTE_SHOPPING_MY_PRODUCTS`。`HomePage` 增加对应
+`destination` 分支与标题；游客浏览放行仍用字面量 `'shopping-goods-detail'`（避免
+`guest-login-app.test.ts` 的 eval 符号表缺少新常量）。「我的」增加我的购物订单 / 我发布的商品 /
+卖家订单三个入口。
+
+游客在详情点「登录后购买」→ `HomePage.requestLogin(new LoginIntent())` → 登录成功后弹栈回到
+原商品详情并刷新（`onShown` 递增 `shoppingRevision`），底部变为「购买」，可继续打开购买弹窗。
+
+### 10.2 本轮修复（交接文档 §5.3 与验收中发现的缺口）
+
+| 编号 | 问题 | 处理 | 设备证据 |
+| --- | --- | --- | --- |
+| A | 游客详情页无购买入口，与任务书「游客点购买 → 登录 → 续接」冲突 | 详情底栏在「在售且有库存、未登录」时显示「登录后购买」；`authenticated` 改为 `@Prop` 保持登录后同步 | `guest-buy-login-cta.jpeg` → `guest-buy-login-page.jpeg` → `guest-buy-after-login.jpeg`，登录后自动回原详情且出现「购买」，弹窗可打开 |
+| B | 商品卡图片区点击被 `ShoppingImage` 的无条件 `onClick` 吞掉，只能点标题进详情 | 移除外层无条件 `onClick`，仅失败态的重试块注册点击 | 点击商品卡图片区成功进入商品详情（`product-detail.jpeg`，11:09） |
+| C | 售罄商品列表仍显示「库存 0」，无售罄标识 | 列表卡显示红色「已售罄」；详情 meta 显示红色「已售罄」chip、底栏显示「该商品已售罄，等待卖家补货」；后端公开列表契约不变（仍返回 `ON_SALE` + `stock=0`） | `shopping-list.jpeg`、`sold-out-detail.jpeg` |
+| D | 详情页无任何操作时渲染空白底栏白条 | A/C 补齐游客与售罄文案后所有详情状态都有内容；不再出现空底栏 | 同 A/C 截图 |
+
+### 10.3 交接文档 §5.3 三个疑点定性
+
+1. **卡片图片区浅蓝底上的白色商品名文字**：不是布局或占位 bug，文字是测试商品图自身的内容
+   （上传的浅蓝底设计图里带标题与规格）。`ShoppingImage` 只渲染解码后的 `PixelMap`，没有在
+   图片上叠加文字；同一张图在「我发布的商品」缩略图中显示相同文字。
+2. **售罄商品仍出现在「最新上架」**：保留在列表中（公开列表按 `ON_SALE` 返回，含 `stock=0`），
+   通过「已售罄」标识而不是隐藏商品来如实表达；如需过滤应由产品决定，本轮未改后端契约。
+3. **列表页底部说明文案被底栏遮挡**：非 bug。页面初始视口下文案位于悬浮 TabBar 后方，
+   向上滚动后完整可见（`shopping-list-bottom-copy.jpeg`，11:13），底部留白 96 与 note 一致。
+
+### 10.4 设备端到端验证
+
+环境：本机 MySQL 3308 开发库 `pchospital_exp_local`，`PORT=13080` 的 Next.js dev，
+模拟器 `T83Nav`（1256×2760），App 连接设置 `http://10.205.195.4:13080`；账号
+`100001/customer123`（客户）、`100002/staff123`（工作人员）。
+
+主流程（截图时间为设备时钟，主机时间 Playwright 同日 22:58–23:13）：
+
+1. 客户在「测试打印纸整箱」（卖家测试工作人员，¥25.50，库存 3）购买 2 件，合计 ¥51.00，
+   下单单号 `d5e62ba0-de5d-487c-a0ca-4ddadd6747e2`，状态 `PENDING_PICKUP`；列表页可见；
+   API 复核库存 3 → 1。
+2. 客户在「我的购物订单」取消该单（二次确认「取消后库存会回补」），状态 `CANCELLED`；
+   API 复核库存回到 3。
+3. 再下 1 件（`88e67162-9483-47d6-a553-95b155bb93f5`，库存 2）；切换工作人员，在「卖家订单」
+   点「确认完成」，状态 `COMPLETED`，完成时间 2026-10-21 23:02（UTC 15:02:55.638）；切回客户，
+   「我的购物订单」显示「已完成」与完成时间。
+4. 游客浏览列表 / 详情正常；游客在详情点「登录后购买」→ 登录页 → 登录后回原详情，
+   出现「购买」并可打开购买弹窗。
+5. 「我的」三入口（我的购物订单 / 我发布的商品 / 卖家订单）均可达，报修与备案入口未受影响；
+   工作人员选购页底栏显示「工作台」，页面与客户一致。
+
+接口错误/幂等分支（curl，原生 `x-client-type: native` + Bearer）：
+
+- 数量 5 > 库存 2：`OUT_OF_STOCK`「库存不足」。
+- 下架商品（`1cbf498a-9bf7-4fa2-b9b3-6989bde68e21`）下单：`PRODUCT_DELISTED`「商品已下架」。
+- 同幂等键（`native-order-t84-idem`）重试：返回同一单 `dae5dc07-5588-4fcd-8836-be9745772bc3`，
+  库存只扣一次（2 → 1）；同键改数量 2：`IDEMPOTENCY_CONFLICT`；取消后库存回补 2。
+
+### 10.5 构建与自动化检查
+
+- HAP（本机签名）`entry-default-signed.hap`：3,820,785 字节，
+  SHA256 `b1aa31efbb0e98094ac5f18a2c63da7db5131955a8ec8e94170ae59eb4fef276`；
+  构建命令：`hvigorw clean assembleHap --mode module -p product=default --no-daemon`
+  （`DEVECO_SDK_HOME=E:/DevEco Studio/sdk`），BUILD SUCCESSFUL。
+  签名使用主检出 `app/build-profile.json5` 的本地调试证书，构建后已还原该文件，不进入提交。
+- `pnpm lint`：通过（exit 0）。
+- `pnpm test:unit`：**578 pass / 0 fail**。
+- `pnpm test:db`（全量）：**301 tests / 295 pass / 6 fail**；其中
+  `tests/integration/shopping.test.ts` **12/12 通过**。6 个失败均为第一轮已记录的既有环境/测试库
+  状态问题，未修改相关代码：
+  - `customer-community.test.ts` 2 个：`KNOWLEDGE_INDEX_UNAVAILABLE`，本机缺
+    `data/knowledge/index/knowledge-index.json`；
+  - `native-activities.test.ts` 3 个：测试库成员档案/账号状态导致 403/404 与期望不符；
+  - `personal-profile.test.ts` 1 个：成员目录期望 1 实际 20，测试库非干净库。
+- `pnpm build`：通过（exit 0，`✓ Compiled successfully in 31.5s`，Next.js 15.5.25）。
+- 备注：验证顺序为 App 改动后先跑全量 DB 与生产构建，提交前再复跑 lint/单测；本机 dev
+  已停止，未与 `pnpm build` 并行。
+
+### 10.6 未完成 / 风险（如实记录）
+
+- **商品图片上传未在设备验证**：模拟器相册为空、拍照瓦片无响应，发布时只能无图提交；
+  图片上传/公开读取已由第一轮 curl 与集成测试覆盖，App 端图片选择与预览仍需实体设备或
+  有照片的模拟器复验。
+- 共享后端 `native/login` 实测 13.9–21.6 s，超过 App 默认 8 s 超时；设备验收全部走本机 13080。
+  dev 模式首次访问新路由需按需编译，发布后首次进详情出现过两次「连接超时」，重试/二次进入即恢复，
+  非接口错误。
+- 模拟器安全键盘弹出时 `snapshot_display` 全黑，取登录页截图需先收起键盘；不影响功能。
+- 未做购物车、议价、私信、线上支付、配送；订单为线下付款取货。
+- 截图均为模拟器证据，无实体手机验证。
+
+### 10.7 截图索引
+
+| 文件 | 内容 | 设备时间 |
+| --- | --- | --- |
+| `shopping-list.jpeg` | 选购列表（游客；含「已售罄」标识） | 11:09 |
+| `product-detail.jpeg` | 商品详情（点击图片区进入） | 11:09 |
+| `product-publish-form.jpeg` | 发布商品表单 | 11:11 |
+| `order-confirm-sheet.jpeg` | 下单确认弹窗（数量 1，合计 ¥25.50） | 11:10 |
+| `buyer-orders.jpeg` | 我的购物订单（已完成 + 已取消） | 11:04 |
+| `seller-orders-pending.jpeg` | 卖家订单（待取货） | 11:02 |
+| `seller-orders-completed.jpeg` | 卖家订单（已完成） | 11:02 |
+| `guest-buy-login-cta.jpeg` | 游客详情「登录后购买」 | 11:09 |
+| `guest-buy-login-page.jpeg` | 点击后进入登录页 | 11:10 |
+| `guest-buy-after-login.jpeg` | 登录后回原详情，出现「购买」 | 11:10 |
+| `sold-out-detail.jpeg` | 售罄详情（chip + 底栏文案） | 11:10 |
+| `staff-shopping.jpeg` | 工作人员视角选购页（底栏「工作台」） | 11:12 |
+| `shopping-list-bottom-copy.jpeg` | 列表滚到底部，说明文案完整可见 | 11:13 |

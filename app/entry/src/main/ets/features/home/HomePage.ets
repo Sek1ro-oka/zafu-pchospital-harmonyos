@@ -44,6 +44,13 @@ import { ROUTE_REPAIR_RECORDS } from '../../core/ui/Routes';
 import { StaffRepairRecordPage } from '../repair/StaffRepairRecordPage';
 import { ServicePage } from '../service/ServicePage';
 import { ShoppingPage } from '../shopping/ShoppingPage';
+import { ProductDetailPage } from '../shopping/ProductDetailPage';
+import { ProductEditPage } from '../shopping/ProductEditPage';
+import { OrdersPage } from '../shopping/OrdersPage';
+import { SellerOrdersPage } from '../shopping/SellerOrdersPage';
+import { MyProductsPage } from '../shopping/MyProductsPage';
+import { ShoppingGoodsParam } from '../shopping/ShoppingTypes';
+import { ROUTE_SHOPPING_GOODS_DETAIL, ROUTE_SHOPPING_GOODS_EDIT, ROUTE_SHOPPING_ORDERS, ROUTE_SHOPPING_SELLER_ORDERS, ROUTE_SHOPPING_MY_PRODUCTS } from '../../core/ui/Routes';
 import { HomeTab } from './HomeTab';
 import { ProfilePage } from '../profile/ProfilePage';
 import { PersonalProfilePage } from '../profile/PersonalProfilePage';
@@ -176,6 +183,7 @@ export struct HomePage {
   @State messagesRevision: number = 0;
   @State publicCasesRevision: number = 0;
   @State publicCaseRevision: number = 0;
+  @State shoppingRevision: number = 0;
   private tabController: TabsController = new TabsController();
   private pusher: NavPusher = new NavPusher();
 
@@ -326,14 +334,15 @@ export struct HomePage {
     // 知识目录（#83 迁入服务）刻意**不**在这个放行名单里：先把账号送到改密页。
     // 注意这里没有写 `loginIntent`，所以改密成功后不会自动打开知识目录，
     // 而是回到 tab 根页（安全行为：半受限账号不直接进入知识页撞 403）。
-    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_KNOWLEDGE_SEARCH && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP) {
+    if (this.authenticated && this.needsPasswordChange(this.mustChangePassword) && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_KNOWLEDGE_SEARCH && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP && route !== 'shopping-goods-detail') {
       this.openPasswordChange(true);
       return;
     }
     // 游客只能浏览公开页面；其余路由压登录页并记住目标，登录成功后续接。
     // `GUEST_KNOWLEDGE_ROUTE` 是 `ROUTE_KNOWLEDGE_LIBRARY` 的字面量镜像，原因见该常量注释。
     if (!this.authenticated && route !== ROUTE_PUBLIC_GUIDES && route !== ROUTE_KNOWLEDGE_SEARCH
-      && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP && route !== GUEST_KNOWLEDGE_ROUTE) {
+      && route !== ROUTE_ACTIVITY_DETAIL && route !== ROUTE_ACTIVITY_LOOKUP && route !== GUEST_KNOWLEDGE_ROUTE
+      && route !== 'shopping-goods-detail') {
       const intent = new LoginIntent();
       intent.route = route;
       intent.param = param;
@@ -590,12 +599,56 @@ export struct HomePage {
             this.expireSession();
           }
         });
+      } else if (name === ROUTE_SHOPPING_GOODS_DETAIL) {
+        ProductDetailPage({
+          param: param as ShoppingGoodsParam,
+          authenticated: this.authenticated && !this.mustChangePassword,
+          refreshVersion: this.shoppingRevision,
+          onBack: (): void => { this.pathStack.pop(); },
+          onOpen: (route: string, target: Object | null): void => { this.openRoute(route, target); },
+          onLogin: (): void => {
+            if (this.mustChangePassword) this.openPasswordChange(true);
+            else this.requestLogin(new LoginIntent());
+          },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_SHOPPING_GOODS_EDIT) {
+        ProductEditPage({
+          param: param === null || param === undefined ? null : param as ShoppingGoodsParam,
+          onBack: (): void => { this.pathStack.pop(); },
+          onSaved: (productId: string): void => {
+            this.pathStack.pop();
+            const target: ShoppingGoodsParam = { id: productId };
+            this.openRoute(ROUTE_SHOPPING_GOODS_DETAIL, target);
+          },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_SHOPPING_ORDERS) {
+        OrdersPage({
+          role: 'buyer',
+          refreshVersion: this.shoppingRevision,
+          onBack: (): void => { this.pathStack.pop(); },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_SHOPPING_SELLER_ORDERS) {
+        SellerOrdersPage({
+          refreshVersion: this.shoppingRevision,
+          onBack: (): void => { this.pathStack.pop(); },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
+      } else if (name === ROUTE_SHOPPING_MY_PRODUCTS) {
+        MyProductsPage({
+          refreshVersion: this.shoppingRevision,
+          onBack: (): void => { this.pathStack.pop(); },
+          onOpen: (route: string, target: Object | null): void => { this.openRoute(route, target); },
+          onSessionExpired: (): void => { this.expireSession(); }
+        });
       }
     }
     .hideTitleBar(name === ROUTE_PERSONAL_PROFILE || name === ROUTE_REPAIR_ORDERS || name === ROUTE_STAFF_ORDERS
       || name === ROUTE_STAFF_ORDER_DETAIL || name === ROUTE_PUBLIC_GUIDES || name === ROUTE_CASE_DETAIL
       || name === ROUTE_CASE_LIBRARY || name === ROUTE_PUBLIC_CASES || name === ROUTE_PUBLIC_CASE_DETAIL || name === ROUTE_KNOWLEDGE_SEARCH
-      || name === ROUTE_KNOWLEDGE_LIBRARY)
+      || name === ROUTE_KNOWLEDGE_LIBRARY || name.indexOf('shopping') >= 0)
     .title(name === ROUTE_LOGIN ? '登录' : routeTitle(name))
     .onShown(() => {
       if (name === ROUTE_KNOWLEDGE_SEARCH) this.knowledgeSearchRevision += 1;
@@ -606,6 +659,7 @@ export struct HomePage {
       if (name === ROUTE_MESSAGES) this.messagesRevision += 1;
       if (name === ROUTE_PUBLIC_CASES) this.publicCasesRevision += 1;
       if (name === ROUTE_PUBLIC_CASE_DETAIL) this.publicCaseRevision += 1;
+      if (name.indexOf('shopping') >= 0) this.shoppingRevision += 1;
     })
     .onBackPressed((): boolean => {
       // 认证写请求进行中 / 强制改密未完成：拦下返回，避免迟到响应把会话写成另一个账号。
@@ -702,10 +756,11 @@ export struct HomePage {
           }
 
           TabContent() {
-            // #83：第四栏由「知识」改为「选购」。交易模块（#84）尚未交付，
-            // 这里只放诚实的建设中页面：无示例商品、价格与订单；游客可直接进入。
             ShoppingPage({
+              refreshVersion: this.shoppingRevision,
               onService: (): void => { this.selectNavigation(2); },
+              onOpen: (route: string, param: Object | null): void => { this.openRoute(route, param); },
+              onSessionExpired: (): void => { this.expireSession(); },
               staff: this.home === HOME_STAFF
             })
           }
@@ -738,6 +793,7 @@ export struct HomePage {
         .onChange((index: number) => {
           this.currentTab = index;
           if (index === 2) this.workbenchRevision += 1;
+          if (index === 3) this.shoppingRevision += 1;
         })
         .width('100%')
         .height('100%')
