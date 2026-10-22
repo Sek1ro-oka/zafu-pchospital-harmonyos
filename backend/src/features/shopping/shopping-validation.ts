@@ -29,6 +29,12 @@ export type ProductDraft = {
 export type ProductPatch = Partial<Omit<ProductDraft, "pickupNote">> & {
   /** null 表示清空自提说明；undefined 表示本次不改。 */
   pickupNote?: string | null;
+  /**
+   * 库存基线：客户端加载商品时看到的 `stock`。只有本次传了 `stock` 才必填，
+   * 服务端在事务内比较当前库存与该基线，不一致返回 409 `STOCK_CONFLICT`，
+   * 防止编辑页的旧快照覆盖订单已经扣减/回补的库存。
+   */
+  stockBase?: number;
 };
 
 export type ShoppingOrderDraft = {
@@ -138,6 +144,7 @@ export function normalizeProductPatch(input: ProductPatch): ProductPatch {
   if (input.priceCents !== undefined) patch.priceCents = input.priceCents;
   if (input.condition !== undefined) patch.condition = clean(input.condition);
   if (input.stock !== undefined) patch.stock = input.stock;
+  if (input.stockBase !== undefined) patch.stockBase = input.stockBase;
   if (input.pickupNote !== undefined)
     patch.pickupNote =
       input.pickupNote === null ? null : clean(input.pickupNote) || null;
@@ -164,7 +171,16 @@ export function validateProductPatch(input: ProductPatch, category: string): voi
   }
   if (input.priceCents !== undefined) validatePrice(input.priceCents, errors);
   if (input.condition !== undefined) validateCondition(input.condition, category, errors);
-  if (input.stock !== undefined) validateStock(input.stock, category, errors);
+  // `stock` 缺省表示本次完全不动库存（编辑与订单扣减解耦，防旧快照覆盖）；
+  // 传了 `stock` 就必须带客户端加载时看到的基线 `stockBase`，服务端在事务内比对。
+  // 只传 `stockBase` 不传 `stock` 时忽略基线，库存不变。
+  if (input.stock !== undefined) {
+    validateStock(input.stock, category, errors);
+    if (input.stockBase === undefined)
+      errors.stockBase = ["修改库存必须同时提交 stockBase（加载时看到的库存）"];
+    else if (!Number.isSafeInteger(input.stockBase) || input.stockBase < 0)
+      errors.stockBase = ["stockBase 必须是不小于 0 的整数"];
+  }
   if (typeof input.pickupNote === "string" && input.pickupNote.length > limits.pickupNoteMaxLength)
     errors.pickupNote = [`自提说明不能超过 ${limits.pickupNoteMaxLength} 字`];
 

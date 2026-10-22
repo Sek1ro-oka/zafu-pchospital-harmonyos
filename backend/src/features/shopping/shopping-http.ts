@@ -76,6 +76,7 @@ export function productPatchInput(body: Record<string, unknown>): ProductPatch {
   if ("condition" in body)
     patch.condition = body.condition === null ? "" : (optionalString(body, "condition") ?? "");
   if ("stock" in body) patch.stock = requiredInteger(body, "stock");
+  if ("stockBase" in body) patch.stockBase = requiredInteger(body, "stockBase");
   if ("pickupNote" in body) {
     patch.pickupNote = body.pickupNote === null ? null : optionalString(body, "pickupNote");
   }

@@ -116,6 +116,12 @@ export const ApiErrorCode = [
   "ORDER_NOT_FOUND",
   // 409：订单当前状态不允许该动作（取消/完成竞争失败、已完成再取消等），客户端应刷新。
   "INVALID_STATUS",
+  // 409：编辑商品时传了 `stock` 但与库存基线不符（已被订单调整），客户端应重新加载后再保存。
+  "STOCK_CONFLICT",
+  // 409：二手商品已产生订单，库存归订单链路管理，不再接受手动改库存。
+  "STOCK_ORDER_LOCKED",
+  // 405：POST 兼容入口缺少或带了错误的 `X-HTTP-Method-Override: PATCH` 头。
+  "METHOD_NOT_ALLOWED",
   "PRODUCT_IMAGE_LIMIT_EXCEEDED",
   "PRODUCT_IMAGE_TYPE_UNSUPPORTED",
   "PRODUCT_IMAGE_TOO_LARGE",
@@ -244,6 +250,9 @@ const defaultStatus: Record<ApiErrorCode, number> = {
   SELF_PURCHASE: 400,
   ORDER_NOT_FOUND: 404,
   INVALID_STATUS: 409,
+  STOCK_CONFLICT: 409,
+  STOCK_ORDER_LOCKED: 409,
+  METHOD_NOT_ALLOWED: 405,
   PRODUCT_IMAGE_LIMIT_EXCEEDED: 400,
   PRODUCT_IMAGE_TYPE_UNSUPPORTED: 415,
   PRODUCT_IMAGE_TOO_LARGE: 413,

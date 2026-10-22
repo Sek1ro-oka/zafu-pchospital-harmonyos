@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { after, before, test } from "node:test";
 
 import { GET as listProductImagesContent } from "../../src/app/api/v1/shopping/product-images/[imageId]/content/route";
-import { GET as getProduct, PATCH as patchProduct } from "../../src/app/api/v1/shopping/products/[id]/route";
+import {
+  GET as getProduct,
+  PATCH as patchProduct,
+  POST as postProductOverride,
+} from "../../src/app/api/v1/shopping/products/[id]/route";
 import { POST as delistProduct } from "../../src/app/api/v1/shopping/products/[id]/delist/route";
 import { POST as uploadProductImages } from "../../src/app/api/v1/shopping/products/[id]/images/route";
 import {
@@ -32,7 +36,8 @@ import { callRoute, sameOriginHeaders } from "./http-harness";
  * - 卖家改/下架、管理员下架他人商品必须填原因、第三人写操作 403/404；
  * - 下单快照 + 条件扣库存、幂等重放不二次扣库存、自购/下架/缺货错误码；
  * - 买家/卖家两种订单视角、完成仅卖家、取消只回补一次、取消/完成竞争 409；
- * - 并发抢最后一件、并发同幂等键只落一单。
+ * - 并发抢最后一件、并发同幂等键只落一单、并发同键不同商品 409；
+ * - 编辑与下单/取消交错不覆盖库存、stockBase 冲突与二手订单锁定、POST 兼容入口。
  *
  * 夹具用户用固定 UUID，`before/after` 只清理本文件数据，避免影响其他集成文件。
  */
@@ -823,4 +828,280 @@ dbTest("并发同幂等键：两次请求只落一单、只扣一次库存", asy
   const row = await getDb().product.findUnique({ where: { id: productId } });
   assert.equal(row?.stock, 0, "并发重试只能扣一次库存");
   assert.equal(await getDb().shoppingOrder.count({ where: { productId } }), 1);
+});
+
+dbTest("编辑与下单/取消交错：不传 stock 的编辑不覆盖订单扣减，取消不翻倍", async () => {
+  const seller = await bearerFor(SELLER_ID);
+  const buyer = await bearerFor(BUYER_ID);
+  const product = await createProductAs(seller, { title: "交错编辑商品" });
+  const productId = product.id as string;
+
+  // 卖家打开编辑页：读取商品，表单快照里 stock=1。
+  const loaded = await callRoute(
+    getProduct,
+    `http://localhost/api/v1/shopping/products/${productId}`,
+    { headers: seller, params: { id: productId } },
+  );
+  assert.equal(loaded.status, 200);
+  assert.equal(dataOf(loaded.json).stock, 1);
+
+  // 卖家保存前买家下单：库存 1 → 0。
+  const created = await placeOrder(buyer, productId, 1);
+  assert.equal(created.status, 201);
+  assert.equal((await getDb().product.findUnique({ where: { id: productId } }))?.stock, 0);
+
+  // 卖家只改标题保存（不回传 stock）：旧快照不得把库存覆盖回 1。
+  const titleOnly = await callRoute(
+    patchProduct,
+    `http://localhost/api/v1/shopping/products/${productId}`,
+    {
+      method: "PATCH",
+      headers: seller,
+      params: { id: productId },
+      body: { title: "只改了标题" },
+    },
+  );
+  assert.equal(titleOnly.status, 200);
+  assert.equal(dataOf(titleOnly.json).title, "只改了标题");
+  assert.equal(
+    (await getDb().product.findUnique({ where: { id: productId } }))?.stock,
+    0,
+    "不传 stock 时库存必须保持订单扣减后的值",
+  );
+
+  // 取消订单：库存回补到扣减前的 1，而不是翻成 2。
+  const orderId = dataOf(created.json).id as string;
+  const cancelled = await callRoute(
+    cancelOrder,
+    `http://localhost/api/v1/shopping/orders/${orderId}/cancel`,
+    { method: "POST", headers: buyer, params: { id: orderId } },
+  );
+  assert.equal(cancelled.status, 200);
+  assert.equal(
+    (await getDb().product.findUnique({ where: { id: productId } }))?.stock,
+    1,
+    "取消后库存回补到扣减前值，不得翻倍",
+  );
+});
+
+dbTest("库存编辑防护：二手已下单锁定、过期基线 409、正确基线补货成功", async () => {
+  const seller = await bearerFor(SELLER_ID);
+  const buyer = await bearerFor(BUYER_ID);
+  const staff = await bearerFor(STAFF_ID);
+
+  // SECONDHAND：已存在订单后传 stock 一律 409 STOCK_ORDER_LOCKED（即使基线正确）。
+  const secondhand = await createProductAs(seller, { title: "二手锁定商品" });
+  const shId = secondhand.id as string;
+  const shOrder = await placeOrder(buyer, shId, 1);
+  assert.equal(shOrder.status, 201);
+  const locked = await callRoute(
+    patchProduct,
+    `http://localhost/api/v1/shopping/products/${shId}`,
+    {
+      method: "PATCH",
+      headers: seller,
+      params: { id: shId },
+      body: { stock: 1, stockBase: 0 },
+    },
+  );
+  assert.equal(locked.status, 409, "二手已有订单不得手动改库存");
+  assert.equal(errorCode(locked.json), "STOCK_ORDER_LOCKED");
+  assert.equal(
+    (await getDb().product.findUnique({ where: { id: shId } }))?.stock,
+    0,
+    "锁定分支不得写库存",
+  );
+
+  // 订单取消后（任意状态都算「已存在订单」）仍然锁定。
+  const shOrderId = dataOf(shOrder.json).id as string;
+  const shCancelled = await callRoute(
+    cancelOrder,
+    `http://localhost/api/v1/shopping/orders/${shOrderId}/cancel`,
+    { method: "POST", headers: buyer, params: { id: shOrderId } },
+  );
+  assert.equal(shCancelled.status, 200);
+  const lockedAfterCancel = await callRoute(
+    patchProduct,
+    `http://localhost/api/v1/shopping/products/${shId}`,
+    {
+      method: "PATCH",
+      headers: seller,
+      params: { id: shId },
+      body: { stock: 1, stockBase: 1 },
+    },
+  );
+  assert.equal(lockedAfterCancel.status, 409, "已取消订单也算已预留，仍应锁定");
+  assert.equal(errorCode(lockedAfterCancel.json), "STOCK_ORDER_LOCKED");
+
+  // CONSUMABLE：过期 stockBase → 409 STOCK_CONFLICT，且不写库存。
+  const consumable = await createProductAs(staff, {
+    category: "CONSUMABLE",
+    title: "耗材补货商品",
+    condition: "",
+    stock: 5,
+  });
+  const cId = consumable.id as string;
+  const cOrder = await placeOrder(buyer, cId, 2);
+  assert.equal(cOrder.status, 201);
+  assert.equal((await getDb().product.findUnique({ where: { id: cId } }))?.stock, 3);
+
+  const stale = await callRoute(
+    patchProduct,
+    `http://localhost/api/v1/shopping/products/${cId}`,
+    {
+      method: "PATCH",
+      headers: staff,
+      params: { id: cId },
+      // 编辑页加载时看到的基线是 5，当前库存已被订单扣到 3。
+      body: { stock: 5, stockBase: 5 },
+    },
+  );
+  assert.equal(stale.status, 409, "过期基线必须 409 而不是覆盖");
+  assert.equal(errorCode(stale.json), "STOCK_CONFLICT");
+  assert.equal(
+    (await getDb().product.findUnique({ where: { id: cId } }))?.stock,
+    3,
+    "冲突分支不得写库存",
+  );
+
+  // 重新加载后带正确基线补货：成功且库存为所传值。
+  const restock = await callRoute(
+    patchProduct,
+    `http://localhost/api/v1/shopping/products/${cId}`,
+    {
+      method: "PATCH",
+      headers: staff,
+      params: { id: cId },
+      body: { stock: 8, stockBase: 3 },
+    },
+  );
+  assert.equal(restock.status, 200, `正确基线补货应成功：${JSON.stringify(restock.json)}`);
+  assert.equal(dataOf(restock.json).stock, 8);
+  assert.equal((await getDb().product.findUnique({ where: { id: cId } }))?.stock, 8);
+
+  // 传 stock 不传 stockBase → 400 VALIDATION_FAILED（fieldErrors.stockBase）。
+  const noBase = await callRoute(
+    patchProduct,
+    `http://localhost/api/v1/shopping/products/${cId}`,
+    { method: "PATCH", headers: staff, params: { id: cId }, body: { stock: 6 } },
+  );
+  assert.equal(noBase.status, 400);
+  assert.equal(errorCode(noBase.json), "VALIDATION_FAILED");
+  assert.ok((noBase.json as Envelope).error?.fieldErrors?.stockBase, "应报 stockBase 字段错误");
+});
+
+dbTest("并发同幂等键不同商品：一单成功、另一单 409，库存只扣成功那笔", async () => {
+  const seller = await bearerFor(SELLER_ID);
+  const buyer = await bearerFor(BUYER_ID);
+  const productA = await createProductAs(seller, { title: "同键商品A" });
+  const productB = await createProductAs(seller, { title: "同键商品B" });
+  const aId = productA.id as string;
+  const bId = productB.id as string;
+  const key = `race-product-${randomUUID()}`;
+
+  const [first, second] = await Promise.all([
+    placeOrder(buyer, aId, 1, key),
+    placeOrder(buyer, bId, 1, key),
+  ]);
+  const statuses = [first.status, second.status].sort((a, b) => a - b);
+  assert.deepEqual(statuses, [201, 409], `应一成一败，实际 ${statuses.join("/")}`);
+  const succeeded = first.status === 201 ? first : second;
+  const failed = first.status === 409 ? first : second;
+  assert.equal(
+    errorCode(failed.json),
+    "IDEMPOTENCY_CONFLICT",
+    "同键不同商品不得返回另一单的成功结果",
+  );
+  const succeededProductId = dataOf(succeeded.json).productId as string;
+  assert.ok(
+    succeededProductId === aId || succeededProductId === bId,
+    "成功单必须属于本次请求的商品",
+  );
+
+  const aRow = await getDb().product.findUnique({ where: { id: aId } });
+  const bRow = await getDb().product.findUnique({ where: { id: bId } });
+  if (succeededProductId === aId) {
+    assert.equal(aRow?.stock, 0, "成功那笔正常扣库存");
+    assert.equal(bRow?.stock, 1, "冲突请求不得扣另一商品库存");
+  } else {
+    assert.equal(bRow?.stock, 0, "成功那笔正常扣库存");
+    assert.equal(aRow?.stock, 1, "冲突请求不得扣另一商品库存");
+  }
+  assert.equal(
+    await getDb().shoppingOrder.count({ where: { productId: { in: [aId, bId] } } }),
+    1,
+    "同一幂等键只落一单",
+  );
+});
+
+dbTest("POST + X-HTTP-Method-Override: PATCH 兼容入口：与 PATCH 同效；缺头/错值 405", async () => {
+  const seller = await bearerFor(SELLER_ID);
+  const buyer = await bearerFor(BUYER_ID);
+  const product = await createProductAs(seller, { title: "override 商品" });
+  const id = product.id as string;
+
+  const viaPost = await callRoute(
+    postProductOverride,
+    `http://localhost/api/v1/shopping/products/${id}`,
+    {
+      method: "POST",
+      headers: { ...seller, "x-http-method-override": "PATCH" },
+      params: { id },
+      body: { title: "POST 通道改标题", priceCents: 888 },
+    },
+  );
+  assert.equal(viaPost.status, 200, `POST 兼容入口应与 PATCH 同效：${viaPost.status}`);
+  assert.equal(dataOf(viaPost.json).title, "POST 通道改标题");
+  assert.equal(dataOf(viaPost.json).priceCents, 888);
+
+  // 头值大小写不敏感。
+  const lowercase = await callRoute(
+    postProductOverride,
+    `http://localhost/api/v1/shopping/products/${id}`,
+    {
+      method: "POST",
+      headers: { ...seller, "x-http-method-override": "patch" },
+      params: { id },
+      body: { title: "小写头值也可以" },
+    },
+  );
+  assert.equal(lowercase.status, 200);
+  assert.equal(dataOf(lowercase.json).title, "小写头值也可以");
+
+  const noHeader = await callRoute(
+    postProductOverride,
+    `http://localhost/api/v1/shopping/products/${id}`,
+    { method: "POST", headers: seller, params: { id }, body: { title: "没有头" } },
+  );
+  assert.equal(noHeader.status, 405, "缺 X-HTTP-Method-Override 应 405");
+  assert.equal(errorCode(noHeader.json), "METHOD_NOT_ALLOWED");
+
+  const wrongValue = await callRoute(
+    postProductOverride,
+    `http://localhost/api/v1/shopping/products/${id}`,
+    {
+      method: "POST",
+      headers: { ...seller, "x-http-method-override": "DELETE" },
+      params: { id },
+      body: { title: "错误头值" },
+    },
+  );
+  assert.equal(wrongValue.status, 405, "头值不是 PATCH 应 405");
+  assert.equal(errorCode(wrongValue.json), "METHOD_NOT_ALLOWED");
+
+  const row = await getDb().product.findUnique({ where: { id } });
+  assert.equal(row?.title, "小写头值也可以", "405 分支不得改动商品");
+
+  // 同一鉴权：第三人走 POST 通道同样 403。
+  const forbidden = await callRoute(
+    postProductOverride,
+    `http://localhost/api/v1/shopping/products/${id}`,
+    {
+      method: "POST",
+      headers: { ...buyer, "x-http-method-override": "PATCH" },
+      params: { id },
+      body: { title: "路人改" },
+    },
+  );
+  assert.equal(forbidden.status, 403, "POST 通道必须复用 PATCH 的鉴权");
 });

@@ -72,6 +72,14 @@ export const shoppingProductService = {
   /**
    * 修改商品：本人且仅在售可改；分类/状态不开放修改。
    * 商品不存在 → 404；非本人 → 403（商品详情公开，不隐藏存在性）。
+   *
+   * 库存与普通字段解耦（PR #89 审查 P1）：
+   * - 不传 `stock`：只改其它字段，库存完全不动 —— 编辑与下单/取消交错时，
+   *   表单里的旧库存快照不会覆盖订单已扣减/回补的值；
+   * - 传 `stock`：必须带 `stockBase`（客户端加载时看到的库存，校验层强制），
+   *   事务内比对不一致 → 409 `STOCK_CONFLICT`；
+   * - SECONDHAND 且已存在订单（任意状态）：库存归订单链路管理，
+   *   传 `stock` → 409 `STOCK_ORDER_LOCKED`。
    */
   async update(id: string, input: ProductPatch, actor: AuthorizedActor) {
     if (!actor.userId) throw new AppError("UNAUTHENTICATED", "登录状态无效");
@@ -86,17 +94,42 @@ export const shoppingProductService = {
     if (patch.description !== undefined) data.description = patch.description;
     if (patch.priceCents !== undefined) data.priceCents = patch.priceCents;
     if (patch.condition !== undefined) data.condition = patch.condition;
-    if (patch.stock !== undefined) data.stock = patch.stock;
     if (patch.pickupNote !== undefined) data.pickupNote = patch.pickupNote;
 
-    // 条件更新与下架互斥：读取之后商品可能已被并发下架，不能把修改写到
-    // DELISTED 商品上。命中 0 行时回读状态，统一返回 409。
-    const updated = await shoppingRepository.updateProductIfOnSale({
-      id,
-      sellerId: actor.userId,
-      data,
-    });
-    if (updated) return toProductView(updated, actor);
+    if (patch.stock !== undefined && patch.stockBase !== undefined) {
+      // 带库存的修改走基线事务：条件里含 `stock=stockBase`，串行化隔离下
+      // 与下单/取消事务互斥，旧快照不可能盖掉并发扣减。
+      const result = await shoppingRepository.updateProductStockWithBase({
+        id,
+        sellerId: actor.userId,
+        data,
+        stock: patch.stock,
+        stockBase: patch.stockBase,
+        orderLocked: product.category === "SECONDHAND",
+      });
+      if (result.outcome === "order-locked")
+        throw new AppError(
+          "STOCK_ORDER_LOCKED",
+          "二手商品已产生订单，库存由订单管理，不能手动修改",
+        );
+      if (result.outcome === "stock-conflict")
+        throw new AppError(
+          "STOCK_CONFLICT",
+          "库存已被订单调整，与提交时的基线不一致，请重新加载商品后再保存",
+        );
+      if (result.outcome === "updated" && result.product)
+        return toProductView(result.product, actor);
+      // not-updated（并发下架/换人）走下面的回读分支统一判 404/403/409。
+    } else {
+      // 条件更新与下架互斥：读取之后商品可能已被并发下架，不能把修改写到
+      // DELISTED 商品上。命中 0 行时回读状态，统一返回 409。
+      const updated = await shoppingRepository.updateProductIfOnSale({
+        id,
+        sellerId: actor.userId,
+        data,
+      });
+      if (updated) return toProductView(updated, actor);
+    }
 
     const fresh = await shoppingRepository.findProductById(id);
     if (!fresh) throw new AppError("PRODUCT_NOT_FOUND", "商品不存在");

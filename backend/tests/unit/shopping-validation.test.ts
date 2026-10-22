@@ -125,18 +125,56 @@ test("商品更新：二手库存只能是 0 或 1，耗材成色可清空", () 
   assert.doesNotThrow(() =>
     validateProductPatch(normalizeProductPatch({ pickupNote: null }), "SECONDHAND"),
   );
-  assert.doesNotThrow(() => validateProductPatch(normalizeProductPatch({ stock: 0 }), "SECONDHAND"));
-  assert.doesNotThrow(() => validateProductPatch(normalizeProductPatch({ stock: 1 }), "SECONDHAND"));
-  assert.throws(() =>
-    validateProductPatch(normalizeProductPatch({ stock: 2 }), "SECONDHAND"),
+  assert.doesNotThrow(() =>
+    validateProductPatch(normalizeProductPatch({ stock: 0, stockBase: 1 }), "SECONDHAND"),
   );
   assert.doesNotThrow(() =>
-    validateProductPatch(normalizeProductPatch({ stock: 5 }), "CONSUMABLE"),
+    validateProductPatch(normalizeProductPatch({ stock: 1, stockBase: 0 }), "SECONDHAND"),
+  );
+  assert.throws(() =>
+    validateProductPatch(normalizeProductPatch({ stock: 2, stockBase: 1 }), "SECONDHAND"),
+  );
+  assert.doesNotThrow(() =>
+    validateProductPatch(normalizeProductPatch({ stock: 5, stockBase: 3 }), "CONSUMABLE"),
   );
   assert.doesNotThrow(() =>
     validateProductPatch(normalizeProductPatch({ condition: "" }), "CONSUMABLE"),
   );
   assert.deepEqual(normalizeProductPatch({ pickupNote: "   " }), { pickupNote: null });
+});
+
+test("商品更新：stock 可缺省（不动库存）；传 stock 必须带合法 stockBase", () => {
+  // 不传 stock：其它字段照常校验，库存完全不动。
+  assert.doesNotThrow(() =>
+    validateProductPatch(normalizeProductPatch({ title: "只改标题" }), "SECONDHAND"),
+  );
+  assert.equal(normalizeProductPatch({ title: "只改标题" }).stock, undefined);
+
+  // 传 stock 但缺 stockBase：报 stockBase 字段错误。
+  assert.throws(
+    () => validateProductPatch(normalizeProductPatch({ stock: 5 }), "CONSUMABLE"),
+    (error: unknown) =>
+      error instanceof AppError && Boolean(fieldErrors(error)?.stockBase),
+  );
+  // stockBase 非法：负数或非安全整数都被拒。
+  assert.throws(
+    () => validateProductPatch({ stock: 5, stockBase: -1 }, "CONSUMABLE"),
+    (error: unknown) =>
+      error instanceof AppError && Boolean(fieldErrors(error)?.stockBase),
+  );
+  assert.throws(
+    () => validateProductPatch({ stock: 5, stockBase: 1.5 }, "CONSUMABLE"),
+    (error: unknown) =>
+      error instanceof AppError && Boolean(fieldErrors(error)?.stockBase),
+  );
+  // 合法组合通过，且归一化保留 stockBase。
+  const normalized = normalizeProductPatch({ stock: 5, stockBase: 0 });
+  assert.deepEqual(normalized, { stock: 5, stockBase: 0 });
+  assert.doesNotThrow(() => validateProductPatch(normalized, "CONSUMABLE"));
+  // 只传 stockBase 不传 stock：基线被忽略，不报错也不改库存。
+  assert.doesNotThrow(() =>
+    validateProductPatch(normalizeProductPatch({ title: "改标题", stockBase: 3 }), "CONSUMABLE"),
+  );
 });
 
 test("下单校验：数量 1..99、幂等键必填且不超过 80 字", () => {

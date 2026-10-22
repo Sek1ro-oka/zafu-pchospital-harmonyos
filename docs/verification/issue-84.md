@@ -5,7 +5,9 @@
 基线 `main 2870955`）实施，Refs #84。**本轮只交付后端 P1+P2**：数据模型与迁移、游客可读的商品
 浏览、商品发布/编辑/下架、商品图上传与公开读取、下单/订单列表/取消/完成、服务端权限与动作计算，
 以及单测、数据库集成测试和真实 HTTP 演示。App 选购页面、HAP 构建与模拟器截图不在本轮范围，
-留待下一轮接入本契约。
+留待下一轮接入本契约。第三轮（PR #89 审查修复）：编辑接口的库存与旧快照防护（`stock` 可选 +
+`stockBase` 基线、二手订单锁定）、事务内幂等命中分支统一走 `replayOrder` 校验、新增
+`POST + X-HTTP-Method-Override: PATCH` 兼容入口；本文 §1–§9 已按最终代码同步。
 
 ## 1. 基线与范围
 
@@ -27,6 +29,13 @@
   - `backend/tests/integration/shopping.test.ts`
 - 迁移只 `CREATE TABLE` / 索引 / 外键，不改既有表；回滚需手工删三张新表（未写 down 脚本，
   与仓库现有迁移风格一致）。
+- 第三轮（PR #89 审查修复）追加改动：`backend/src/lib/api/errors.ts`（新增
+  `STOCK_CONFLICT`/`STOCK_ORDER_LOCKED`/`METHOD_NOT_ALLOWED`）、
+  `backend/src/features/shopping/shopping-validation.ts`、`shopping-http.ts`、
+  `shopping-repository.ts`、`shopping-product-service.ts`、`shopping-order-service.ts`、
+  `backend/src/app/api/v1/shopping/products/[id]/route.ts`（新增 POST 兼容入口），
+  以及 `backend/tests/unit/shopping-validation.test.ts`、
+  `backend/tests/integration/shopping.test.ts` 增补；未改数据模型与迁移。
 
 ## 2. 数据模型与迁移
 
@@ -84,7 +93,8 @@ npx prisma migrate status
 | GET | `/api/v1/shopping/products` | 游客 | 在售商品列表；`category`、`q`、`page`、`pageSize` |
 | GET | `/api/v1/shopping/products/{id}` | 游客 | 商品详情；`DELISTED` 仍可读，带图片/卖家/状态/动作 |
 | POST | `/api/v1/shopping/products` | 登录 | 发布；`sellerId` 服务端取登录人；耗材需权限 |
-| PATCH | `/api/v1/shopping/products/{id}` | 登录 | 本人修改；仅在售；耗材另需权限 |
+| PATCH | `/api/v1/shopping/products/{id}` | 登录 | 本人修改；仅在售；耗材另需权限。`stock` 可选：不传则库存不动；传则必须带 `stockBase`（见 §4.2） |
+| POST | `/api/v1/shopping/products/{id}` | 登录 | 编辑兼容入口（API 24 客户端无 PATCH 枚举）：仅当请求头 `X-HTTP-Method-Override: PATCH`（值大小写不敏感）时委托给同一更新 handler（同一鉴权/校验/业务）；缺头或头值不是 PATCH 返回 405 `METHOD_NOT_ALLOWED` |
 | POST | `/api/v1/shopping/products/{id}/delist` | 登录 | 本人或管理员；管理员下架必须带 `reason`（含本人商品） |
 | POST | `/api/v1/shopping/products/{id}/images` | 登录 | multipart，字段名 `photos`，1–9 张 |
 | GET | `/api/v1/shopping/product-images/{imageId}/content` | 游客 | 公开图片字节，`nosniff`，缓存 1 天 |
@@ -110,12 +120,16 @@ npx prisma migrate status
 | `SELF_PURCHASE` | 400 | 购买自己发布的商品 |
 | `ORDER_NOT_FOUND` | 404 | 订单不存在或当前用户不是买卖一方 |
 | `INVALID_STATUS` | 409 | 当前状态不允许取消/完成/编辑 |
+| `STOCK_CONFLICT` | 409 | 编辑传 `stock` 时当前库存与提交的 `stockBase` 不一致（已被订单调整），需重新加载 |
+| `STOCK_ORDER_LOCKED` | 409 | 二手商品已存在订单（任意状态），库存由订单链路管理，不接受手动改库存 |
+| `METHOD_NOT_ALLOWED` | 405 | POST 兼容入口缺少或带了错误的 `X-HTTP-Method-Override: PATCH` 头 |
 | `PRODUCT_IMAGE_LIMIT_EXCEEDED` | 400 | 单商品图片超过上限 |
 | `PRODUCT_IMAGE_TYPE_UNSUPPORTED` | 415 | 非 JPEG/PNG/WebP，或魔数与声明类型不一致 |
 | `PRODUCT_IMAGE_TOO_LARGE` | 413 | 单张超过 `UPLOAD_MAX_BYTES` |
 | `PRODUCT_IMAGE_STORAGE_FAILED` | 500 | 落盘/读取失败（不泄露路径） |
 
-请求校验失败沿用 `VALIDATION_FAILED` + `fieldErrors`；未登录为 `UNAUTHENTICATED`；
+请求校验失败沿用 `VALIDATION_FAILED` + `fieldErrors`（更新时传 `stock` 缺 `stockBase`
+或基线非法，报 `fieldErrors.stockBase`）；未登录为 `UNAUTHENTICATED`；
 无权限为 `FORBIDDEN`；幂等键复用为 `IDEMPOTENCY_CONFLICT`（409）。
 
 ## 4. 权限与状态机
@@ -147,6 +161,14 @@ npx prisma migrate status
 - 库存口径：二手商品固定单件，发布缺省 `stock=1`，显式传大于 1 返回 400
   `fieldErrors.stock`；编辑只允许 0 或 1（0 表示已售出）。耗材允许 0..999，可多件下单，
   `condition`（成色/规格）可为空。取消回补后二手库存回到 1，不会超过 1。
+- 编辑与库存调整分开（PR #89 审查 P1）：更新 body 的 `stock` 可选。**不传 `stock`**
+  时库存完全不动 —— 编辑加载与保存之间发生下单/取消，旧表单快照也不会覆盖已扣减/回补的
+  库存；**传 `stock`** 必须同时带 `stockBase`（客户端加载时看到的库存，整数 >= 0，缺失报
+  `fieldErrors.stockBase`），服务端在 Serializable 事务内比对当前库存，不一致返回 409
+  `STOCK_CONFLICT` 且不写入；写入条件为 `id + sellerId + status=ON_SALE + stock=stockBase`，
+  与下单/取消事务互斥。SECONDHAND 商品只要已存在至少一笔订单（任意状态，含已取消），
+  传 `stock` 一律 409 `STOCK_ORDER_LOCKED`，库存只由订单链路扣减/回补；耗材带正确基线
+  的补货即普通编辑路径。
 - 下单在 Serializable 事务内先做 `(buyer_id, idempotency_key)` 查询，再执行条件更新：
   `UPDATE products SET stock = stock - ? WHERE id = ? AND status = 'ON_SALE' AND stock >= ?`。
   影响 0 行则回读商品，区分 `PRODUCT_NOT_FOUND`/`PRODUCT_DELISTED`/`OUT_OF_STOCK`；订单与
@@ -154,7 +176,10 @@ npx prisma migrate status
 - 取消同样用条件更新：仅 `PENDING_PICKUP → CANCELLED` 成功（`count === 1`）才执行
   `stock = stock + quantity`；只改库存、不改商品状态，已下架商品不会因此复活。
 - 同一 `(buyer_id, idempotency_key)` 并发由唯一索引兜底；输掉的事务整体回滚，捕获
-  `P2002` 后回读原单返回；同键但商品/数量不同返回 `IDEMPOTENCY_CONFLICT`。
+  `P2002` 后回读原单返回。**事务内命中同键既有单的分支（仓储返回 `reserved=false`）
+  与事务外查重一样，统一由服务层走 `replayOrder` 校验**（PR #89 审查 P2）：
+  `productId/quantity` 必须与本次请求一致（`buyerId` 由查询键天然一致），一致才返回原单，
+  不一致返回 409 `IDEMPOTENCY_CONFLICT`，同键不同参数的并发请求不会拿到他人商品的成功订单。
 
 ## 5. 自动测试
 
@@ -163,15 +188,18 @@ npx prisma migrate status
 | 命令 | 结果 | 说明 |
 | --- | --- | --- |
 | `npm run lint` | 通过 | `eslint .` 无输出 |
-| `npm run test:unit` | **578 pass / 0 fail** | 含新增 `tests/unit/shopping-validation.test.ts` 10 例；先运行 `node tools/ensure-doc-manifest.mjs` 补齐既有生成物 |
-| `npm run test:db -- tests/integration/shopping.test.ts` | **12 pass / 0 fail** | 真实 MySQL `pchospital_exp_local_test`，含审查修订后的二手库存与重复取消用例 |
-| `npm run test:db`（全量） | 294 pass / 6 fail | 6 个失败均为既有环境/测试库状态问题，见下 |
+| `npm run test:unit` | **579 pass / 0 fail** | 含 `tests/unit/shopping-validation.test.ts` 11 例（第三轮增补 stock 可选与 stockBase 规则 1 例）；先运行 `node tools/ensure-doc-manifest.mjs` 补齐既有生成物 |
+| `npm run test:db -- tests/integration/shopping.test.ts` | **16 pass / 0 fail** | 真实 MySQL `pchospital_exp_local_test`；第三轮增补 4 例审查回归（见下 13–16） |
+| `npm run test:db`（全量） | 299 pass / 6 fail（共 305） | 6 个失败均为既有环境/测试库状态问题，见下 |
+
+表中为第三轮（PR #89 审查修复）落地后的重跑结果；本机以 `corepack pnpm <script>` 执行。
 
 新增单测覆盖：字段归一化与长度/价格/库存边界、二手固定单件与耗材多库存/空成色、
-PATCH 部分更新与清空 `pickupNote`、下单参数、列表参数、展示名不取 `realName`、
-商品/订单动作、权限策略。
+PATCH 部分更新与清空 `pickupNote`、更新时 `stock` 可缺省 / 传 `stock` 必须带合法
+`stockBase`（缺失、负数、非整数均报 `fieldErrors.stockBase`）、下单参数、列表参数、
+展示名不取 `realName`、商品/订单动作、权限策略。
 
-新增集成测试 12 例覆盖：
+集成测试 16 例覆盖（1–12 为第一、二轮，13–16 为第三轮审查回归）：
 
 1. 游客读列表/详情/商品图，写操作 401；
 2. 普通用户发布二手成功且缺省库存 1、显式 stock=5 被 400 拒绝；工作人员发布耗材成功，
@@ -185,7 +213,16 @@ PATCH 部分更新与清空 `pickupNote`、下单参数、列表参数、展示�
 9. 自购、缺货、已下架、商品不存在；
 10. 取消只回补一次、卖家取消必须带原因、下架商品取消后不复活、重复取消 409；
 11. 取消/完成竞争、并发抢最后一件、并发同幂等键；
-12. 耗材空成色、多件库存下单扣减与取消回补。
+12. 耗材空成色、多件库存下单扣减与取消回补；
+13. 编辑与下单/取消交错：卖家读取商品（快照 stock=1）后买家下单扣到 0，卖家只改标题
+    （不传 stock）保存，库存保持 0；随后取消回补到 1，不出现翻倍；
+14. 库存编辑防护：二手已存在订单（下单后、取消后）传 stock → 409 `STOCK_ORDER_LOCKED`
+    且不写库存；耗材过期 `stockBase` → 409 `STOCK_CONFLICT` 且不写库存；带正确基线补货
+    成功且库存为所传值；传 stock 缺 stockBase → 400 `fieldErrors.stockBase`；
+15. 并发同幂等键不同商品：一单 201、另一单 409 `IDEMPOTENCY_CONFLICT`，库存只扣成功
+    那笔，另一商品库存不变，两商品合计只落一单；
+16. POST 兼容入口：`POST + X-HTTP-Method-Override: PATCH` 与 PATCH 同效（头值大小写
+    不敏感），缺头/头值错误 → 405 `METHOD_NOT_ALLOWED` 且不改商品，第三人走该入口同样 403。
 
 全量 DB 的 6 个失败与购物无关，未改相关代码：
 

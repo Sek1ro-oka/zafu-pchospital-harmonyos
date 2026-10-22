@@ -76,7 +76,13 @@ export const shoppingOrderService = {
       throw error;
     }
 
-    if (created.order) return toShoppingOrderView(created.order, actor);
+    // `reserved=true` 是本次事务新落的单，直接返回；`reserved=false` 且带 order
+    // 是事务内命中了同键既有单（并发窗口里另一个请求先提交）。这条分支必须和
+    // 事务外查重一样走 `replayOrder` 校验 productId/quantity —— 否则同键不同
+    // 参数的并发请求会拿到商品 A 的成功订单而不是 IDEMPOTENCY_CONFLICT
+    // （PR #89 审查 P2；buyerId 由 `(buyerId, idempotencyKey)` 查询键天然一致）。
+    if (created.order && created.reserved) return toShoppingOrderView(created.order, actor);
+    if (created.order) return replayOrder(created.order, draft, actor);
 
     // 条件扣减命中 0 行：回读商品区分「已下架」与「库存不足」，避免笼统报错。
     const current = await shoppingRepository.findProductById(draft.productId);

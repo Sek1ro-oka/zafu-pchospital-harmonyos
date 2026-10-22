@@ -149,6 +149,60 @@ export const shoppingRepository = {
   },
 
   /**
+   * 带库存基线的修改：普通字段与 `stock` 在同一 Serializable 事务内提交，
+   * 且只有「当前库存 === 客户端加载时看到的 stockBase」才会写入，防止编辑页
+   * 旧快照覆盖订单已扣减/回补的库存。
+   *
+   * `orderLocked=true`（二手且已存在订单）时事务内直接判定锁定，不做任何写入；
+   * 订单数在事务内读取，与下单事务串行化，避免「刚下的单还没被看见」的窗口。
+   *
+   * 返回四种结果，由服务层翻译错误码：
+   * - `updated`：命中并写回最新行；
+   * - `order-locked`：二手已有订单，库存归订单链路管理；
+   * - `stock-conflict`：当前库存与 stockBase 不一致；
+   * - `not-updated`：条件更新命中 0 行（并发下架/换人），服务层回读判 404/403/409。
+   */
+  async updateProductStockWithBase(input: {
+    id: string;
+    sellerId: string;
+    data: Prisma.ProductUncheckedUpdateInput;
+    stock: number;
+    stockBase: number;
+    orderLocked: boolean;
+  }): Promise<
+    | { outcome: "updated"; product: ProductRow | null }
+    | { outcome: "order-locked" }
+    | { outcome: "stock-conflict" }
+    | { outcome: "not-updated" }
+  > {
+    return inSerializableTransaction(async (tx) => {
+      if (input.orderLocked) {
+        const orders = await tx.shoppingOrder.count({ where: { productId: input.id } });
+        if (orders > 0) return { outcome: "order-locked" as const };
+      }
+      const current = await tx.product.findUnique({ where: { id: input.id } });
+      if (!current) return { outcome: "not-updated" as const };
+      if (current.stock !== input.stockBase) return { outcome: "stock-conflict" as const };
+      const updated = await tx.product.updateMany({
+        where: {
+          id: input.id,
+          sellerId: input.sellerId,
+          status: "ON_SALE",
+          // 双重保险：比较之外再把基线写进条件，串行化重试也不会盖掉并发扣减。
+          stock: input.stockBase,
+        },
+        data: { ...input.data, stock: input.stock },
+      });
+      if (updated.count !== 1) return { outcome: "not-updated" as const };
+      const product = await tx.product.findUnique({
+        where: { id: input.id },
+        include: productInclude,
+      });
+      return { outcome: "updated" as const, product };
+    });
+  },
+
+  /**
    * 下架：条件 `ON_SALE` 才更新。返回受影响行数，调用方据此区分
    * 「本次下架成功」与「并发请求已经下架」，后者按幂等处理。
    */
@@ -277,7 +331,9 @@ export const shoppingRepository = {
    * 创建订单并扣库存，同一 Serializable 事务提交。
    *
    * 顺序很重要：
-   * 1. 先按 `(buyerId, idempotencyKey)` 查重，命中直接返回原单，**不再扣库存**；
+   * 1. 先按 `(buyerId, idempotencyKey)` 查重，命中返回 `{ order, reserved: false }`，
+   *    **不再扣库存**；服务层必须对 `reserved=false` 的结果统一走 `replayOrder`
+   *    校验 productId/quantity，防止同键不同参数的并发请求拿到别人的成功单；
    * 2. 再条件扣库存（`status=ON_SALE AND stock>=quantity`），命中 0 行说明
    *    商品下架或库存不足，由服务层读当前商品区分错误码；
    * 3. 最后写订单（含标题/单价/首图快照）。
