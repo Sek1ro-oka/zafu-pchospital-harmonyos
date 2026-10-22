@@ -607,7 +607,7 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
 | B | 商品卡图片区点击被 `ShoppingImage` 的无条件 `onClick` 吞掉，只能点标题进详情 | 移除外层无条件 `onClick`，仅失败态的重试块注册点击 | 点击商品卡图片区成功进入商品详情（`product-detail.jpeg`，11:09） |
 | C | 售罄商品列表仍显示「库存 0」，无售罄标识 | 列表卡显示红色「已售罄」；详情 meta 显示红色「已售罄」chip、底栏显示「该商品已售罄，等待卖家补货」；后端公开列表契约不变（仍返回 `ON_SALE` + `stock=0`） | `shopping-list.jpeg`、`sold-out-detail.jpeg` |
 | D | 详情页无任何操作时渲染空白底栏白条 | A/C 补齐游客与售罄文案后所有详情状态都有内容；不再出现空底栏 | 同 A/C 截图 |
-| E | `PATCH` 枚举在 API 26 才加入，工程 `compatibleSdkVersion` 为 24，旧系统上直接调用会失败 | `ShoppingService.patch` 在 `http.RequestMethod.PATCH === undefined` 时抛 `CLIENT_UNSUPPORTED`，提示升级系统，不发空请求 | API 26 模拟器编辑保存 `PATCH ... 200`（`edit-product.jpeg` → `edit-saved-detail.jpeg`）；API 24 未实测 |
+| E | `PATCH` 枚举在 API 26 才加入，工程 `compatibleSdkVersion` 为 24，旧系统上直接调用会失败 | ~~`ShoppingService.patch` 在 `http.RequestMethod.PATCH === undefined` 时抛 `CLIENT_UNSUPPORTED`，提示升级系统，不发空请求~~ **已被审查第二轮修复取代**：guard 方案会让 API 24 设备永远无法保存编辑，现改为 `POST` + `X-HTTP-Method-Override: PATCH` 兼容通道并删除 `CLIENT_UNSUPPORTED` guard，见 §10.8 A | 当时：API 26 模拟器编辑保存 `PATCH ... 200`（`edit-product.jpeg` → `edit-saved-detail.jpeg`）；API 24 未实测 |
 | F | 逐张上传图片失败后重试会把已成功的图片再传一遍，进度计数恒为 0 | 每成功一张即 `pendingImages = images.slice(i + 1)` 并累计 `uploaded`，重试只处理剩余图片 | 代码修复；模拟器相册为空，未做设备上传复验 |
 | G | 切换分类/刷新时若上一轮「加载更多」未结束，`loadingMore` 会保持 true，之后上滑不再加载 | `reload()` 开头重置 `loadingMore = false` | 代码修复；构建与自动化检查通过 |
 
@@ -686,10 +686,12 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
 - **商品图片上传未在设备验证**：模拟器相册为空、拍照瓦片无响应，发布时只能无图提交；
   图片上传/公开读取已由第一轮 curl 与集成测试覆盖，App 端图片选择与预览仍需实体设备或
   有照片的模拟器复验。§10.2 F 的「失败后只重试剩余图片」因此只有代码审查，没有设备复验。
-- **编辑功能依赖 API 26**：`http.RequestMethod.PATCH` 是 API 26 新增，工程
-  `compatibleSdkVersion` 为 6.1.1(24)，构建会给出兼容性告警。已在 API 26 模拟器验证
-  PATCH 200；API 24 及以下设备会收到「当前系统版本不支持编辑商品」的明确提示，
-  需低版本模拟器或真机复验。
+- **编辑功能与系统版本**（已按审查第二轮修复，见 §10.8 A）：原实现直接使用
+  `http.RequestMethod.PATCH`（API 26 新增）并在低版本抛 `CLIENT_UNSUPPORTED`，
+  导致 API 24 设备「进得去编辑页但永远保存不了」。现已改为 `POST` +
+  `X-HTTP-Method-Override: PATCH` 请求头（POST 枚举与自定义头在所有支持的
+  API 版本可用），客户端不再有版本 guard；该通道为代码级兼容修复，
+  设备端验证（API 26 模拟器回归 + 后端委托入口联调）由指挥在 §10.8 之后统一补做。
 - 共享后端 `native/login` 实测 13.9–21.6 s，超过 App 默认 8 s 超时；设备验收全部走本机 13080。
   dev 模式首次访问新路由需按需编译，发布后首次进详情出现过两次「连接超时」，重试/二次进入即恢复，
   非接口错误。
@@ -718,3 +720,20 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
 | `edit-saved-detail.jpeg` | 保存后返回商品详情，字段一致 | 12:28 |
 
 前 13 张为设备时钟 11:0x–11:13；模拟器重启后时钟变为 12:27–12:28，用于编辑复验。
+
+### 10.8 审查第二轮修复（PR #90 CHANGES_REQUESTED，2026-10-22）
+
+上游审查对 App 侧提出四项 P2，按下表修复（仅改 `app/entry/src/main/ets/**`；
+后端兼容入口由 #89 分支的另一位写手按同一契约同步实现）。
+
+| 编号 | 审查意见 | 处理 | 验证状态 |
+| --- | --- | --- | --- |
+| A | `ShoppingService.ets:190`：`http.RequestMethod.PATCH` 是 API 26 枚举，工程 `compatibleSdkVersion` 为 24，`CLIENT_UNSUPPORTED` guard 使 API 24 卖家永远保存不了编辑 | `updateProduct` 改走 `ApiClient.postWithHeaders`：`POST /api/v1/shopping/products/{id}` + 请求头 `X-HTTP-Method-Override: PATCH`，由服务端把带该头的 POST 委托给同一更新 handler（鉴权/校验一致）。删除私有 `patch` 方法、PATCH 枚举引用与 `CLIENT_UNSUPPORTED` guard；POST 枚举与自定义请求头在所有支持的 API 版本可用 | 代码级兼容（逐行自查类型与导入）；API 26 模拟器回归与后端委托入口联调由指挥随后统一构建 HAP 后补做 |
+| B | 编辑保存无条件覆盖 `stock`，会吞掉编辑期间的下单扣减 | `ShoppingProductPatch` 增加可选 `stockBase`；编辑页加载时记录 `loadedStock`，提交时库存未改则不传 `stock`/`stockBase`，改了则同时传目标值与基线；保存成功后基线推进到当前输入。服务端 409（`STOCK_CONFLICT` / `STOCK_ORDER_LOCKED`）的 message 经现有 `formError` 机制显示在表单 | 代码级；409 冲突链路待后端 #89 入口合并后联调，由指挥设备复验 |
+| C | `ProductDetailPage.ets:86`：下单结果未知（超时/网络错误）时关闭弹层再打开会无条件生成新幂等键，可能重复下单 | 新增 `@State pendingIntent: PendingOrderIntent \| null`（key + productId + quantity 快照）。`confirmBuy`：存在匹配本商品的快照则复用原 key 与数量；成功或服务端明确拒绝（业务错误码，如 `OUT_OF_STOCK`）→ 清空快照；`NETWORK_ERROR` / `UNEXPECTED_RESPONSE`（结果未知）→ 写入快照并提示「下单结果未确认，重试将复用同一请求」。弹层重开时若有匹配快照：数量步进器禁用并显示锁定提示，确认按钮文案改「重试同一请求」，另提供「查看我的订单」入口（`ROUTE_SHOPPING_ORDERS`）确认原请求结果；确认前不允许换数量或另起新键 | 代码级；断网/超时场景需设备模拟器复验（指挥随后补） |
+| D | `ProductEditPage.ets:495`：新发布成功只设 `savedId`，上传失败后删光待传图片再点按钮会再次 `createProduct`，产生重复商品 | `submit()` 以 `existingId = productId !== '' ? productId : savedId` 区分创建/编辑/上传恢复：`existingId` 非空一律走更新 payload（含 B 的库存规则）+ `uploadPending(existingId)`，仅 `existingId` 为空才 `createProduct`。`savedId` 存在且待传图片为空时按钮文案为「完成并返回」，路径与 `uploadPending` 空列表直接 `onSaved` 一致，不再重复建品 | 代码级；「发布→上传失败→删图→完成」链路待设备复验（模拟器相册为空，图片上传仍未设备闭环，见 §10.6） |
+| E | `ProductEditPage.ets:222`：无 `aboutToDisappear` 代次检查，离开页面后迟到的 createProduct/upload 成功回调仍执行 `onSaved`，HomePage 无条件 pop 会弹掉用户新开的页面 | 新增 `private disposed: boolean`，`aboutToDisappear` 置 true；`loadExisting` / `submit` / `uploadPending` / `retryUpload` 中每个 await 之后、以及 `onSaved` / `onSessionExpired` / toast / 上传循环继续前检查 `disposed`，已离开则静默返回（不导航、不失效会话、不再上传），`finally` 中的状态复位同样受保护 | 代码级；「上传中返回再开新页」竞态需设备复验 |
+
+本节修复后的 HAP 构建、模拟器操作证据与后端 `X-HTTP-Method-Override` 入口联调
+由指挥统一执行后补充；§10.2 E 行与 §10.6「编辑功能与系统版本」条目已同步修正，
+不再描述 `CLIENT_UNSUPPORTED` guard。

@@ -16,6 +16,16 @@ import {
 } from './ShoppingTypes';
 
 /**
+ * 结果未知的下单请求快照：网络错误 / 超时时服务端可能已建单，
+ * 重试必须复用同一把幂等键与数量；结果确认（成功或明确拒绝）后清空。
+ */
+interface PendingOrderIntent {
+  key: string;
+  productId: string;
+  quantity: number;
+}
+
+/**
  * 商品详情（#84）：游客可读，购买 / 编辑 / 下架按服务端 `actions` 展示。
  *
  * 服务端 actions 只是渲染依据，真正的权限仍由每个写接口校验；
@@ -38,7 +48,7 @@ export struct ProductDetailPage {
   @State quantity: number = 1;
   @State buying: boolean = false;
   @State buyError: string = '';
-  @State orderKey: string = '';
+  @State pendingIntent: PendingOrderIntent | null = null;
   @State delistOpen: boolean = false;
   @State delistReason: string = '';
   @State delisting: boolean = false;
@@ -75,29 +85,41 @@ export struct ProductDetailPage {
     }
   }
 
+  /** 当前商品是否存在结果未知的下单请求（重试须复用原幂等键与数量）。 */
+  private retryIntent(): PendingOrderIntent | null {
+    const detail: ShoppingProductView | null = this.detail;
+    if (detail === null || this.pendingIntent === null) return null;
+    if (this.pendingIntent.productId !== detail.id) return null;
+    return this.pendingIntent;
+  }
+
   private openBuy(): void {
     if (!this.authenticated) {
       this.onLogin();
       return;
     }
-    this.quantity = 1;
     this.buyError = '';
-    this.orderKey = ShoppingService.newOrderKey();
+    const pending: PendingOrderIntent | null = this.retryIntent();
+    // 结果未知时锁定原数量，不允许换数量或另起新键。
+    this.quantity = pending !== null ? pending.quantity : 1;
     this.buyOpen = true;
   }
 
   private async confirmBuy(): Promise<void> {
     const detail: ShoppingProductView | null = this.detail;
     if (detail === null || this.buying) return;
+    const pending: PendingOrderIntent | null = this.retryIntent();
+    const key: string = pending !== null ? pending.key : ShoppingService.newOrderKey();
+    const quantity: number = pending !== null ? pending.quantity : this.quantity;
     this.buying = true;
     this.buyError = '';
     try {
       await ShoppingService.createOrder({
         productId: detail.id,
-        quantity: this.quantity,
-        idempotencyKey: this.orderKey
+        quantity: quantity,
+        idempotencyKey: key
       });
-      this.orderKey = '';
+      this.pendingIntent = null;
       this.buyOpen = false;
       this.onOpen(ROUTE_SHOPPING_ORDERS, null);
     } catch (error) {
@@ -106,7 +128,17 @@ export struct ProductDetailPage {
         this.onSessionExpired();
         return;
       }
-      this.buyError = apiError.message;
+      if (apiError.code === 'NETWORK_ERROR' || apiError.code === 'UNEXPECTED_RESPONSE') {
+        // 网络错误 / 超时 / 无法解析的响应：服务端可能已建单，结果未知。
+        // 保留快照，重试继续用同一把幂等键；确认结果前不允许新购买意图。
+        const snapshot: PendingOrderIntent = { key: key, productId: detail.id, quantity: quantity };
+        this.pendingIntent = snapshot;
+        this.buyError = '下单结果未确认，重试将复用同一请求，不会重复建单';
+      } else {
+        // 服务端明确拒绝（如 OUT_OF_STOCK / IDEMPOTENCY_CONFLICT）：结果已知，可换新键。
+        this.pendingIntent = null;
+        this.buyError = apiError.message;
+      }
     } finally {
       this.buying = false;
     }
@@ -192,15 +224,21 @@ export struct ProductDetailPage {
         Row({ space: 12 }) {
           Text('数量').fontSize(14).fontColor('#4D5860').layoutWeight(1)
           Button('−').width(36).height(36).fontSize(18).backgroundColor('#EEF2F5').fontColor('#1F2933')
-            .enabled(!this.buying).onClick(() => {
+            .enabled(!this.buying && this.retryIntent() === null).onClick(() => {
               this.removeQuantity();
             })
           Text(`${this.quantity}`).fontSize(16).fontWeight(FontWeight.Medium).width(34).textAlign(TextAlign.Center)
           Button('+').width(36).height(36).fontSize(18).backgroundColor('#EEF2F5').fontColor('#1F2933')
-            .enabled(!this.buying).onClick(() => {
+            .enabled(!this.buying && this.retryIntent() === null).onClick(() => {
               this.addQuantity();
             })
         }.width('100%')
+        if (this.retryIntent() !== null) {
+          Text('上一次下单结果未确认：数量与请求已锁定，重试复用同一幂等键；请先重试或到订单列表确认，再发起新的购买。')
+            .fontSize(12).fontColor('#8A5A00').lineHeight(18).width('100%')
+            .padding({ left: 12, right: 12, top: 8, bottom: 8 })
+            .backgroundColor('#FFF8E8').borderRadius(10)
+        }
         Row() {
           Text('合计').fontSize(14).fontColor('#4D5860').layoutWeight(1)
           Text(shoppingMoney(this.detail === null ? 0 : this.detail.priceCents * this.quantity))
@@ -211,12 +249,21 @@ export struct ProductDetailPage {
         if (this.buyError !== '') {
           Text(this.buyError).fontSize(12).fontColor($r('app.color.danger')).width('100%')
         }
-        Button(this.buying ? '提交中…' : '确认下单')
+        Button(this.buying ? '提交中…' : (this.retryIntent() !== null ? '重试同一请求' : '确认下单'))
           .width('100%').height(46).fontSize(15).fontColor(Color.White)
           .backgroundColor($r('app.color.brand')).enabled(!this.buying)
           .onClick(() => {
             this.confirmBuy();
           })
+        if (this.retryIntent() !== null) {
+          Text('查看我的订单').fontSize(13).fontColor($r('app.color.brand')).padding({ top: 2 })
+            .onClick(() => {
+              if (!this.buying) {
+                this.buyOpen = false;
+                this.onOpen(ROUTE_SHOPPING_ORDERS, null);
+              }
+            })
+        }
         Text('再想想').fontSize(13).fontColor('#6B7780').padding({ top: 2, bottom: 6 })
           .onClick(() => {
             if (!this.buying) this.buyOpen = false;

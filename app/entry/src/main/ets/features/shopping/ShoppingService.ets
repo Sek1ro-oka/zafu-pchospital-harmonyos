@@ -1,9 +1,7 @@
-import { http } from '@kit.NetworkKit';
-import { BusinessError } from '@kit.BasicServicesKit';
 import { util } from '@kit.ArkTS';
 import { ApiClient, ApiRequestError, MultipartFilePart } from '../../core/network/ApiClient';
 import { ApiConfig } from '../../core/network/ApiConfig';
-import { ApiErrorBody, ApiMeta, ApiPage } from '../../core/network/ApiContract';
+import { ApiPage } from '../../core/network/ApiContract';
 import { SessionStore } from '../../core/auth/SessionStore';
 import { PickedImage } from '../repair/PhotoPicker';
 import {
@@ -17,13 +15,6 @@ import {
 const PRODUCTS_PATH: string = '/api/v1/shopping/products';
 const MY_PRODUCTS_PATH: string = '/api/v1/shopping/me/products';
 const ORDERS_PATH: string = '/api/v1/shopping/orders';
-
-interface ShoppingEnvelope {
-  success: boolean;
-  data?: Object;
-  error?: ApiErrorBody;
-  meta?: ApiMeta;
-}
 
 async function optionalToken(): Promise<string> {
   return SessionStore.readToken();
@@ -50,9 +41,11 @@ function encodeId(id: string): string {
  * 列表接口的 `data` 是数组、分页在 `meta.pagination`，故列表统一走
  * `ApiClient.getPage`；写接口走服务端既有信封。
  *
- * `PATCH /products/{id}` 是购物编辑唯一的服务端入口，但共享 `ApiClient`
- * 没有 PATCH 方法（且本轮不允许改 `core/`），因此在本文件内用
- * `@ohos.net.http` 发 PATCH 并复用同一套信封 / 错误码解析。
+ * 编辑商品在语义上是 `PATCH /products/{id}`，但 `http.RequestMethod.PATCH`
+ * 枚举在 API 26 才加入、工程 `compatibleSdkVersion` 为 24，因此改发
+ * `POST` 并携带 `X-HTTP-Method-Override: PATCH` 请求头，由服务端把带该头的
+ * POST 委托给同一更新 handler（鉴权与校验一致）。POST 枚举与自定义请求头
+ * 在所有支持的 API 版本可用，与备案编辑的 POST 别名做法一致。
  */
 export class ShoppingService {
   static async listProducts(category: string, page: number, pageSize: number): Promise<ApiPage<ShoppingProductView>> {
@@ -83,11 +76,14 @@ export class ShoppingService {
   }
 
   static async updateProduct(id: string, patch: ShoppingProductPatch): Promise<ShoppingProductView> {
-    const token: string = await requireToken();
-    return ShoppingService.patch<ShoppingProductView>(
+    const headers: Record<string, string> = {};
+    headers['X-HTTP-Method-Override'] = 'PATCH';
+    return ApiClient.postWithHeaders<ShoppingProductView>(
+      ApiConfig.getBaseUrl(),
       `${PRODUCTS_PATH}/${encodeId(id)}`,
       JSON.stringify(patch),
-      token
+      await requireToken(),
+      headers
     );
   }
 
@@ -182,67 +178,7 @@ export class ShoppingService {
     return ApiClient.getBytes(ApiConfig.getBaseUrl(), path, '');
   }
 
-  /** 与服务端同语义的 PATCH：路径是已编码的相对路径，body 是 JSON 字符串。 */
-  private static async patch<T>(path: string, body: string, token: string): Promise<T> {
-    // PATCH 枚举在 API 26 才加入；compatibleSdkVersion 为 24，旧系统给出明确提示而不是发空请求。
-    if (http.RequestMethod.PATCH === undefined) {
-      throw new ApiRequestError('CLIENT_UNSUPPORTED', '当前系统版本不支持编辑商品，请升级系统后重试', 0, '');
-    }
-    const headers: Record<string, string> = {};
-    headers['Content-Type'] = 'application/json';
-    headers['X-Client-Type'] = 'native';
-    headers['User-Agent'] = 'PC-Hospital-Harmony/0.1.0';
-    headers['Authorization'] = `Bearer ${token}`;
-    const options: http.HttpRequestOptions = {
-      method: http.RequestMethod.PATCH,
-      header: headers,
-      expectDataType: http.HttpDataType.STRING,
-      connectTimeout: 8000,
-      readTimeout: 8000,
-      extraData: body
-    };
-    const request = http.createHttp();
-    let response: http.HttpResponse;
-    try {
-      response = await request.request(`${ApiConfig.getBaseUrl()}${path}`, options);
-    } catch (error) {
-      throw new ApiRequestError(
-        'NETWORK_ERROR',
-        `网络请求失败（错误码 ${(error as BusinessError).code}）`,
-        0,
-        ''
-      );
-    } finally {
-      request.destroy();
-    }
-    const status: number = response.responseCode;
-    const text: string = response.result as string;
-    if (text === undefined || text === '') {
-      throw new ApiRequestError('UNEXPECTED_RESPONSE', `服务器无响应内容（HTTP ${status}）`, status, '');
-    }
-    let envelope: ShoppingEnvelope;
-    try {
-      envelope = JSON.parse(text) as ShoppingEnvelope;
-    } catch (decodeError) {
-      throw new ApiRequestError('UNEXPECTED_RESPONSE', `服务器返回无法识别的数据（HTTP ${status}）`, status, '');
-    }
-    if (envelope.success === true) {
-      return envelope.data as T;
-    }
-    const requestId: string = envelope.meta !== undefined ? envelope.meta.requestId : '';
-    if (envelope.error !== undefined) {
-      throw new ApiRequestError(
-        envelope.error.code,
-        envelope.error.message,
-        status,
-        requestId,
-        envelope.error.fieldErrors
-      );
-    }
-    throw new ApiRequestError('UNEXPECTED_RESPONSE', `请求失败（HTTP ${status}）`, status, requestId);
-  }
-
-  /** 幂等键：一次下单尝试内复用，成功后换新；格式与后端 80 字符上限兼容。 */
+  /** 幂等键：一次购买意图内复用（结果未知时重试沿用同一把），结果确认后换新；格式与后端 80 字符上限兼容。 */
   static newOrderKey(): string {
     return `native-order-${util.generateRandomUUID(true)}`;
   }

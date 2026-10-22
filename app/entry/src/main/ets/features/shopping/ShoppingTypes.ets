@@ -107,7 +107,17 @@ export interface ShoppingProductPatch {
   description?: string;
   priceCents?: number;
   condition?: string;
+  /**
+   * 目标库存；仅在用户实际修改了库存时携带，未改则不传，避免覆盖
+   * 编辑期间发生的下单扣减。改动库存时必须同时携带 `stockBase`。
+   */
   stock?: number;
+  /**
+   * 页面加载时读到的库存（乐观锁基线）。服务端发现当前库存已不等于
+   * 基线（期间有下单/取消）时返回 409 `STOCK_CONFLICT` / `STOCK_ORDER_LOCKED`，
+   * 客户端展示服务端 message 并让用户重新加载后再改。
+   */
+  stockBase?: number;
   pickupNote?: string | null;
 }
 

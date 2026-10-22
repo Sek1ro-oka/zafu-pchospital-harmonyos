@@ -10,6 +10,7 @@ import {
   ShoppingGoodsParam,
   ShoppingImageView,
   ShoppingProductDraft,
+  ShoppingProductPatch,
   ShoppingProductView,
   shoppingCategoryLabel,
 } from './ShoppingTypes';
@@ -19,8 +20,11 @@ const MAX_IMAGES: number = 9;
 /**
  * 商品发布 / 编辑页（#84）。
  *
- * 新建时先保存商品，再逐张上传图片；图片上传失败保留已保存的商品 id，
- * 可点重试而不会重复创建商品。编辑时分类不可改（后端同样忽略 category）。
+ * 新建时先保存商品，再逐张上传图片；保存成功后以 `savedId` 为准区分
+ * 创建 / 编辑 / 上传恢复，图片上传失败后重试不会重复创建商品。
+ * 编辑时分类不可改（后端同样忽略 category）；库存只在用户实际修改时
+ * 携带 `stock + stockBase`（乐观锁基线），避免覆盖编辑期间的下单扣减。
+ * 页面离开（aboutToDisappear）后所有迟到的回调静默作废，不再导航或续传。
  */
 @Component
 export struct ProductEditPage {
@@ -52,6 +56,10 @@ export struct ProductEditPage {
   @State stockError: string = '';
   @State categoryError: string = '';
   @State formError: string = '';
+  /** 页面已离开：迟到的异步回调不得导航、失效会话或继续上传。 */
+  private disposed: boolean = false;
+  /** 加载（或创建）时的库存基线；-1 表示尚无基线。 */
+  private loadedStock: number = -1;
 
   aboutToAppear(): void {
     const param: ShoppingGoodsParam | null = this.param;
@@ -61,20 +69,27 @@ export struct ProductEditPage {
     }
   }
 
+  aboutToDisappear(): void {
+    this.disposed = true;
+  }
+
   private async loadExisting(id: string): Promise<void> {
     this.loading = true;
     this.errorText = '';
     try {
       const detail: ShoppingProductView = await ShoppingService.productDetail(id);
+      if (this.disposed) return;
       this.titleText = detail.title;
       this.description = detail.description;
       this.priceText = this.priceInput(detail.priceCents);
       this.conditionText = detail.condition;
       this.stockText = `${detail.stock}`;
+      this.loadedStock = detail.stock;
       this.category = detail.category;
       this.pickupNote = detail.pickupNote === null ? '' : detail.pickupNote;
       this.existingImages = detail.images;
     } catch (error) {
+      if (this.disposed) return;
       const apiError = error as ApiRequestError;
       if (isSessionExpiredCode(apiError.code)) {
         this.onSessionExpired();
@@ -82,7 +97,7 @@ export struct ProductEditPage {
       }
       this.errorText = apiError.message;
     } finally {
-      this.loading = false;
+      if (!this.disposed) this.loading = false;
     }
   }
 
@@ -168,6 +183,27 @@ export struct ProductEditPage {
     };
   }
 
+  /**
+   * 编辑 payload：库存未被用户改动时不传 `stock` / `stockBase`，
+   * 改动时同时传目标值与加载时的基线，服务端做乐观锁比对，
+   * 冲突返回 409（`STOCK_CONFLICT` / `STOCK_ORDER_LOCKED`），message 落到 formError。
+   */
+  private patchPayload(): ShoppingProductPatch {
+    const patch: ShoppingProductPatch = {
+      title: this.titleText.trim(),
+      description: this.description.trim(),
+      priceCents: Math.round(Number(this.priceText.trim()) * 100),
+      condition: this.conditionText.trim(),
+      pickupNote: this.pickupNote.trim() === '' ? null : this.pickupNote.trim()
+    };
+    const stock: number = Number(this.stockText.trim());
+    if (this.loadedStock >= 0 && stock !== this.loadedStock) {
+      patch.stock = stock;
+      patch.stockBase = this.loadedStock;
+    }
+    return patch;
+  }
+
   private async pickImages(): Promise<void> {
     if (this.uploading || this.submitting) return;
     const remain: number = MAX_IMAGES - this.existingImages.length - this.pendingImages.length;
@@ -195,25 +231,26 @@ export struct ProductEditPage {
   }
 
   private async submit(): Promise<void> {
-    if (this.submitting || this.uploading) return;
+    if (this.submitting || this.uploading || this.disposed) return;
     if (!this.validate()) return;
     this.submitting = true;
     this.formError = '';
     try {
-      let id: string = this.productId;
-      if (id === '') {
+      // 以已保存的 ID 为准区分创建 / 编辑 / 上传恢复：
+      // 新建成功后 savedId 已落，即便图片上传失败、用户删光待传图片再点按钮，
+      // 也只会走更新 + 收尾，不会重复 createProduct。
+      const existingId: string = this.productId !== '' ? this.productId : this.savedId;
+      let id: string = existingId;
+      if (existingId === '') {
         const created: ShoppingProductView = await ShoppingService.createProduct(this.draft());
+        if (this.disposed) return;
         id = created.id;
       } else {
-        await ShoppingService.updateProduct(id, {
-          title: this.titleText.trim(),
-          description: this.description.trim(),
-          priceCents: Math.round(Number(this.priceText.trim()) * 100),
-          condition: this.conditionText.trim(),
-          stock: Number(this.stockText.trim()),
-          pickupNote: this.pickupNote.trim() === '' ? null : this.pickupNote.trim()
-        });
+        await ShoppingService.updateProduct(existingId, this.patchPayload());
+        if (this.disposed) return;
       }
+      // 保存成功后把乐观锁基线推进到当前输入，避免后续提交携带过期 stockBase。
+      this.loadedStock = Number(this.stockText.trim());
       this.savedId = id;
       if (this.pendingImages.length === 0) {
         this.onSaved(id);
@@ -221,6 +258,7 @@ export struct ProductEditPage {
       }
       await this.uploadPending(id);
     } catch (error) {
+      if (this.disposed) return;
       const apiError = error as ApiRequestError;
       if (isSessionExpiredCode(apiError.code)) {
         this.onSessionExpired();
@@ -229,30 +267,35 @@ export struct ProductEditPage {
       this.applyFieldErrors(apiError);
       this.formError = this.formError === '' ? apiError.message : this.formError;
     } finally {
-      this.submitting = false;
+      if (!this.disposed) this.submitting = false;
     }
   }
 
   private async uploadPending(id: string): Promise<void> {
     if (this.pendingImages.length === 0) {
-      this.onSaved(id);
+      if (!this.disposed) this.onSaved(id);
       return;
     }
+    if (this.disposed) return;
     this.uploading = true;
     this.formError = '';
     const images: PickedImage[] = this.pendingImages.slice();
     let uploaded: number = 0;
     try {
       for (let i = 0; i < images.length; i += 1) {
+        if (this.disposed) return;
         this.uploadMessage = `正在上传图片 ${i + 1}/${images.length}`;
         await ShoppingService.uploadImages(id, [images[i]]);
+        if (this.disposed) return;
         uploaded += 1;
         this.pendingImages = images.slice(i + 1);
       }
       this.pendingImages = [];
       this.uploadMessage = '';
+      if (this.disposed) return;
       this.onSaved(id);
     } catch (error) {
+      if (this.disposed) return;
       const apiError = error as ApiRequestError;
       if (isSessionExpiredCode(apiError.code)) {
         this.onSessionExpired();
@@ -264,17 +307,17 @@ export struct ProductEditPage {
         this.toast('部分图片已上传，可点重试继续');
       }
     } finally {
-      this.uploading = false;
+      if (!this.disposed) this.uploading = false;
     }
   }
 
   private async retryUpload(): Promise<void> {
-    if (this.savedId === '' || this.uploading) return;
+    if (this.savedId === '' || this.uploading || this.disposed) return;
     this.submitting = true;
     try {
       await this.uploadPending(this.savedId);
     } finally {
-      this.submitting = false;
+      if (!this.disposed) this.submitting = false;
     }
   }
 
@@ -297,6 +340,15 @@ export struct ProductEditPage {
 
   private toast(message: string): void {
     this.getUIContext().getPromptAction().showToast({ message: message });
+  }
+
+  /** 按钮文案：与 savedId / pendingImages 的实际行为保持一致。 */
+  private submitLabel(): string {
+    if (this.submitting) return '保存中…';
+    if (this.savedId !== '' && this.pendingImages.length > 0) return '重试上传图片';
+    if (this.productId !== '') return '保存修改';
+    if (this.savedId !== '') return '完成并返回';
+    return '发布商品';
   }
 
   @Builder
@@ -483,7 +535,7 @@ export struct ProductEditPage {
               Text(this.formError).fontSize(12).fontColor($r('app.color.danger')).width('100%').lineHeight(18)
             }
 
-            Button(this.submitting ? '保存中…' : (this.savedId !== '' ? '重试上传图片' : (this.productId === '' ? '发布商品' : '保存修改')))
+            Button(this.submitLabel())
               .width('100%').height(48).fontSize(15).fontColor(Color.White)
               .backgroundColor($r('app.color.brand'))
               .enabled(!this.submitting && !this.uploading)
