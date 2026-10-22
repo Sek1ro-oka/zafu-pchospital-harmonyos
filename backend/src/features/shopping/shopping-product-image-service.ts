@@ -37,24 +37,43 @@ function detectImageType(
   return null;
 }
 
-export function createShoppingProductImageService(storage: ProductImageStorage) {
+/**
+ * 图片服务依赖的仓储切片。抽成命名类型便于单元测试注入内存实现，
+ * 而不必拉起真实 Prisma/DB（类型引用会在编译期擦除）。
+ */
+export type ProductImageRepository = Pick<
+  typeof shoppingRepository,
+  "findProductById" | "countProductImages" | "createProductImages" | "findProductImageById"
+>;
+
+export function createShoppingProductImageService(
+  storage: ProductImageStorage,
+  repository: ProductImageRepository = shoppingRepository,
+) {
   return {
     /**
      * 上传商品图：先校验全部文件（大小/魔数/声明类型一致）再落盘，最后批量建行；
      * 任何一步失败都把已写文件删掉，避免留下无数据库记录的孤儿文件。
+     *
+     * 图片配额有两道防线：
+     * 1) 落盘前的事务外预检查（`countProductImages`）快速拒绝明显超限的请求；
+     * 2) 建行事务内复核有效图片数（`createProductImages` 在同商品 Serializable 事务里
+     *    重新 count 再插入），防止两次并发上传都读到旧 count 而突破每商品上限。
+     * 事务内复核返回 `limit-exceeded` 时，这里在 try 内抛错，走统一文件清理，绝不留孤儿文件。
      */
     async upload(
       productId: string,
       files: File[],
       actor: AuthorizedActor,
     ): Promise<ProductImageView[]> {
-      const product = await shoppingRepository.findProductById(productId);
+      const product = await repository.findProductById(productId);
       if (!product) throw new AppError("PRODUCT_NOT_FOUND", "商品不存在");
       assertCanEditProduct(actor, product);
 
       const limits = productImageUploadLimits();
       if (!files.length) throw new AppError("VALIDATION_FAILED", "请选择图片");
-      const existing = await shoppingRepository.countProductImages(productId);
+      // 事务外预检查：快速失败，但不是唯一防线，事务内还会复核。
+      const existing = await repository.countProductImages(productId);
       if (existing + files.length > limits.maxFiles)
         throw new AppError(
           "PRODUCT_IMAGE_LIMIT_EXCEEDED",
@@ -92,8 +111,14 @@ export function createShoppingProductImageService(storage: ProductImageStorage) 
             now,
           };
         });
-        const created = await shoppingRepository.createProductImages(rows);
-        return created.map((row) => ({ id: row.id, url: row.url, sortOrder: row.sortOrder }));
+        const result = await repository.createProductImages({ rows, maxFiles: limits.maxFiles });
+        if (result.outcome === "limit-exceeded")
+          // 并发窗口内配额被占满：在 try 内抛错，交由 catch 删除本次已落盘的文件。
+          throw new AppError(
+            "PRODUCT_IMAGE_LIMIT_EXCEEDED",
+            `每件商品最多上传 ${limits.maxFiles} 张图片`,
+          );
+        return result.images.map((row) => ({ id: row.id, url: row.url, sortOrder: row.sortOrder }));
       } catch (error) {
         await Promise.allSettled(stored.map((entry) => storage.delete(entry.storageKey)));
         if (error instanceof AppError) throw error;
@@ -106,7 +131,7 @@ export function createShoppingProductImageService(storage: ProductImageStorage) 
      * 已软删的图片仍可按 ID 读取，保证历史订单的 `imageSnapshot` 不失效。
      */
     async open(imageId: string) {
-      const image = await shoppingRepository.findProductImageById(imageId);
+      const image = await repository.findProductImageById(imageId);
       if (!image) throw new AppError("RESOURCE_NOT_FOUND", "图片不存在");
       try {
         const bytes = await storage.open(image.storageKey);

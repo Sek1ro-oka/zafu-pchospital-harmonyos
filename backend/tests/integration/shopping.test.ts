@@ -534,6 +534,50 @@ dbTest("商品图：本人可传、游客可读、类型/张数受限、非本�
   assert.equal(errorCode(overLimit.json), "PRODUCT_IMAGE_LIMIT_EXCEEDED");
 });
 
+dbTest("商品图配额并发：8 张基础上两个并发各传 1 张，只一个成功、最终 9 张、无孤儿行", async () => {
+  const seller = await bearerFor(SELLER_ID);
+  const product = await createProductAs(seller, { title: "图片配额并发商品" });
+  const id = product.id as string;
+
+  // 先铺满到 8 张（上限 9），为并发留出恰好 1 个名额。
+  const seed = await uploadImages(
+    seller,
+    id,
+    Array.from({ length: 8 }, (_, index) => ({
+      bytes: PNG_BYTES,
+      type: "image/png",
+      name: `${index}.png`,
+    })),
+  );
+  assert.equal(seed.status, 201, `预铺 8 张应成功，实际 ${seed.status}`);
+  assert.equal(
+    await getDb().productImage.count({ where: { productId: id, deletedAt: null } }),
+    8,
+  );
+
+  // 两个并发请求各传 1 张：事务外预检查都会读到 8 并通过，必须由建行事务内复核拦截其一。
+  const [first, second] = await Promise.all([
+    uploadImages(seller, id, [{ bytes: PNG_BYTES, type: "image/png", name: "a.png" }]),
+    uploadImages(seller, id, [{ bytes: PNG_BYTES, type: "image/png", name: "b.png" }]),
+  ]);
+  const statuses = [first.status, second.status].sort((a, b) => a - b);
+  assert.deepEqual(statuses, [201, 400], `应一成一超限，实际 ${statuses.join("/")}`);
+  const failed = first.status === 400 ? first : second;
+  assert.equal(errorCode(failed.json), "PRODUCT_IMAGE_LIMIT_EXCEEDED");
+
+  // 最终有效图片恰好 9 张，失败方不得留下任何数据库行（含软删），配额不被绕过。
+  assert.equal(
+    await getDb().productImage.count({ where: { productId: id, deletedAt: null } }),
+    9,
+    "并发后有效图片必须恰好 9 张（不得 8→10）",
+  );
+  assert.equal(
+    await getDb().productImage.count({ where: { productId: id } }),
+    9,
+    "失败方不得留下孤儿数据库行",
+  );
+});
+
 dbTest("下单成功：扣库存、写快照；买家/卖家列表与完成链路", async () => {
   const seller = await bearerFor(SELLER_ID);
   const buyer = await bearerFor(BUYER_ID);

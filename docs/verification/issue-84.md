@@ -8,6 +8,8 @@
 留待下一轮接入本契约。第三轮（PR #89 审查修复）：编辑接口的库存与旧快照防护（`stock` 可选 +
 `stockBase` 基线、二手订单锁定）、事务内幂等命中分支统一走 `replayOrder` 校验、新增
 `POST + X-HTTP-Method-Override: PATCH` 兼容入口；本文 §1–§9 已按最终代码同步。
+第四轮（PR #89 审查修复·PWVolcano 第三轮 P2）：把商品图配额复核移入建行事务，堵住并发上传
+绕过每商品图片上限（8→10）的窗口；本文 §1、§5 已同步。
 
 ## 1. 基线与范围
 
@@ -36,6 +38,12 @@
   `backend/src/app/api/v1/shopping/products/[id]/route.ts`（新增 POST 兼容入口），
   以及 `backend/tests/unit/shopping-validation.test.ts`、
   `backend/tests/integration/shopping.test.ts` 增补；未改数据模型与迁移。
+- 第四轮（PR #89 审查修复·图片配额事务）追加改动：`shopping-repository.ts`（`createProductImages`
+  改为在同一 Serializable 事务内先复核有效图片数再建行，返回 `created`/`limit-exceeded` 结果）、
+  `shopping-product-image-service.ts`（注入仓储切片 `ProductImageRepository`、事务外预检查保留为
+  快速失败、事务内 `limit-exceeded` 在 `try` 内抛 `PRODUCT_IMAGE_LIMIT_EXCEEDED` 以复用文件清理），
+  新增 `backend/tests/unit/shopping-product-image-quota.test.ts`，
+  `backend/tests/integration/shopping.test.ts` 增补并发配额回归；未改数据模型、迁移与错误码文案。
 
 ## 2. 数据模型与迁移
 
@@ -188,18 +196,18 @@ npx prisma migrate status
 | 命令 | 结果 | 说明 |
 | --- | --- | --- |
 | `npm run lint` | 通过 | `eslint .` 无输出 |
-| `npm run test:unit` | **579 pass / 0 fail** | 含 `tests/unit/shopping-validation.test.ts` 11 例（第三轮增补 stock 可选与 stockBase 规则 1 例）；先运行 `node tools/ensure-doc-manifest.mjs` 补齐既有生成物 |
-| `npm run test:db -- tests/integration/shopping.test.ts` | **16 pass / 0 fail** | 真实 MySQL `pchospital_exp_local_test`；第三轮增补 4 例审查回归（见下 13–16） |
-| `npm run test:db`（全量） | 299 pass / 6 fail（共 305） | 6 个失败均为既有环境/测试库状态问题，见下 |
+| `npm run test:unit` | **581 pass / 0 fail** | 含 `tests/unit/shopping-validation.test.ts` 11 例与新增 `tests/unit/shopping-product-image-quota.test.ts` 2 例（第四轮图片配额并发回归）；先运行 `node tools/ensure-doc-manifest.mjs` 补齐既有生成物 |
+| `npm run test:db -- tests/integration/shopping.test.ts` | **17 pass / 0 fail** | 真实 MySQL `pchospital_exp_local_test`；第三轮增补 4 例审查回归（13–16），第四轮增补图片配额并发回归（17） |
+| `npm run test:db`（全量） | 300 pass / 6 fail（共 306） | 6 个失败均为既有环境/测试库状态问题，见下 |
 
-表中为第三轮（PR #89 审查修复）落地后的重跑结果；本机以 `corepack pnpm <script>` 执行。
+表中为第四轮（PR #89 审查修复·图片配额事务）落地后的重跑结果；本机以 `corepack pnpm <script>` 执行。
 
 新增单测覆盖：字段归一化与长度/价格/库存边界、二手固定单件与耗材多库存/空成色、
 PATCH 部分更新与清空 `pickupNote`、更新时 `stock` 可缺省 / 传 `stock` 必须带合法
 `stockBase`（缺失、负数、非整数均报 `fieldErrors.stockBase`）、下单参数、列表参数、
 展示名不取 `realName`、商品/订单动作、权限策略。
 
-集成测试 16 例覆盖（1–12 为第一、二轮，13–16 为第三轮审查回归）：
+集成测试 17 例覆盖（1–12 为第一、二轮，13–16 为第三轮审查回归，17 为第四轮图片配额并发回归）：
 
 1. 游客读列表/详情/商品图，写操作 401；
 2. 普通用户发布二手成功且缺省库存 1、显式 stock=5 被 400 拒绝；工作人员发布耗材成功，
@@ -223,6 +231,20 @@ PATCH 部分更新与清空 `pickupNote`、更新时 `stock` 可缺省 / 传 `st
     那笔，另一商品库存不变，两商品合计只落一单；
 16. POST 兼容入口：`POST + X-HTTP-Method-Override: PATCH` 与 PATCH 同效（头值大小写
     不敏感），缺头/头值错误 → 405 `METHOD_NOT_ALLOWED` 且不改商品，第三人走该入口同样 403。
+17. 商品图配额并发（第四轮，PWVolcano 第三轮 P2）：先铺满 8 张（上限 9），两个并发请求
+    各传 1 张；事务外预检查都会读到 8 并通过，必须由建行事务内复核拦截其一。断言恰好一个
+    201、另一个 400 `PRODUCT_IMAGE_LIMIT_EXCEEDED`，最终有效图片恰好 9 张（不得 8→10），
+    且该商品图片行总数仍为 9（失败方不留孤儿数据库行）。
+
+第四轮图片配额修复说明：审查指出 `countProductImages` 在建行事务外执行，初始 8 张时两次并发
+各上传 1 张都读到 8 并通过 9 张上限，随后 `createProductImages` 只计算 `sortOrder`、不复核数量，
+最终保存 10 张，多窗口/并发可绕过每商品资源配额。修复把「有效图片数配额复核 + 插入」放进同一个
+Serializable 事务：事务内重新 `count`（只算 `deletedAt: null` 的有效行），`existing + rows.length
+> maxFiles` 时返回 `limit-exceeded` 且不写入任何行；服务层在 `try` 内把它翻译成既有错误码
+`PRODUCT_IMAGE_LIMIT_EXCEEDED`（消息不变），由既有 `catch` 删除本次已 `storage.put` 的文件，
+不留孤儿文件。事务外的预检查保留为快速失败，但不再是唯一防线。新增单测
+`tests/unit/shopping-product-image-quota.test.ts`（内存仓储 + 严格串行化建行事务复现 8→9 只成一、
+失败方无孤儿文件；已达上限时事务外快速失败不落盘）与集成回归（上表 17）覆盖。
 
 全量 DB 的 6 个失败与购物无关，未改相关代码：
 

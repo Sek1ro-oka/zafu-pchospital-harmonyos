@@ -237,9 +237,17 @@ export const shoppingRepository = {
 
   /**
    * 图片行与文件一一对应；调用方先落文件、失败时按 storageKey 回滚。
-   * `sortOrder` 在 Serializable 事务内取 `max+1`，避免并发上传按旧 count 重号。
+   *
+   * 「有效图片数配额复核」与「建行」在**同一 Serializable 事务**内完成：事务内重新
+   * 统计未软删的有效行，`existing + rows.length > maxFiles` 时不写入任何行、直接返回
+   * `limit-exceeded`，由服务层清理已落盘文件。这样即便两次并发上传在事务外都读到旧
+   * count（如各读到 8），事务内复核也会在第二个事务里看到 9 而拒绝，最终不会突破每
+   * 商品图片上限（8→10）。事务外的预检查只作快速失败，不作为唯一防线。
+   *
+   * `sortOrder` 在同一事务内取 `max+1`，避免并发上传按旧 count 重号。
    */
-  async createProductImages(
+  async createProductImages(input: {
+    maxFiles: number;
     rows: Array<{
       id: string;
       productId: string;
@@ -248,35 +256,45 @@ export const shoppingRepository = {
       mimeType: string;
       sizeBytes: number;
       now: Date;
-    }>,
-  ) {
+    }>;
+  }): Promise<
+    | { outcome: "created"; images: Array<{ id: string; url: string; sortOrder: number }> }
+    | { outcome: "limit-exceeded"; existing: number }
+  > {
+    const { rows, maxFiles } = input;
     return inSerializableTransaction(async (tx) => {
       const productId = rows[0]?.productId;
-      if (!productId) return [];
+      if (!productId) return { outcome: "created" as const, images: [] };
+      // 配额复核放在事务内：只统计未软删的有效行，与并发上传串行化。
+      const existing = await tx.productImage.count({
+        where: { productId, deletedAt: null },
+      });
+      if (existing + rows.length > maxFiles) {
+        return { outcome: "limit-exceeded" as const, existing };
+      }
       const aggregate = await tx.productImage.aggregate({
         where: { productId },
         _max: { sortOrder: true },
       });
       let sortOrder = (aggregate._max.sortOrder ?? -1) + 1;
-      const created: Array<{ id: string; url: string; sortOrder: number }> = [];
+      const images: Array<{ id: string; url: string; sortOrder: number }> = [];
       for (const row of rows) {
-        created.push(
-          await tx.productImage.create({
-            data: {
-              id: row.id,
-              productId: row.productId,
-              storageKey: row.storageKey,
-              url: row.url,
-              mimeType: row.mimeType,
-              sizeBytes: row.sizeBytes,
-              sortOrder,
-              createdAt: row.now,
-            },
-          }),
-        );
+        const created = await tx.productImage.create({
+          data: {
+            id: row.id,
+            productId: row.productId,
+            storageKey: row.storageKey,
+            url: row.url,
+            mimeType: row.mimeType,
+            sizeBytes: row.sizeBytes,
+            sortOrder,
+            createdAt: row.now,
+          },
+        });
+        images.push({ id: created.id, url: created.url, sortOrder: created.sortOrder });
         sortOrder += 1;
       }
-      return created;
+      return { outcome: "created" as const, images };
     });
   },
 
