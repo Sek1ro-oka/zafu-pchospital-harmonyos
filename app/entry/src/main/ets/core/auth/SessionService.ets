@@ -88,6 +88,19 @@ export class SessionService {
     return SessionService.identity;
   }
 
+  /**
+   * 会话快照标识（#84 审查第三轮：业务页迟到回调的归属校验）。
+   *
+   * 业务页在发出**写请求之前**记下它，回调到达时再比对一次：代次或 userId
+   * 任一变化（退出 / 换账号 / 恢复会话）都说明发起请求的那个会话已被放弃，
+   * 迟到的成功 / 失败回调必须整份丢弃 —— 不得导航、不得触发 expireSession、
+   * 不得更新页面状态。只做整体相等比较，不解析内容。
+   */
+  static sessionStamp(): string {
+    const identity = SessionService.identity;
+    return `${SessionService.epoch}|${identity === null ? '' : identity.userId}`;
+  }
+
   static async login(qq: string, password: string, rememberMe: boolean = false): Promise<SessionIdentity> {
     const baseUrl = ApiConfig.getBaseUrl();
     if (baseUrl === '') {

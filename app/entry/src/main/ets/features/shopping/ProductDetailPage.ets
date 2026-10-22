@@ -1,7 +1,11 @@
+import { common } from '@kit.AbilityKit';
 import { ApiRequestError, isSessionExpiredCode } from '../../core/network/ApiClient';
+import { ApiConfig } from '../../core/network/ApiConfig';
+import { SessionService } from '../../core/auth/SessionService';
 import { DETAIL_BACKGROUND, DetailHeader, DetailNotice } from '../../core/ui/ReferenceDetail';
 import { CARD_RADIUS, GAP_SM } from '../../core/ui/Theme';
 import { ROUTE_SHOPPING_GOODS_EDIT, ROUTE_SHOPPING_ORDERS } from '../../core/ui/Routes';
+import { PendingOrderRecord, PendingOrderStore } from './PendingOrderStore';
 import { ShoppingImage } from './ShoppingImage';
 import { ShoppingService } from './ShoppingService';
 import {
@@ -18,6 +22,9 @@ import {
 /**
  * 结果未知的下单请求快照：网络错误 / 超时时服务端可能已建单，
  * 重试必须复用同一把幂等键与数量；结果确认（成功或明确拒绝）后清空。
+ *
+ * 内存 `@State` 只覆盖同一详情实例；跨实例（详情出栈销毁后重进）由
+ * `PendingOrderStore` 按 账号 + 服务器 + 商品 持久化恢复（#84 审查第三轮）。
  */
 interface PendingOrderIntent {
   key: string;
@@ -30,6 +37,10 @@ interface PendingOrderIntent {
  *
  * 服务端 actions 只是渲染依据，真正的权限仍由每个写接口校验；
  * 本页不根据 roles 自行推断。
+ *
+ * 页面离开（aboutToDisappear）后迟到的异步回调静默作废：不导航、不触发
+ * expireSession、不更新状态；未决下单意图的持久化写入 / 清除是唯一例外 ——
+ * 它独立于 UI 生命周期，销毁后仍要执行（#84 审查第三轮）。
  */
 @Component
 export struct ProductDetailPage {
@@ -54,35 +65,107 @@ export struct ProductDetailPage {
   @State delisting: boolean = false;
   @State delistError: string = '';
   private generation: number = 0;
+  /** 页面已离开：迟到的异步回调不得导航、失效会话或更新状态（持久化意图读写除外）。 */
+  private disposed: boolean = false;
+  /**
+   * aboutToAppear 时缓存的宿主 Context：preferences 读写要在请求回调里进行，
+   * 页面销毁后 `getUIContext()` 不再可靠，缓存保证「清除意图」仍能执行。
+   */
+  private hostContext: common.Context | null = null;
 
   aboutToAppear(): void {
+    try {
+      const context: common.Context | undefined = this.getUIContext().getHostContext();
+      this.hostContext = context === undefined ? null : context;
+    } catch (error) {
+      // 拿不到 Context 时降级为仅内存快照（同实例仍复用幂等键），不阻塞详情加载。
+      this.hostContext = null;
+    }
+    this.restorePendingIntent();
     this.reload();
   }
 
+  aboutToDisappear(): void {
+    this.disposed = true;
+  }
+
   onRefreshChanged(): void {
+    // 页面重新可见（如登录返回、订单页返回）时同步重读持久化意图：
+    // 游客进入时没有账号标识读不到，登录回来后要能恢复未决下单。
+    this.restorePendingIntent();
     this.reload();
   }
 
   private async reload(): Promise<void> {
     this.generation += 1;
     const generation: number = this.generation;
+    const sessionStamp: string = SessionService.sessionStamp();
     this.loading = true;
     this.errorText = '';
     try {
       const detail = await ShoppingService.productDetail(this.param.id);
-      if (generation !== this.generation) return;
+      if (generation !== this.generation || this.disposed) return;
       this.detail = detail;
     } catch (error) {
-      if (generation !== this.generation) return;
+      if (generation !== this.generation || this.disposed) return;
       const apiError = error as ApiRequestError;
       if (isSessionExpiredCode(apiError.code)) {
+        // 迟到的会话失效错误不得在会话已被替换（换账号 / 重新登录）后触发 expireSession。
+        if (SessionService.sessionStamp() !== sessionStamp) return;
         this.onSessionExpired();
         return;
       }
       this.errorText = apiError.message;
     } finally {
-      if (generation === this.generation) this.loading = false;
+      if (generation === this.generation && !this.disposed) this.loading = false;
     }
+  }
+
+  /**
+   * 恢复当前 账号 + 服务器 + 商品 的未决下单意图（跨详情实例，#84 审查第三轮）。
+   *
+   * 命中记录则复用原幂等键与原数量（弹层据此锁步进器、改「重试同一请求」）；
+   * 其他账号 / 服务器 / 商品的记录整份忽略。读取失败或身份不全（游客、
+   * 服务器地址为空）按无记录处理，不阻塞详情加载。
+   */
+  private async restorePendingIntent(): Promise<void> {
+    const context: common.Context | null = this.hostContext;
+    const identity = SessionService.current();
+    const userId: string = identity === null ? '' : identity.userId;
+    const baseUrl: string = ApiConfig.getBaseUrl();
+    if (context === null || userId === '' || baseUrl === '') return;
+    const record: PendingOrderRecord | null =
+      await PendingOrderStore.read(context, userId, baseUrl, this.param.id);
+    if (record === null || this.disposed) return;
+    // 同实例内存快照优先（结果未知失败刚写入的），不被磁盘记录覆盖。
+    if (this.pendingIntent !== null) return;
+    const intent: PendingOrderIntent = { key: record.key, productId: record.productId, quantity: record.quantity };
+    this.pendingIntent = intent;
+  }
+
+  /** 写入持久化未决意图；缺 Context / 账号 / 服务器标识时静默降级（同实例仍有内存快照）。 */
+  private async saveIntent(intent: PendingOrderIntent, userId: string, baseUrl: string): Promise<void> {
+    const context: common.Context | null = this.hostContext;
+    if (context === null || userId === '' || baseUrl === '') return;
+    const record: PendingOrderRecord = {
+      userId: userId,
+      baseUrl: baseUrl,
+      productId: intent.productId,
+      key: intent.key,
+      quantity: intent.quantity,
+      savedAt: Date.now()
+    };
+    await PendingOrderStore.write(context, record);
+  }
+
+  /**
+   * 结果确认后清除持久化未决意图；只清发起请求时那个账号 + 服务器下本商品的记录。
+   * 该操作独立于 UI 生命周期：页面已销毁 / 会话已更换时仍必须执行。
+   */
+  private async clearIntent(productId: string, userId: string, baseUrl: string): Promise<void> {
+    const context: common.Context | null = this.hostContext;
+    if (context === null || userId === '' || baseUrl === '') return;
+    await PendingOrderStore.clear(context, userId, baseUrl, productId);
   }
 
   /** 当前商品是否存在结果未知的下单请求（重试须复用原幂等键与数量）。 */
@@ -107,40 +190,70 @@ export struct ProductDetailPage {
 
   private async confirmBuy(): Promise<void> {
     const detail: ShoppingProductView | null = this.detail;
-    if (detail === null || this.buying) return;
+    if (detail === null || this.buying || this.disposed) return;
     const pending: PendingOrderIntent | null = this.retryIntent();
     const key: string = pending !== null ? pending.key : ShoppingService.newOrderKey();
     const quantity: number = pending !== null ? pending.quantity : this.quantity;
+    // 会话快照：发请求前记下归属；回调时代次 / 账号已变（退出、换账号、重新登录）
+    // 则整份丢弃 —— 不导航、不触发 expireSession、不更新状态（#84 审查第三轮）。
+    const sessionStamp: string = SessionService.sessionStamp();
+    const identity = SessionService.current();
+    const userId: string = identity === null ? '' : identity.userId;
+    const baseUrl: string = ApiConfig.getBaseUrl();
+    const intent: PendingOrderIntent = { key: key, productId: detail.id, quantity: quantity };
     this.buying = true;
     this.buyError = '';
+    // 发出请求**之前**落持久记录：响应丢失且页面销毁（返回列表、进程被杀）后，
+    // 重进同一商品仍能复用这把幂等键，服务端按 (buyerId, key) 去重不会建第二笔。
+    await this.saveIntent(intent, userId, baseUrl);
+    if (this.disposed || SessionService.sessionStamp() !== sessionStamp) {
+      // 请求尚未发出页面就已离开 / 会话已变：不发请求，并回收刚写入的记录。
+      await this.clearIntent(detail.id, userId, baseUrl);
+      if (!this.disposed) this.buying = false;
+      return;
+    }
     try {
       await ShoppingService.createOrder({
         productId: detail.id,
         quantity: quantity,
         idempotencyKey: key
       });
+      // 下单成功：结果已确认，清除持久记录与内存快照。
+      // 清除独立于 UI 生命周期：页面已销毁 / 会话已变时同样要执行。
+      await this.clearIntent(detail.id, userId, baseUrl);
+      if (this.disposed || SessionService.sessionStamp() !== sessionStamp) return;
       this.pendingIntent = null;
       this.buyOpen = false;
       this.onOpen(ROUTE_SHOPPING_ORDERS, null);
     } catch (error) {
       const apiError = error as ApiRequestError;
       if (isSessionExpiredCode(apiError.code)) {
+        // 会话失效是**确定结果**（服务端拒绝或未发出请求），订单没有建立：清除意图。
+        // 但迟到的失效错误不得在页面已离开 / 会话已被替换后触发 expireSession。
+        await this.clearIntent(detail.id, userId, baseUrl);
+        if (this.disposed || SessionService.sessionStamp() !== sessionStamp) return;
+        this.pendingIntent = null;
         this.onSessionExpired();
         return;
       }
       if (apiError.code === 'NETWORK_ERROR' || apiError.code === 'UNEXPECTED_RESPONSE') {
         // 网络错误 / 超时 / 无法解析的响应：服务端可能已建单，结果未知。
-        // 保留快照，重试继续用同一把幂等键；确认结果前不允许新购买意图。
-        const snapshot: PendingOrderIntent = { key: key, productId: detail.id, quantity: quantity };
-        this.pendingIntent = snapshot;
+        // 持久记录发请求前已写入，这里重写一次兜底（写失败降级）；内存快照供同实例复用。
+        // 重试继续用同一把幂等键；确认结果前不允许新购买意图。
+        await this.saveIntent(intent, userId, baseUrl);
+        if (this.disposed || SessionService.sessionStamp() !== sessionStamp) return;
+        this.pendingIntent = intent;
         this.buyError = '下单结果未确认，重试将复用同一请求，不会重复建单';
       } else {
-        // 服务端明确拒绝（如 OUT_OF_STOCK / IDEMPOTENCY_CONFLICT）：结果已知，可换新键。
+        // 服务端明确拒绝（如 OUT_OF_STOCK / 商品已下架）：结果已知、订单未建立，
+        // 清除持久记录，允许换新键重新购买。
+        await this.clearIntent(detail.id, userId, baseUrl);
+        if (this.disposed || SessionService.sessionStamp() !== sessionStamp) return;
         this.pendingIntent = null;
         this.buyError = apiError.message;
       }
     } finally {
-      this.buying = false;
+      if (!this.disposed) this.buying = false;
     }
   }
 
@@ -156,14 +269,18 @@ export struct ProductDetailPage {
 
   private async confirmDelist(): Promise<void> {
     const detail: ShoppingProductView | null = this.detail;
-    if (detail === null || this.delisting) return;
+    if (detail === null || this.delisting || this.disposed) return;
+    const sessionStamp: string = SessionService.sessionStamp();
     this.delisting = true;
     this.delistError = '';
     try {
       const updated = await ShoppingService.delistProduct(detail.id, this.delistReason.trim());
+      // 页面已离开 / 会话已变的迟到回调静默作废，不再更新本页状态。
+      if (this.disposed || SessionService.sessionStamp() !== sessionStamp) return;
       this.detail = updated;
       this.delistOpen = false;
     } catch (error) {
+      if (this.disposed || SessionService.sessionStamp() !== sessionStamp) return;
       const apiError = error as ApiRequestError;
       if (isSessionExpiredCode(apiError.code)) {
         this.onSessionExpired();
@@ -171,7 +288,7 @@ export struct ProductDetailPage {
       }
       this.delistError = this.reasonError(apiError);
     } finally {
-      this.delisting = false;
+      if (!this.disposed) this.delisting = false;
     }
   }
 

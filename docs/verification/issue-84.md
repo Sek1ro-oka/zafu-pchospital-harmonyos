@@ -737,3 +737,29 @@ App 端在同一个功能分支接入第一轮后端契约，ArkTS / ArkUI 原�
 本节修复后的 HAP 构建、模拟器操作证据与后端 `X-HTTP-Method-Override` 入口联调
 由指挥统一执行后补充；§10.2 E 行与 §10.6「编辑功能与系统版本」条目已同步修正，
 不再描述 `CLIENT_UNSUPPORTED` guard。
+
+### 10.9 审查第三轮修复（PR #90 CHANGES_REQUESTED，2026-10-22）
+
+上游审查对 App 侧再提出两项 P2，按下表修复（仅改 `app/entry/src/main/ets/**`；
+本轮按维护者安排不构建 HAP、不做模拟器操作）。
+
+| 编号 | 审查意见 | 处理 | 验证状态 |
+| --- | --- | --- | --- |
+| A | 未决下单意图只存 `@State`，跨详情实例丢失：订单已落库而响应丢失 → 返回选购（详情出栈销毁）→ 重进同商品重试会生成新幂等键，建出第二笔订单 | 新增 `features/shopping/PendingOrderStore.ets`：与 `ApiConfig` 同一 preferences 私有库（`pc_hospital_app`），值为 JSON 记录数组，每条含 `userId + baseUrl + productId + key + quantity + savedAt`，查找时 **账号 + 服务器 + 商品** 三元组全等才命中（换账号 / 换服务器 / 退出登录的记录自然不可见），读取或解析失败降级为无记录。`ProductDetailPage.confirmBuy` 在**发出 createOrder 之前**写入持久记录（内存 `@State` 快照仍供同实例使用）；只有结果确认（下单成功、服务端明确业务拒绝、会话失效类确定拒绝）才清除，`NETWORK_ERROR` / `UNEXPECTED_RESPONSE` 保留并重写兜底。`aboutToAppear` 与 `refreshVersion` 变化（登录返回 / 订单页返回）时恢复命中记录：复用原 key、锁定原数量，弹层维持「重试同一请求」+「查看我的订单」 | 代码级 + 沙箱回归（见下）；丢响应→返回列表→重进→重试的设备链路**待模拟器复验（本轮按维护者安排未做设备操作）** |
+| B | `await createOrder` 后直接调用 `onOpen`：详情无 `aboutToDisappear` / 请求代次 / 会话快照检查，离开页面后迟到的成功回调仍会把当前页导航到订单页，迟到的会话错误仍可能触发 `expireSession` | `ProductDetailPage` 增加 `disposed` 标志 + `aboutToDisappear()`（与 `ProductEditPage` 同款写法）；`confirmBuy` / `reload` / `confirmDelist` 每个 await 之后检查 `disposed`，已销毁则不导航、不 `expireSession`、不 toast、不更新任何 `@State`（持久化意图的写入 / 清除除外——用 `aboutToAppear` 缓存的宿主 Context 执行，独立于 UI 生命周期）。会话绑定：`SessionService` 新增公开 `sessionStamp()`（会话代次 + userId），写请求发出前记录快照，回调时快照不一致（退出 / 换账号 / 重新登录）整份丢弃。请求发出前页面已销毁 / 会话已变时不发请求并回收刚落盘的记录 | 代码级 + 沙箱回归（见下）；延迟下单时返回并打开另一页的设备竞态**待模拟器复验（本轮按维护者安排未做设备操作）** |
+
+沙箱回归：沿用仓库 `*-app.test.ts` 的「真实 `.ets` 源码 → 转译 → 沙箱 eval」做法，
+执行 `ProductDetailPage.confirmBuy / restorePendingIntent / openBuy / aboutToDisappear`
+与真实 `PendingOrderStore`（preferences 为内存假实现），5 个场景全部通过
+（脚本 `work/tmp/pending-order-r3-check.mjs`，不进仓库）：
+
+1. 订单落库但响应丢失 → 详情销毁 → 新实例恢复意图 → 重试复用 `key-1`，服务端仅一笔订单，记录清除；
+2. 离开页面后迟到的成功回调不导航，持久记录仍被清除（独立于 UI 生命周期）；
+3. 会话更换后迟到的成功回调不导航、迟到的 `AUTH_SESSION_EXPIRED` 不触发 `expireSession`；
+4. 服务端明确拒绝（`OUT_OF_STOCK`）清除记录，允许换新键重新下单；
+5. 记录按 账号 + 服务器 + 商品 三元组隔离，换任一维度读不到。
+
+自动化检查（backend/，最终代码）：`corepack pnpm lint` 通过（exit 0）；
+`corepack pnpm test:unit` **579 pass / 0 fail**（含 eval `SessionService.ets` 全源码的
+`native-auth-app.test.ts`，新增 `sessionStamp()` 未破坏既有用例）。
+HAP 构建与模拟器复验由指挥统一执行后补充。
